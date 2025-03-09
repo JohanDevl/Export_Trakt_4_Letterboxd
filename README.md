@@ -266,6 +266,20 @@ This project uses GitHub Actions to automatically build and publish Docker image
 
 For detailed documentation on the GitHub Actions workflow, see [GITHUB_ACTIONS.md](docs/GITHUB_ACTIONS.md).
 
+### Automated Docker Testing
+
+This project includes an automated testing workflow for Docker images. The workflow is triggered when a Pull Request is opened against the `main` or `develop` branches and performs a comprehensive series of tests to ensure that the Docker image is functional and error-free.
+
+The tests include:
+
+- Image building verification
+- Structure and dependency checks
+- Configuration handling tests
+- Docker Compose validation
+- Volume mounting tests
+
+For detailed documentation on the Docker testing workflow, see [DOCKER_TESTING.md](docs/DOCKER_TESTING.md).
+
 ### Automatic Version Tagging
 
 This project implements automatic version tagging when Pull Requests are merged into the main branch. The system:
@@ -329,20 +343,32 @@ To manually trigger the workflow:
 
 ### Using the Published Docker Image
 
-Once the workflow has run successfully, you can pull the published image from GitHub Container Registry:
+Once the workflow has run successfully, you can pull the published image from GitHub Container Registry. The image is automatically tagged with version numbers and special tags for easy reference:
 
 ```bash
+# Pull the latest stable version (from main branch)
 docker pull ghcr.io/johandevl/export_trakt_4_letterboxd:latest
+
+# Pull the latest development version (from develop branch)
+docker pull ghcr.io/johandevl/export_trakt_4_letterboxd:develop
+
+# Or pull a specific version
+docker pull ghcr.io/johandevl/export_trakt_4_letterboxd:v1.0.0
 ```
 
-Or specify it in your docker-compose.yml:
+You can specify the image in your docker-compose.yml:
 
 ```yaml
 version: "3"
 
 services:
   trakt-export:
+    # For stable production use:
     image: ghcr.io/johandevl/export_trakt_4_letterboxd:latest
+
+    # For testing the latest development version:
+    # image: ghcr.io/johandevl/export_trakt_4_letterboxd:develop
+
     container_name: trakt-export
     volumes:
       - ./config:/app/config
@@ -355,6 +381,13 @@ services:
       - CRON_SCHEDULE=0 3 * * * # Run daily at 3:00 AM
       - EXPORT_OPTION=normal # Use the normal export option
 ```
+
+The tagging strategy ensures that:
+
+- `latest` always points to the most recent stable build (main branch)
+- `develop` always points to the most recent development build (develop branch)
+- Specific versions are available for production stability
+- You can also use major or minor version tags (e.g., `v1` or `v1.0`)
 
 ## Authors
 
