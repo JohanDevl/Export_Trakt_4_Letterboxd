@@ -160,9 +160,13 @@ echo "  initial - Export only rated and watched movies"
 echo "  complet - Export all available data"
 echo ""
 
-# Execute command if provided, otherwise start shell
+# Execute command if provided, otherwise keep container running
 if [ $# -gt 0 ]; then
     exec "$@"
 else
-    exec /bin/bash
+    echo "No command provided. Container will stay alive for use with docker exec."
+    echo "Use 'docker exec -it <container_name> bash' to connect to this container."
+    
+    # Keep the container running
+    tail -f /dev/null
 fi 
