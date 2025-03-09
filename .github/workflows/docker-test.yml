@@ -122,14 +122,20 @@ jobs:
           SAISPAS='\e[1;33;41m'
           EOF
 
-          # Start the container with the mock data
+          # Create example config file in the test directory
+          cp ./test-data/config/.config.cfg ./test-data/config/.config.cfg.example
+
+          # Start the container with the mock data and keep it running with sleep
           docker run -d --name test-container-mock \
             -v $(pwd)/test-data/config:/app/config \
             -v $(pwd)/test-data/logs:/app/logs \
             -v $(pwd)/test-data/copy:/app/copy \
             -v $(pwd)/test-data/brain_ops:/app/brain_ops \
             -v $(pwd)/test-data/backup:/app/backup \
-            trakt-export:test
+            trakt-export:test sleep 60
+
+          # Wait a moment to ensure the container is running
+          sleep 5
 
           # Check if the container is running
           docker ps | grep test-container-mock
