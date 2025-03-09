@@ -335,7 +335,7 @@ Once the workflow has run successfully, you can pull the published image from Gi
 # Pull the latest stable version (from main branch)
 docker pull ghcr.io/johandevl/export_trakt_4_letterboxd:latest
 
-# Pull the latest development version (from dev branch)
+# Pull the latest development version (from develop branch)
 docker pull ghcr.io/johandevl/export_trakt_4_letterboxd:develop
 
 # Or pull a specific version
@@ -371,7 +371,7 @@ services:
 The tagging strategy ensures that:
 
 - `latest` always points to the most recent stable build (main branch)
-- `develop` always points to the most recent development build (dev branch)
+- `develop` always points to the most recent development build (develop branch)
 - Specific versions are available for production stability
 - You can also use major or minor version tags (e.g., `v1` or `v1.0`)
 

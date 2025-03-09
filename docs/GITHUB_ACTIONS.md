@@ -17,7 +17,7 @@ The workflow is triggered by:
 
 - **Schedule**: Runs daily at 15:32 UTC (`cron: "32 15 * * *"`)
 - **Push to main branch**: Any commits pushed to the `main` branch
-- **Push to dev branch**: Any commits pushed to the `dev` branch
+- **Push to develop branch**: Any commits pushed to the `develop` branch
 - **Version tags**: Any tags matching the pattern `v*.*.*` (e.g., `v1.0.0`)
 - **Pull requests**: Any pull requests targeting the `main` branch
 
@@ -112,7 +112,7 @@ The workflow uses a comprehensive tagging strategy:
 
 2. **Branch and PR Tags**:
 
-   - Branch name (e.g., `main`, `dev`)
+   - Branch name (e.g., `main`, `develop`)
    - PR number (e.g., `pr-42`)
 
 3. **Special Tags**:
@@ -120,7 +120,7 @@ The workflow uses a comprehensive tagging strategy:
      - Builds from the `main` branch
      - Builds triggered by version tags (e.g., `v1.2.3`)
    - The `develop` tag is automatically applied to:
-     - Builds from the `dev` branch
+     - Builds from the `develop` branch
 
 This ensures that users can always access:
 
