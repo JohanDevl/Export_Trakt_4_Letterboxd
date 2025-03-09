@@ -1,75 +1,100 @@
 ![Export_Trakt_4_Letterboxd](https://socialify.git.ci/u2pitchjami/Export_Trakt_4_Letterboxd/image?description=1&descriptionEditable=The%20purpose%20of%20this%20script%20is%20to%20export%20Trakt%20movies%20watchlist%20to%20csv%20file%20for%20manual%20Letterboxd%20import&font=Jost&language=1&logo=https%3A%2F%2Fgreen-berenice-35.tiiny.site%2Fimage2vector-3.svg&name=1&owner=1&pattern=Charlie%20Brown&stargazers=1&theme=Dark)
-# Export Trakt for Letterboxd
 
-[![Twitter](https://img.shields.io/twitter/follow/u2pitchjami.svg?style=social)](https://twitter.com/u2pitchjami)
-![GitHub followers](https://img.shields.io/github/followers/u2pitchjami)
-![Reddit User Karma](https://img.shields.io/reddit/user-karma/combined/u2pitchjami)
+# Export Trakt 4 Letterboxd
 
+This project allows you to export your Trakt.tv data to a format compatible with Letterboxd.
 
+## Prerequisites
 
-The purpose of this script is to export Trakt movies watchlist to csv file for manual Letterboxd import
+- A Trakt.tv account
+- A Trakt.tv application (see below)
+- jq (for JSON processing)
+- curl (for API requests)
 
-First i run initial mode and after every day the normal mode.
-The import files is updated every day by the normal mode and manualy inject every week in letterboxd.
+## Configuration
 
+### 1. Create a Trakt.tv application
 
-## Installation
+1. Log in to your Trakt.tv account
+2. Go to https://trakt.tv/oauth/applications
+3. Click on "New Application"
+4. Fill in the information:
+   - Name: Export Trakt 4 Letterboxd
+   - Redirect URL: urn:ietf:wg:oauth:2.0:oob
+   - Description: (optional)
+5. Save the application
+6. Note your Client ID and Client Secret
 
-### 1 - Clone the repository :
+### 2. Set up the configuration file
+
+Copy the example configuration file to create your own:
+
 ```bash
-git clone https://github.com/u2pitchjami/Export_Trakt_4_Letterboxd.git
-```  
-### 2 - Obtain Trakt Api Key :
+cp .config.cfg.example .config.cfg
+```
 
-![image](https://github.com/user-attachments/assets/74512753-929c-4dcc-91b4-13e6de62d31c)
+You can edit the configuration file manually if you prefer, but it's recommended to use the setup script in the next step.
 
-### 3 - Create and edit .config.cfg :
+### 3. Authentication configuration
+
+Run the configuration script:
+
 ```bash
-cd Export_Trakt_4_Letterboxd
-sudo mv .config.cfg.example .config.cfg
-sudo nano .config.cfg
-``` 
+./setup_trakt.sh
+```
 
-![image](https://github.com/user-attachments/assets/b8e148ae-d6eb-4238-96db-4813cefa4216)
+This script will guide you through the following steps:
 
+1. Enter your Client ID and Client Secret
+2. Obtain an authorization code
+3. Generate access tokens
 
-## Usage/Examples
+## Usage
 
-### 1 - Start the script
+### Export your data
+
 ```bash
-Export_Trakt_4_Letterboxd.sh initial  # --> for initialisation (take all trakt movies)
+./Export_Trakt_4_Letterboxd.sh [option]
+```
 
-Export_Trakt_4_Letterboxd.sh          # --> default mode, take only the last 10 movies
+Available options:
 
-Export_Trakt_4_Letterboxd.sh complet  # --> default mode + save and compress trakt data
+- `normal` (default): Exports rated movies, rated episodes, movie and TV show history, and watchlist
+- `initial`: Exports only rated and watched movies
+- `complet`: Exports all available data
 
-```    
-It will generate a csv file
+### Result
 
+The script generates a `letterboxd_import.csv` file that you can import on Letterboxd at the following address: https://letterboxd.com/import/
 
-![image](https://github.com/user-attachments/assets/7eb9d818-70c4-44a3-b137-4d05819e82a7)
+## Troubleshooting
 
-### 2 - Import to Letterboxd
+### No data is exported
 
-- connect to Letterboxd and use this link : https://letterboxd.com/import/
+If the script runs without error but no data is exported:
 
-The csv file is format for letterboxd.
+1. Check that your Trakt.tv profile is public
+2. Verify that you have correctly configured authentication
+3. Run the configuration script again: `./setup_trakt.sh`
 
-- Select your letterboxd_import.csv
+### Authentication errors
 
-- Import
+If you encounter authentication errors:
 
-- It's done, enjoy !!
+1. Check that your Client ID and Client Secret are correct
+2. Get a new access token by running `./setup_trakt.sh`
 
-![image](https://github.com/user-attachments/assets/806de508-4e55-47b7-a98a-6b16bde6bd71)
+## License
+
+This project is under MIT license.
 
 ## Authors
 
 👤 **u2pitchjami**
 
-* Twitter: [@u2pitchjami](https://twitter.com/u2pitchjami)
-* Github: [@u2pitchjami](https://github.com/u2pitchjami)
-* LinkedIn: [@thierry-beugnet-a7761672](https://linkedin.com/in/thierry-beugnet-a7761672)
+- Twitter: [@u2pitchjami](https://twitter.com/u2pitchjami)
+- Github: [@u2pitchjami](https://github.com/u2pitchjami)
+- LinkedIn: [@thierry-beugnet-a7761672](https://linkedin.com/in/thierry-beugnet-a7761672)
 
 ## Documentation
 
@@ -78,4 +103,3 @@ thanks to :
 https://gist.github.com/kijart/4974b7b61bcec092dc3de3433e6e00e2
 
 https://gist.github.com/darekkay/ff1c5aadf31588f11078
-
