@@ -266,6 +266,17 @@ This project uses GitHub Actions to automatically build and publish Docker image
 
 For detailed documentation on the GitHub Actions workflow, see [GITHUB_ACTIONS.md](docs/GITHUB_ACTIONS.md).
 
+### Automatic Version Tagging
+
+This project implements automatic version tagging when Pull Requests are merged into the main branch. The system:
+
+- Automatically increments version numbers
+- Creates Git tags for each merged PR
+- Generates GitHub Releases with notes from PR descriptions
+- Triggers the Docker image build workflow
+
+For more information on how this works, see [AUTO_TAGGING.md](docs/AUTO_TAGGING.md).
+
 ### Testing the GitHub Actions Workflow
 
 To test the GitHub Actions workflow locally or trigger it on GitHub:
