@@ -149,6 +149,52 @@ The Docker container uses the following volumes to persist data:
 - `/app/brain_ops`: Contains additional export data
 - `/app/backup`: Contains Trakt API backup data
 
+### Automated Exports with Cron
+
+You can configure the Docker container to automatically run the export script on a schedule using cron. To enable this feature, set the following environment variables:
+
+- `CRON_SCHEDULE`: The cron schedule expression (e.g., `0 3 * * *` for daily at 3:00 AM)
+- `EXPORT_OPTION`: The export option to use (`normal`, `initial`, or `complet`)
+
+#### Example with Docker Compose:
+
+```yaml
+version: "3"
+
+services:
+  trakt-export:
+    build: .
+    container_name: trakt-export
+    volumes:
+      - ./config:/app/config
+      - ./logs:/app/logs
+      - ./copy:/app/copy
+      - ./brain_ops:/app/brain_ops
+      - ./backup:/app/backup
+    environment:
+      - TZ=Europe/Paris
+      - CRON_SCHEDULE=0 3 * * * # Run daily at 3:00 AM
+      - EXPORT_OPTION=normal # Use the normal export option
+    stdin_open: true
+    tty: true
+```
+
+#### Example with Docker Run:
+
+```bash
+docker run -it --name trakt-export \
+  -v $(pwd)/config:/app/config \
+  -v $(pwd)/logs:/app/logs \
+  -v $(pwd)/copy:/app/copy \
+  -v $(pwd)/brain_ops:/app/brain_ops \
+  -v $(pwd)/backup:/app/backup \
+  -e CRON_SCHEDULE="0 3 * * *" \
+  -e EXPORT_OPTION="normal" \
+  trakt-export
+```
+
+The cron job will log its output to `/app/logs/cron_export.log`.
+
 ### Docker Implementation Notes
 
 The Docker implementation includes several optimizations:

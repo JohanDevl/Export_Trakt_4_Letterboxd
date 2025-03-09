@@ -41,6 +41,51 @@ chmod +x /app/Export_Trakt_4_Letterboxd.sh /app/setup_trakt.sh
 sed -i 's|CONFIG_FILE="${SCRIPT_DIR}/.config.cfg"|CONFIG_FILE="/app/config/.config.cfg"|g' /app/setup_trakt.sh
 sed -i 's|source ${SCRIPT_DIR}/.config.cfg|source /app/config/.config.cfg|g' /app/Export_Trakt_4_Letterboxd.sh
 
+# Setup cron job if CRON_SCHEDULE is provided
+if [ ! -z "${CRON_SCHEDULE}" ]; then
+    # Install cron if not already installed
+    if ! command -v cron &> /dev/null; then
+        echo "Installing cron..."
+        apk add --no-cache dcron
+    fi
+
+    # Set default export option if not provided
+    EXPORT_OPTION=${EXPORT_OPTION:-normal}
+    
+    echo "Setting up cron job with schedule: ${CRON_SCHEDULE}"
+    echo "Export option: ${EXPORT_OPTION}"
+    
+    # Create a wrapper script for the cron job
+    cat > /app/cron_wrapper.sh << 'EOF'
+#!/bin/bash
+echo "========================================================"
+echo "🎬 Starting Trakt to Letterboxd Export - $(date)"
+echo "========================================================"
+echo "🌟 Exporting your Trakt data to Letterboxd format..."
+echo "📊 This may take a few minutes depending on the amount of data."
+echo "========================================================"
+cd /app && ./Export_Trakt_4_Letterboxd.sh $1
+echo "========================================================"
+echo "✅ Export completed at $(date)"
+echo "🎉 Your Letterboxd import file is ready in the copy directory!"
+echo "========================================================"
+EOF
+    
+    # Make the wrapper script executable
+    chmod +x /app/cron_wrapper.sh
+    
+    # Create cron job using the wrapper script
+    echo "${CRON_SCHEDULE} /app/cron_wrapper.sh ${EXPORT_OPTION} >> /app/logs/cron_export.log 2>&1" > /etc/crontabs/root
+    
+    # Make sure the log file exists and is writable
+    touch /app/logs/cron_export.log
+    chmod 644 /app/logs/cron_export.log
+    
+    # Start cron daemon
+    echo "Starting cron daemon..."
+    crond -b -l 8
+fi
+
 # Display help message
 echo "=== Export Trakt 4 Letterboxd ==="
 echo ""

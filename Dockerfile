@@ -24,7 +24,9 @@ RUN chmod +x /app/Export_Trakt_4_Letterboxd.sh /app/setup_trakt.sh /app/docker-e
 ENV DOSLOG=/app/logs \
     DOSCOPY=/app/copy \
     BRAIN_OPS=/app/brain_ops \
-    BACKUP_DIR=/app/backup
+    BACKUP_DIR=/app/backup \
+    CRON_SCHEDULE="" \
+    EXPORT_OPTION="normal"
 
 # Set volume for persistent data
 VOLUME ["/app/logs", "/app/copy", "/app/brain_ops", "/app/backup", "/app/config"]

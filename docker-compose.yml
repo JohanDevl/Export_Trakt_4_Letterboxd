@@ -12,5 +12,8 @@ services:
       - ./backup:/app/backup
     environment:
       - TZ=Europe/Paris
+      # Cron configuration for testing - runs every 5 minutes
+      - CRON_SCHEDULE=*/5 * * * *
+      - EXPORT_OPTION=normal
     stdin_open: true
     tty: true
