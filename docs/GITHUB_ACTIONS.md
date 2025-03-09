@@ -9,6 +9,7 @@ The workflow is defined in `.github/workflows/docker-publish.yml` and performs t
 1. Builds a Docker image from the project
 2. Pushes the image to GitHub Container Registry (ghcr.io)
 3. Signs the image using Cosign for security
+4. Automatically tags the latest build as "latest" for easy reference
 
 ## Workflow Triggers
 
@@ -16,6 +17,7 @@ The workflow is triggered by:
 
 - **Schedule**: Runs daily at 15:32 UTC (`cron: "32 15 * * *"`)
 - **Push to main branch**: Any commits pushed to the `main` branch
+- **Push to dev branch**: Any commits pushed to the `dev` branch
 - **Version tags**: Any tags matching the pattern `v*.*.*` (e.g., `v1.0.0`)
 - **Pull requests**: Any pull requests targeting the `main` branch
 
@@ -97,6 +99,33 @@ Common cron examples:
 - `0 0 * * *`: Daily at midnight UTC
 - `0 */6 * * *`: Every 6 hours
 - `0 0 * * 0`: Weekly on Sunday at midnight UTC
+
+### Image Tagging Strategy
+
+The workflow uses a comprehensive tagging strategy:
+
+1. **Semantic Versioning Tags** (for version tags like `v1.2.3`):
+
+   - Full version: `v1.2.3`
+   - Minor version: `v1.2`
+   - Major version: `v1`
+
+2. **Branch and PR Tags**:
+
+   - Branch name (e.g., `main`, `dev`)
+   - PR number (e.g., `pr-42`)
+
+3. **Special Tags**:
+   - The `latest` tag is automatically applied to:
+     - Builds from the `main` branch
+     - Builds triggered by version tags (e.g., `v1.2.3`)
+   - The `develop` tag is automatically applied to:
+     - Builds from the `dev` branch
+
+This ensures that users can always access:
+
+- The most recent stable version using the `latest` tag
+- The most recent development version using the `develop` tag
 
 ### Changing the Registry
 
