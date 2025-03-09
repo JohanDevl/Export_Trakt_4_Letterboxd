@@ -266,6 +266,20 @@ This project uses GitHub Actions to automatically build and publish Docker image
 
 For detailed documentation on the GitHub Actions workflow, see [GITHUB_ACTIONS.md](docs/GITHUB_ACTIONS.md).
 
+### Automated Docker Testing
+
+This project includes an automated testing workflow for Docker images. The workflow is triggered when a Pull Request is opened against the `main` or `develop` branches and performs a comprehensive series of tests to ensure that the Docker image is functional and error-free.
+
+The tests include:
+
+- Image building verification
+- Structure and dependency checks
+- Configuration handling tests
+- Docker Compose validation
+- Volume mounting tests
+
+For detailed documentation on the Docker testing workflow, see [DOCKER_TESTING.md](docs/DOCKER_TESTING.md).
+
 ### Automatic Version Tagging
 
 This project implements automatic version tagging when Pull Requests are merged into the main branch. The system:

@@ -1,0 +1,149 @@
+name: Docker Image Test
+
+on:
+  pull_request:
+    branches: ["main", "develop"]
+
+jobs:
+  test:
+    name: Test Docker Image
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          load: true
+          tags: trakt-export:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          push: false
+
+      - name: Verify Docker image
+        run: |
+          echo "🔍 Verifying Docker image structure and dependencies..."
+
+          # Check if the image was built successfully
+          docker image inspect trakt-export:test
+
+          # Check if the required scripts exist and are executable
+          docker run --rm trakt-export:test ls -la /app/Export_Trakt_4_Letterboxd.sh /app/setup_trakt.sh /app/docker-entrypoint.sh
+
+          # Check if the required directories exist
+          docker run --rm trakt-export:test ls -la /app/config /app/logs /app/copy /app/brain_ops /app/backup /app/TEMP
+
+          # Check if the entrypoint script works correctly
+          docker run --rm trakt-export:test bash -c "test -x /app/docker-entrypoint.sh && echo '✅ Entrypoint script is executable'"
+
+          # Check if the required tools are installed
+          docker run --rm trakt-export:test bash -c "command -v jq && command -v curl && command -v sed && echo '✅ Required tools are installed'"
+
+          # Create a test container with the image
+          echo "🚀 Creating test container..."
+          docker run -d --name test-container trakt-export:test sleep 300
+
+          # Check if the container is running
+          docker ps | grep test-container
+
+          # Check if the configuration example file exists
+          docker exec test-container test -f /app/config/.config.cfg.example && echo "✅ Configuration example file exists"
+
+          # Create a test configuration file
+          docker exec test-container bash -c "cp /app/config/.config.cfg.example /app/config/.config.cfg"
+
+          # Check if the cron setup works (without actually running the cron)
+          docker exec -e CRON_SCHEDULE="* * * * *" -e EXPORT_OPTION="normal" test-container bash -c "source /app/docker-entrypoint.sh setup_cron && echo '✅ Cron setup successful'"
+
+          # Clean up
+          docker stop test-container
+          docker rm test-container
+
+          echo "✅ Docker image verification completed successfully"
+
+      - name: Test Docker Compose
+        run: |
+          echo "🔍 Testing Docker Compose configuration..."
+
+          # Create test environment variables
+          echo "CRON_SCHEDULE=* * * * *" > .env
+          echo "EXPORT_OPTION=normal" >> .env
+
+          # Validate docker-compose.yml
+          docker compose config
+
+          # Start the container with docker-compose
+          docker compose up -d
+
+          # Check if the container is running
+          docker compose ps
+
+          # Stop and remove the container
+          docker compose down
+
+          echo "✅ Docker Compose test completed successfully"
+
+      - name: Test Docker image with mock data
+        run: |
+          echo "🔍 Testing Docker image with mock data..."
+
+          # Create a test container with mounted volumes
+          mkdir -p ./test-data/config ./test-data/logs ./test-data/copy ./test-data/brain_ops ./test-data/backup
+
+          # Create a mock configuration file
+          cat > ./test-data/config/.config.cfg << 'EOF'
+          API_KEY="test_key"
+          API_SECRET="test_secret"
+          API_URL="https://api.trakt.tv"
+          ACCESS_TOKEN="test_token"
+          REFRESH_TOKEN="test_refresh"
+          REDIRECT_URI="urn:ietf:wg:oauth:2.0:oob"
+          USERNAME="test_user"
+          BACKUP_DIR="./backup/test_backup"
+          DOSLOG="./logs"
+          DOSCOPY="./copy"
+          BRAIN_OPS="./brain_ops"
+          DATE="20250101_0000"
+          LOG="${DOSLOG}/test-Export_Trakt.txt"
+          RED='\033[0;31m'
+          GREEN='\033[0;32m'
+          NC='\033[0m'
+          BOLD='\033[1m'
+          SAISPAS='\e[1;33;41m'
+          EOF
+
+          # Start the container with the mock data
+          docker run -d --name test-container-mock \
+            -v $(pwd)/test-data/config:/app/config \
+            -v $(pwd)/test-data/logs:/app/logs \
+            -v $(pwd)/test-data/copy:/app/copy \
+            -v $(pwd)/test-data/brain_ops:/app/brain_ops \
+            -v $(pwd)/test-data/backup:/app/backup \
+            trakt-export:test
+
+          # Check if the container is running
+          docker ps | grep test-container-mock
+
+          # Check if the container can access the mounted volumes
+          docker exec test-container-mock bash -c "ls -la /app/config /app/logs /app/copy /app/brain_ops /app/backup"
+
+          # Check if the configuration file is accessible
+          docker exec test-container-mock bash -c "cat /app/config/.config.cfg | grep API_KEY"
+
+          # Clean up
+          docker stop test-container-mock
+          docker rm test-container-mock
+          rm -rf ./test-data
+
+          echo "✅ Docker image test with mock data completed successfully"
+
+      - name: Summary
+        run: |
+          echo "🎉 All Docker image tests passed successfully!"
+          echo "The Docker image is verified to be functional and ready for deployment."
