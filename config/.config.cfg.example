@@ -47,4 +47,13 @@ fi
 mkdir TEMP
 
 if [ ! -d $DOSLOG ]; then
-    mkdir $DOSLOG 
+    mkdir $DOSLOG
+fi
+
+if [ ! -d $DOSCOPY ]; then
+    mkdir $DOSCOPY
+fi
+
+if [ ! -d $BRAIN_OPS ]; then
+    mkdir $BRAIN_OPS
+fi 

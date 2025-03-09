@@ -58,32 +58,57 @@ if [ ! -z "${CRON_SCHEDULE}" ]; then
     # Create a wrapper script for the cron job
     cat > /app/cron_wrapper.sh << 'EOF'
 #!/bin/bash
+# Get the start time
+START_TIME=$(date +"%Y-%m-%d %H:%M:%S")
+
+# Log to container stdout with a friendly message
+echo "🎬 [CRON] Starting Trakt to Letterboxd Export at ${START_TIME} 🎬" > /proc/1/fd/1
+echo "📊 Exporting your Trakt data... This may take a few minutes." > /proc/1/fd/1
+
+# Redirect all output to the log file
+exec > /app/logs/cron_export.log 2>&1
+
+# Print friendly messages
 echo "========================================================"
 echo "🎬 Starting Trakt to Letterboxd Export - $(date)"
 echo "========================================================"
 echo "🌟 Exporting your Trakt data to Letterboxd format..."
 echo "📊 This may take a few minutes depending on the amount of data."
 echo "========================================================"
+
+# Run the export script
 cd /app && ./Export_Trakt_4_Letterboxd.sh $1
+
+# Get the end time
+END_TIME=$(date +"%Y-%m-%d %H:%M:%S")
+
+# Print completion message
 echo "========================================================"
 echo "✅ Export completed at $(date)"
 echo "🎉 Your Letterboxd import file is ready in the copy directory!"
 echo "========================================================"
+
+# Log to container stdout with a friendly completion message
+echo "✅ [CRON] Trakt to Letterboxd Export completed at ${END_TIME} ✅" > /proc/1/fd/1
+echo "🎉 Your Letterboxd import file is ready in the copy directory! 🎉" > /proc/1/fd/1
 EOF
     
     # Make the wrapper script executable
     chmod +x /app/cron_wrapper.sh
     
     # Create cron job using the wrapper script
-    echo "${CRON_SCHEDULE} /app/cron_wrapper.sh ${EXPORT_OPTION} >> /app/logs/cron_export.log 2>&1" > /etc/crontabs/root
+    echo "${CRON_SCHEDULE} /app/cron_wrapper.sh ${EXPORT_OPTION}" > /etc/crontabs/root
     
     # Make sure the log file exists and is writable
     touch /app/logs/cron_export.log
     chmod 644 /app/logs/cron_export.log
     
-    # Start cron daemon
+    # Start cron daemon with appropriate logging
     echo "Starting cron daemon..."
-    crond -b -l 8
+    crond -b -L 8
+    
+    echo "Cron job has been set up. Logs will be written to /app/logs/cron_export.log"
+    echo "You can also see cron execution messages in the container logs."
 fi
 
 # Display help message

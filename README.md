@@ -193,7 +193,35 @@ docker run -it --name trakt-export \
   trakt-export
 ```
 
-The cron job will log its output to `/app/logs/cron_export.log`.
+#### Cron Job Logging and Monitoring
+
+The cron job provides comprehensive logging to help you monitor the export process:
+
+1. **Container Logs**:
+
+   - User-friendly messages with emojis appear in the container logs
+   - Start and completion notifications with timestamps
+   - Progress indicators and success confirmations
+
+   View these logs with:
+
+   ```bash
+   docker logs trakt-export
+   ```
+
+2. **Detailed Export Logs**:
+
+   - Complete export details are saved to `/app/logs/cron_export.log`
+   - Includes API responses, processing steps, and any warnings or errors
+   - Timestamped entries for easier troubleshooting
+
+   View these logs with:
+
+   ```bash
+   docker exec trakt-export cat /app/logs/cron_export.log
+   ```
+
+The cron job is configured to provide clear visual feedback about the export process, making it easy to confirm that your exports are running successfully.
 
 ### Docker Implementation Notes
 
