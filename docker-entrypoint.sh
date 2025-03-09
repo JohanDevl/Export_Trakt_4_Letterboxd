@@ -4,12 +4,48 @@ set -e
 # Create config directory if it doesn't exist
 mkdir -p /app/config
 
-# Move the example config file to the config directory if it doesn't exist there
+# Create example config file if it doesn't exist
 if [ ! -f /app/config/.config.cfg.example ]; then
-    echo "Moving example config file to config directory..."
-    cp /app/.config.cfg.example /app/config/.config.cfg.example
-    # Remove the original example file after copying
-    rm -f /app/.config.cfg.example
+    echo "Creating example config file in config directory..."
+    cat > /app/config/.config.cfg.example << 'EOF'
+# Trakt API credentials
+CLIENT_ID="YOUR_TRAKT_CLIENT_ID"
+CLIENT_SECRET="YOUR_TRAKT_CLIENT_SECRET"
+TRAKT_USERNAME="YOUR_TRAKT_USERNAME"
+
+# TMDB API key (optional, for better movie matching)
+TMDB_API_KEY="YOUR_TMDB_API_KEY"
+
+# Export options
+EXPORT_RATINGS=true
+EXPORT_HISTORY=true
+EXPORT_WATCHLIST=true
+EXPORT_EPISODES=true
+
+# Date format for export (YYYY-MM-DD)
+DATE_FORMAT="%Y-%m-%d"
+
+# Minimum rating to export (1-10)
+MIN_RATING=1
+
+# Export path
+EXPORT_PATH="/app/copy"
+
+# Backup options
+BACKUP_ENABLED=true
+BACKUP_DIR="/app/backup"
+
+# Log options
+LOG_ENABLED=true
+LOG_DIR="/app/logs"
+LOG_LEVEL="info"
+
+# Advanced options
+USE_TMDB_FOR_MATCHING=true
+INCLUDE_YEAR_IN_TITLE=true
+INCLUDE_LETTERBOXD_TAGS=true
+EOF
+    echo "Example config file created at /app/config/.config.cfg.example"
 fi
 
 # Check if config file exists
@@ -124,9 +160,13 @@ echo "  initial - Export only rated and watched movies"
 echo "  complet - Export all available data"
 echo ""
 
-# Execute command if provided, otherwise start shell
+# Execute command if provided, otherwise keep container running
 if [ $# -gt 0 ]; then
     exec "$@"
 else
-    exec /bin/bash
+    echo "No command provided. Container will stay alive for use with docker exec."
+    echo "Use 'docker exec -it <container_name> bash' to connect to this container."
+    
+    # Keep the container running
+    tail -f /dev/null
 fi 
