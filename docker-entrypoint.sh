@@ -4,10 +4,48 @@ set -e
 # Create config directory if it doesn't exist
 mkdir -p /app/config
 
-# Check if example config file exists in config directory
+# Create example config file if it doesn't exist
 if [ ! -f /app/config/.config.cfg.example ]; then
-    echo "WARNING: Example config file not found at /app/config/.config.cfg.example"
-    echo "Please ensure the .config.cfg.example file is included in your volume mount at /app/config/"
+    echo "Creating example config file in config directory..."
+    cat > /app/config/.config.cfg.example << 'EOF'
+# Trakt API credentials
+CLIENT_ID="YOUR_TRAKT_CLIENT_ID"
+CLIENT_SECRET="YOUR_TRAKT_CLIENT_SECRET"
+TRAKT_USERNAME="YOUR_TRAKT_USERNAME"
+
+# TMDB API key (optional, for better movie matching)
+TMDB_API_KEY="YOUR_TMDB_API_KEY"
+
+# Export options
+EXPORT_RATINGS=true
+EXPORT_HISTORY=true
+EXPORT_WATCHLIST=true
+EXPORT_EPISODES=true
+
+# Date format for export (YYYY-MM-DD)
+DATE_FORMAT="%Y-%m-%d"
+
+# Minimum rating to export (1-10)
+MIN_RATING=1
+
+# Export path
+EXPORT_PATH="/app/copy"
+
+# Backup options
+BACKUP_ENABLED=true
+BACKUP_DIR="/app/backup"
+
+# Log options
+LOG_ENABLED=true
+LOG_DIR="/app/logs"
+LOG_LEVEL="info"
+
+# Advanced options
+USE_TMDB_FOR_MATCHING=true
+INCLUDE_YEAR_IN_TITLE=true
+INCLUDE_LETTERBOXD_TAGS=true
+EOF
+    echo "Example config file created at /app/config/.config.cfg.example"
 fi
 
 # Check if config file exists
