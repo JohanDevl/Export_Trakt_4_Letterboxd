@@ -12,8 +12,7 @@ services:
       - ./backup:/app/backup
     environment:
       - TZ=Europe/Paris
-      # Cron configuration for testing - runs every minute
-      - CRON_SCHEDULE=* * * * *
-      - EXPORT_OPTION=normal
+      - CRON_SCHEDULE=0 0 * * *
+      - EXPORT_OPTION=complet
     stdin_open: true
     tty: true
