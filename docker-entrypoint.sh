@@ -4,12 +4,10 @@ set -e
 # Create config directory if it doesn't exist
 mkdir -p /app/config
 
-# Move the example config file to the config directory if it doesn't exist there
+# Check if example config file exists in config directory
 if [ ! -f /app/config/.config.cfg.example ]; then
-    echo "Moving example config file to config directory..."
-    cp /app/.config.cfg.example /app/config/.config.cfg.example
-    # Remove the original example file after copying
-    rm -f /app/.config.cfg.example
+    echo "WARNING: Example config file not found at /app/config/.config.cfg.example"
+    echo "Please ensure the .config.cfg.example file is included in your volume mount at /app/config/"
 fi
 
 # Check if config file exists
