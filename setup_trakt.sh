@@ -1,6 +1,24 @@
 #!/bin/bash
 SCRIPT_DIR=$(dirname "$(realpath "$0")")
-CONFIG_FILE="${SCRIPT_DIR}/.config.cfg"
+
+# Detect OS for sed compatibility
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    # macOS uses BSD sed
+    SED_INPLACE="sed -i ''"
+else
+    # Linux and others use GNU sed
+    SED_INPLACE="sed -i"
+fi
+
+# Always use the config file from the config directory
+CONFIG_DIR="${SCRIPT_DIR}/config"
+if [ -f "/app/config/.config.cfg" ]; then
+    # If running in Docker, use the absolute path
+    CONFIG_FILE="/app/config/.config.cfg"
+else
+    # If running locally, use the relative path
+    CONFIG_FILE="${CONFIG_DIR}/.config.cfg"
+fi
 
 echo "=== Trakt Authentication Configuration ==="
 echo ""
@@ -9,8 +27,21 @@ echo ""
 
 # Check if the configuration file exists
 if [ ! -f "$CONFIG_FILE" ]; then
-    echo "Error: Configuration file does not exist."
-    exit 1
+    echo "Error: Configuration file does not exist at $CONFIG_FILE."
+    echo "Creating config directory if it doesn't exist..."
+    mkdir -p "$(dirname "$CONFIG_FILE")"
+    
+    # Check if example config exists and copy it
+    if [ -f "${SCRIPT_DIR}/.config.cfg.example" ]; then
+        echo "Copying example config to $CONFIG_FILE..."
+        cp "${SCRIPT_DIR}/.config.cfg.example" "$CONFIG_FILE"
+    elif [ -f "${CONFIG_DIR}/.config.cfg.example" ]; then
+        echo "Copying example config to $CONFIG_FILE..."
+        cp "${CONFIG_DIR}/.config.cfg.example" "$CONFIG_FILE"
+    else
+        echo "Error: No example configuration file found."
+        exit 1
+    fi
 fi
 
 # Request API information
@@ -23,9 +54,9 @@ read -p "Enter your Client Secret: " API_SECRET
 echo ""
 
 # Update the configuration file
-sed -i '' "s|API_KEY=.*|API_KEY=\"$API_KEY\"|" "$CONFIG_FILE"
-sed -i '' "s|API_SECRET=.*|API_SECRET=\"$API_SECRET\"|" "$CONFIG_FILE"
-sed -i '' "s|REDIRECT_URI=.*|REDIRECT_URI=\"urn:ietf:wg:oauth:2.0:oob\"|" "$CONFIG_FILE"
+$SED_INPLACE "s|API_KEY=.*|API_KEY=\"$API_KEY\"|" "$CONFIG_FILE"
+$SED_INPLACE "s|API_SECRET=.*|API_SECRET=\"$API_SECRET\"|" "$CONFIG_FILE"
+$SED_INPLACE "s|REDIRECT_URI=.*|REDIRECT_URI=\"urn:ietf:wg:oauth:2.0:oob\"|" "$CONFIG_FILE"
 
 echo "Step 2: Get an authorization code"
 echo ""
@@ -52,8 +83,8 @@ REFRESH_TOKEN=$(echo "$RESPONSE" | jq -r '.refresh_token')
 
 if [[ "$ACCESS_TOKEN" != "null" && "$REFRESH_TOKEN" != "null" && -n "$ACCESS_TOKEN" && -n "$REFRESH_TOKEN" ]]; then
     # Update the configuration file
-    sed -i '' "s|ACCESS_TOKEN=.*|ACCESS_TOKEN=\"$ACCESS_TOKEN\"|" "$CONFIG_FILE"
-    sed -i '' "s|REFRESH_TOKEN=.*|REFRESH_TOKEN=\"$REFRESH_TOKEN\"|" "$CONFIG_FILE"
+    $SED_INPLACE "s|ACCESS_TOKEN=.*|ACCESS_TOKEN=\"$ACCESS_TOKEN\"|" "$CONFIG_FILE"
+    $SED_INPLACE "s|REFRESH_TOKEN=.*|REFRESH_TOKEN=\"$REFRESH_TOKEN\"|" "$CONFIG_FILE"
     
     echo "✅ Configuration completed successfully!"
     echo ""

@@ -1,0 +1,16 @@
+version: "3"
+
+services:
+  trakt-export:
+    build: .
+    container_name: trakt-export
+    volumes:
+      - ./config:/app/config
+      - ./logs:/app/logs
+      - ./copy:/app/copy
+      - ./brain_ops:/app/brain_ops
+      - ./backup:/app/backup
+    environment:
+      - TZ=Europe/Paris
+    stdin_open: true
+    tty: true

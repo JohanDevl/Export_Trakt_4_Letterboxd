@@ -1,0 +1,14 @@
+.git
+.gitignore
+.DS_Store
+logs/
+backup/
+copy/
+brain_ops/
+TEMP/
+*.tar.gz
+letterboxd_import.csv
+watched_*.csv
+watchlist_*.csv
+README.md
+LICENSE 

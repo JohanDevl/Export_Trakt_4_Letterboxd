@@ -17,7 +17,25 @@
 # Trakt client API key: http://docs.trakt.apiary.io/#introduction/create-an-app
 SCRIPT_DIR=$(dirname "$(realpath "$0")")
 echo "$SCRIPT_DIR"
-source ${SCRIPT_DIR}/.config.cfg
+
+# Detect OS for sed compatibility
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    # macOS uses BSD sed
+    SED_INPLACE="sed -i ''"
+else
+    # Linux and others use GNU sed
+    SED_INPLACE="sed -i"
+fi
+
+# Always use the config file from the config directory
+CONFIG_DIR="${SCRIPT_DIR}/config"
+if [ -f "/app/config/.config.cfg" ]; then
+    # If running in Docker, use the absolute path
+    source /app/config/.config.cfg
+else
+    # If running locally, use the relative path
+    source ${CONFIG_DIR}/.config.cfg
+fi
 
 # Use the user's temporary directory
 TEMP_DIR="/tmp/trakt_export_$USER"
@@ -48,9 +66,18 @@ refresh_access_token() {
 
     if [[ "$NEW_ACCESS_TOKEN" != "null" && "$NEW_REFRESH_TOKEN" != "null" ]]; then
         echo "✅ Token refreshed successfully." | tee -a "${LOG}"
-        sed -i '' "s|ACCESS_TOKEN=.*|ACCESS_TOKEN=\"$NEW_ACCESS_TOKEN\"|" .config.cfg
-        sed -i '' "s|REFRESH_TOKEN=.*|REFRESH_TOKEN=\"$NEW_REFRESH_TOKEN\"|" .config.cfg
-        source .config.cfg  # Reload updated variables
+        
+        # Determine which config file to update
+        CONFIG_FILE="/app/config/.config.cfg"
+        if [ ! -f "$CONFIG_FILE" ]; then
+            CONFIG_FILE="${CONFIG_DIR}/.config.cfg"
+        fi
+        
+        $SED_INPLACE "s|ACCESS_TOKEN=.*|ACCESS_TOKEN=\"$NEW_ACCESS_TOKEN\"|" "$CONFIG_FILE"
+        $SED_INPLACE "s|REFRESH_TOKEN=.*|REFRESH_TOKEN=\"$NEW_REFRESH_TOKEN\"|" "$CONFIG_FILE"
+        
+        # Re-source the config file to update variables
+        source "$CONFIG_FILE"
     else
         echo "❌ Error refreshing token. Check your configuration!" | tee -a "${LOG}"
         exit 1
@@ -240,7 +267,13 @@ else
               then
               NOTE=$(echo "${SCENEIN}" | cut -d "," -f6 )
               
-              sed -i '' ""$o"s|$|$NOTE|" $TEMP_DIR/temp.csv
+              if [[ "$OSTYPE" == "darwin"* ]]; then
+                  # macOS version
+                  sed -i '' "${o}s|$|$NOTE|" $TEMP_DIR/temp.csv
+              else
+                  # Linux version
+                  sed -i "${o}s|$|$NOTE|" $TEMP_DIR/temp.csv
+              fi
             fi
          
         done
@@ -257,7 +290,13 @@ else
                   then
                   NOTE=$(echo "${SCENEIN}" | cut -d "," -f9 )
                   
-                  sed -i '' ""$o"s|$|$NOTE|" $TEMP_DIR/temp_show.csv
+                  if [[ "$OSTYPE" == "darwin"* ]]; then
+                      # macOS version
+                      sed -i '' "${o}s|$|$NOTE|" $TEMP_DIR/temp_show.csv
+                  else
+                      # Linux version
+                      sed -i "${o}s|$|$NOTE|" $TEMP_DIR/temp_show.csv
+                  fi
                 fi
              
             done    
@@ -302,9 +341,21 @@ else
                 #FIN2=$(echo "$SCENEIN2" | cut -d "," -f6)
                 if [[ -n $FIN1 ]]
                   then
-                  sed -i '' ""$SCENEIN2"s/$FIN1/$FIN/" ${DOSCOPY}/letterboxd_import.csv
+                  if [[ "$OSTYPE" == "darwin"* ]]; then
+                      # macOS version
+                      sed -i '' "${SCENEIN2}s/$FIN1/$FIN/" ${DOSCOPY}/letterboxd_import.csv
                   else
-                  sed -i '' ""$SCENEIN2"s/$/$FIN/" ${DOSCOPY}/letterboxd_import.csv
+                      # Linux version
+                      sed -i "${SCENEIN2}s/$FIN1/$FIN/" ${DOSCOPY}/letterboxd_import.csv
+                  fi
+                  else
+                  if [[ "$OSTYPE" == "darwin"* ]]; then
+                      # macOS version
+                      sed -i '' "${SCENEIN2}s/$/$FIN/" ${DOSCOPY}/letterboxd_import.csv
+                  else
+                      # Linux version
+                      sed -i "${SCENEIN2}s/$/$FIN/" ${DOSCOPY}/letterboxd_import.csv
+                  fi
                   fi
                 echo "Movie: ${DEBUTCOURT} already present but adding rating $FIN" | tee -a "${LOG}"
               fi
@@ -324,18 +375,36 @@ else
   # Process temporary files only if they exist and contain data
   if [ -s "$TEMP_DIR/temp.csv" ]; then
       awk -F, 'BEGIN {OFS=","} {gsub(/"/, "", $1); $2=$2",NULL,NULL,NULL"}1' $TEMP_DIR/temp.csv > $TEMP_DIR/temp2.csv
-      sed -i '' 's/^/Movie,/; s/"//g' $TEMP_DIR/temp2.csv
+      if [[ "$OSTYPE" == "darwin"* ]]; then
+          # macOS version
+          sed -i '' 's/^/Movie,/; s/"//g' $TEMP_DIR/temp2.csv
+      else
+          # Linux version
+          sed -i 's/^/Movie,/; s/"//g' $TEMP_DIR/temp2.csv
+      fi
   else
       # Create an empty file
       touch $TEMP_DIR/temp2.csv
   fi
   
   if [ -s "$TEMP_DIR/temp_show.csv" ]; then
-      sed -i '' 's/^/Show,/; s/"//g' $TEMP_DIR/temp_show.csv
+      if [[ "$OSTYPE" == "darwin"* ]]; then
+          # macOS version
+          sed -i '' 's/^/Show,/; s/"//g' $TEMP_DIR/temp_show.csv
+      else
+          # Linux version
+          sed -i 's/^/Show,/; s/"//g' $TEMP_DIR/temp_show.csv
+      fi
   fi
   
   if [ -s "$TEMP_DIR/temp_watchlist.csv" ]; then
-      sed -i '' 's/"//g' $TEMP_DIR/temp_watchlist.csv
+      if [[ "$OSTYPE" == "darwin"* ]]; then
+          # macOS version
+          sed -i '' 's/"//g' $TEMP_DIR/temp_watchlist.csv
+      else
+          # Linux version
+          sed -i 's/"//g' $TEMP_DIR/temp_watchlist.csv
+      fi
   fi
 
   # Define BRAIN_OPS if it's not defined

@@ -67,6 +67,102 @@ Available options:
 
 The script generates a `letterboxd_import.csv` file that you can import on Letterboxd at the following address: https://letterboxd.com/import/
 
+## Docker Usage
+
+You can also run this application in a Docker container.
+
+### Prerequisites for Docker
+
+- Docker installed on your system
+- Docker Compose (optional, but recommended)
+
+### Using Docker Compose (recommended)
+
+1. Clone the repository:
+
+   ```bash
+   git clone https://github.com/JohanDevl/Export_Trakt_4_Letterboxd.git
+   cd Export_Trakt_4_Letterboxd
+   ```
+
+2. Build and start the container:
+
+   ```bash
+   docker-compose up -d
+   ```
+
+3. Enter the container:
+
+   ```bash
+   docker-compose exec trakt-export bash
+   ```
+
+4. Configure Trakt authentication:
+
+   ```bash
+   ./setup_trakt.sh
+   ```
+
+5. Run the export script:
+   ```bash
+   ./Export_Trakt_4_Letterboxd.sh [option]
+   ```
+
+### Using Docker directly
+
+1. Build the Docker image:
+
+   ```bash
+   docker build -t trakt-export .
+   ```
+
+2. Run the container:
+
+   ```bash
+   docker run -it --name trakt-export \
+     -v $(pwd)/config:/app/config \
+     -v $(pwd)/logs:/app/logs \
+     -v $(pwd)/copy:/app/copy \
+     -v $(pwd)/brain_ops:/app/brain_ops \
+     -v $(pwd)/backup:/app/backup \
+     trakt-export
+   ```
+
+3. Configure Trakt authentication:
+
+   ```bash
+   ./setup_trakt.sh
+   ```
+
+4. Run the export script:
+   ```bash
+   ./Export_Trakt_4_Letterboxd.sh [option]
+   ```
+
+### Docker Volumes
+
+The Docker container uses the following volumes to persist data:
+
+- `/app/config`: Contains the configuration file
+- `/app/logs`: Contains log files
+- `/app/copy`: Contains the exported Letterboxd CSV file
+- `/app/brain_ops`: Contains additional export data
+- `/app/backup`: Contains Trakt API backup data
+
+### Docker Implementation Notes
+
+The Docker implementation includes several optimizations:
+
+1. **Modified `sed` commands**: The `sed` commands in the scripts have been adapted to work in Alpine Linux by removing the empty string argument (`''`) which is specific to macOS/BSD versions of `sed`.
+
+2. **Configuration file handling**: The Docker setup uses a dedicated configuration directory (`/app/config`) with proper symlinks to ensure scripts can find and modify the configuration file.
+
+3. **Permissions management**: The Docker entrypoint script ensures all files and directories have the correct permissions for read/write operations.
+
+4. **Path handling**: All scripts have been updated to use absolute paths with the `SCRIPT_DIR` variable to ensure consistent file access regardless of the current working directory.
+
+If you encounter any issues with the Docker implementation, please check the logs and ensure your configuration file is properly set up.
+
 ## Troubleshooting
 
 ### No data is exported
