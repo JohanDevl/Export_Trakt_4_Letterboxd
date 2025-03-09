@@ -260,6 +260,91 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 The MIT License is a permissive license that is short and to the point. It lets people do anything they want with your code as long as they provide attribution back to you and don't hold you liable.
 
+## GitHub Actions and Container Registry
+
+This project uses GitHub Actions to automatically build and publish Docker images to the GitHub Container Registry (ghcr.io). The workflow is defined in the `.github/workflows/docker-publish.yml` file.
+
+For detailed documentation on the GitHub Actions workflow, see [GITHUB_ACTIONS.md](docs/GITHUB_ACTIONS.md).
+
+### Testing the GitHub Actions Workflow
+
+To test the GitHub Actions workflow locally or trigger it on GitHub:
+
+#### Local Testing with `act`
+
+You can test GitHub Actions workflows locally using [act](https://github.com/nektos/act), a tool that runs your GitHub Actions locally:
+
+1. Install `act`:
+
+   ```bash
+   # macOS
+   brew install act
+
+   # Linux
+   curl -s https://raw.githubusercontent.com/nektos/act/master/install.sh | sudo bash
+   ```
+
+2. Run the workflow locally:
+   ```bash
+   act push
+   ```
+
+#### Triggering the Workflow on GitHub
+
+The workflow is configured to run automatically on:
+
+- Schedule: Every day at 15:32 UTC
+- Push to the `main` branch
+- Push of version tags (e.g., `v1.0.0`)
+- Pull requests to the `main` branch
+
+To manually trigger the workflow:
+
+1. Push to the main branch:
+
+   ```bash
+   git commit -m "Your commit message"
+   git push origin main
+   ```
+
+2. Create and push a version tag:
+
+   ```bash
+   git tag v1.0.0
+   git push origin v1.0.0
+   ```
+
+3. Or manually trigger the workflow from the GitHub Actions tab in your repository.
+
+### Using the Published Docker Image
+
+Once the workflow has run successfully, you can pull the published image from GitHub Container Registry:
+
+```bash
+docker pull ghcr.io/johandevl/export_trakt_4_letterboxd:latest
+```
+
+Or specify it in your docker-compose.yml:
+
+```yaml
+version: "3"
+
+services:
+  trakt-export:
+    image: ghcr.io/johandevl/export_trakt_4_letterboxd:latest
+    container_name: trakt-export
+    volumes:
+      - ./config:/app/config
+      - ./logs:/app/logs
+      - ./copy:/app/copy
+      - ./brain_ops:/app/brain_ops
+      - ./backup:/app/backup
+    environment:
+      - TZ=Europe/Paris
+      - CRON_SCHEDULE=0 3 * * * # Run daily at 3:00 AM
+      - EXPORT_OPTION=normal # Use the normal export option
+```
+
 ## Authors
 
 👤 **u2pitchjami**
