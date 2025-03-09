@@ -88,13 +88,13 @@ You can also run this application in a Docker container.
 2. Build and start the container:
 
    ```bash
-   docker-compose up -d
+   docker compose up -d
    ```
 
 3. Enter the container:
 
    ```bash
-   docker-compose exec trakt-export bash
+   docker compose exec trakt-export bash
    ```
 
 4. Configure Trakt authentication:
