@@ -1,5 +1,3 @@
-![Export_Trakt_4_Letterboxd](https://socialify.git.ci/u2pitchjami/Export_Trakt_4_Letterboxd/image?description=1&descriptionEditable=The%20purpose%20of%20this%20script%20is%20to%20export%20Trakt%20movies%20watchlist%20to%20csv%20file%20for%20manual%20Letterboxd%20import&font=Jost&language=1&logo=https%3A%2F%2Fgreen-berenice-35.tiiny.site%2Fimage2vector-3.svg&name=1&owner=1&pattern=Charlie%20Brown&stargazers=1&theme=Dark)
-
 # Export Trakt 4 Letterboxd
 
 This project allows you to export your Trakt.tv data to a format compatible with Letterboxd.
@@ -84,14 +82,22 @@ If you encounter issues:
 2. Verify your authentication configuration
 3. Run `./setup_trakt.sh` again to refresh your tokens
 
+## Acknowledgements
+
+This project is based on the original work by [u2pitchjami](https://github.com/u2pitchjami/Export_Trakt_4_Letterboxd). I would like to express my sincere gratitude to u2pitchjami for creating the initial version of this tool, which has been an invaluable foundation for this project.
+
+The original repository can be found at: https://github.com/u2pitchjami/Export_Trakt_4_Letterboxd
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
+The original work by u2pitchjami is also licensed under the MIT License. This fork maintains the same license to respect the original author's intentions.
+
 ## Authors
 
-👤 **u2pitchjami**
+👤 **JohanDevl**
 
-- Twitter: [@u2pitchjami](https://twitter.com/u2pitchjami)
-- Github: [@u2pitchjami](https://github.com/u2pitchjami)
-- LinkedIn: [@thierry-beugnet-a7761672](https://linkedin.com/in/thierry-beugnet-a7761672)
+- Twitter: [@0xUta](https://twitter.com/0xUta)
+- Github: [@JohanDevl](https://github.com/JohanDevl)
+- LinkedIn: [@johan-devlaminck](https://linkedin.com/in/johan-devlaminck)
