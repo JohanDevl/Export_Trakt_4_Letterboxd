@@ -51,14 +51,14 @@ echo "         - Redirect URL: urn:ietf:wg:oauth:2.0:oob"
 echo ""
 read -p "Enter your Client ID (API Key): " API_KEY
 read -p "Enter your Client Secret: " API_SECRET
-read -p "Enter your Trakt Username: " TRAKT_USERNAME
+read -p "Enter your Trakt Username: " USERNAME
 echo ""
 
 # Update the configuration file
 $SED_INPLACE "s|API_KEY=.*|API_KEY=\"$API_KEY\"|" "$CONFIG_FILE"
 $SED_INPLACE "s|API_SECRET=.*|API_SECRET=\"$API_SECRET\"|" "$CONFIG_FILE"
 $SED_INPLACE "s|REDIRECT_URI=.*|REDIRECT_URI=\"urn:ietf:wg:oauth:2.0:oob\"|" "$CONFIG_FILE"
-$SED_INPLACE "s|TRAKT_USERNAME=.*|TRAKT_USERNAME=\"$TRAKT_USERNAME\"|" "$CONFIG_FILE"
+$SED_INPLACE "s|USERNAME=.*|USERNAME=\"$USERNAME\"|" "$CONFIG_FILE"
 
 echo "Step 2: Get an authorization code"
 echo ""
