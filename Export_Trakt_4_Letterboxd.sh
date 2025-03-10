@@ -88,7 +88,7 @@ refresh_access_token() {
 if [ ! -z $1 ]
 	then
 	OPTION=$(echo $1 | tr '[:upper:]' '[:lower:]')
-	if [ $OPTION == "complet" ]
+	if [ $OPTION == "complete" ]
 		then
 		echo -e "${SAISPAS}${BOLD}[`date`] - Complete Mode activated${NC}" | tee -a "${LOG}"
     endpoints=(
@@ -193,7 +193,7 @@ done
 
 echo -e "All files have been retrieved\n Starting processing" | tee -a "${LOG}"
 
-if [ $OPTION == "complet" ]
+if [ $OPTION == "complete" ]
 	then
 # compress backup folder
 echo -e "Compressing backup..." | tee -a "${LOG}"

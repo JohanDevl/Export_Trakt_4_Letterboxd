@@ -180,7 +180,7 @@ echo ""
 echo "Options for Export_Trakt_4_Letterboxd.sh:"
 echo "  normal (default) - Export rated movies, episodes, history, and watchlist"
 echo "  initial - Export only rated and watched movies"
-echo "  complet - Export all available data"
+echo "  complete - Export all available data"
 echo ""
 
 # Execute command if provided, otherwise keep container running
