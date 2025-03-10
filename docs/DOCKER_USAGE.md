@@ -126,7 +126,7 @@ The Docker container uses the following volumes to persist data:
 You can configure the Docker container to automatically run the export script on a schedule using cron. To enable this feature, set the following environment variables:
 
 - `CRON_SCHEDULE`: The cron schedule expression (e.g., `0 3 * * *` for daily at 3:00 AM)
-- `EXPORT_OPTION`: The export option to use (`normal`, `initial`, or `complet`)
+- `EXPORT_OPTION`: The export option to use (`normal`, `initial`, or `complete`)
 
 ### Example with Docker Compose:
 

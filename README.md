@@ -31,7 +31,7 @@ This project allows you to export your Trakt.tv data to a format compatible with
    ```bash
    ./Export_Trakt_4_Letterboxd.sh [option]
    ```
-   Options: `normal` (default), `initial`, or `complet`
+   Options: `normal` (default), `initial`, or `complete`
 
 ### Docker Installation
 

@@ -58,7 +58,7 @@ Available options:
 
 - `normal` (default): Exports rated movies, rated episodes, movie and TV show history, and watchlist
 - `initial`: Exports only rated and watched movies
-- `complet`: Exports all available data
+- `complete`: Exports all available data
 
 ### Result
 
