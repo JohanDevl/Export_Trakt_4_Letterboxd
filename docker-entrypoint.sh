@@ -78,6 +78,91 @@ if [ ! -f /app/config/.config.cfg ]; then
     echo "Please edit /app/config/.config.cfg with your Trakt API credentials."
 fi
 
+# Function to verify and add missing variables to the config file
+verify_config_variables() {
+    local config_file="/app/config/.config.cfg"
+    local example_file="/app/config/.config.cfg.example"
+    local missing_vars=0
+    local added_vars=0
+    
+    echo "Verifying configuration variables..."
+    
+    # Create a temporary file to store the list of required variables
+    cat > /tmp/required_vars.txt << 'EOF'
+API_KEY
+API_SECRET
+API_URL
+ACCESS_TOKEN
+REFRESH_TOKEN
+REDIRECT_URI
+USERNAME
+BACKUP_DIR
+DOSLOG
+DOSCOPY
+BRAIN_OPS
+DATE
+LOG
+RED
+GREEN
+NC
+BOLD
+SAISPAS
+EOF
+    
+    # Check each required variable
+    while IFS= read -r var; do
+        if ! grep -q "^${var}=" "$config_file"; then
+            echo "Missing variable: ${var}"
+            missing_vars=$((missing_vars + 1))
+            
+            # Extract the variable definition from the example file
+            var_line=$(grep "^${var}=" "$example_file")
+            
+            if [ -n "$var_line" ]; then
+                # Add the variable to the config file
+                echo "$var_line" >> "$config_file"
+                added_vars=$((added_vars + 1))
+                echo "Added ${var} to config file"
+            else
+                echo "Warning: Could not find ${var} in example file"
+            fi
+        fi
+    done < /tmp/required_vars.txt
+    
+    # Check for initialization section
+    if ! grep -q "INITIALIZATION" "$config_file"; then
+        echo "Missing INITIALIZATION section"
+        
+        # Extract the initialization section from the example file
+        sed -n '/INITIALIZATION/,/^fi$/p' "$example_file" > /tmp/init_section.txt
+        
+        # Add the initialization section to the config file
+        echo "" >> "$config_file"
+        echo "############################################################################" >> "$config_file"
+        echo "# INITIALIZATION" >> "$config_file"
+        echo "############################################################################" >> "$config_file"
+        cat /tmp/init_section.txt >> "$config_file"
+        
+        echo "Added INITIALIZATION section to config file"
+        added_vars=$((added_vars + 1))
+    fi
+    
+    # Clean up temporary files
+    rm -f /tmp/required_vars.txt /tmp/init_section.txt
+    
+    # Report results
+    if [ $missing_vars -eq 0 ]; then
+        echo "✅ All required variables are present in the config file."
+    else
+        if [ $added_vars -eq $missing_vars ]; then
+            echo "✅ Added $added_vars missing variables to the config file."
+        else
+            echo "⚠️ Found $missing_vars missing variables, but could only add $added_vars."
+            echo "   Please check your config file manually."
+        fi
+    fi
+}
+
 # Remove any existing symlink or config file in the root directory
 if [ -L /app/.config.cfg ] || [ -f /app/.config.cfg ]; then
     rm -f /app/.config.cfg
@@ -87,6 +172,9 @@ fi
 set +e  # Don't exit on error
 chmod -f 644 /app/config/.config.cfg
 chmod -f 644 /app/config/.config.cfg.example
+
+# Verify and add missing variables to the config file
+verify_config_variables
 
 # Create necessary directories
 mkdir -p /app/logs /app/copy /app/brain_ops /app/backup /app/TEMP
