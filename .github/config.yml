@@ -1,0 +1,26 @@
+# Configuration for new-issue-welcome - https://github.com/behaviorbot/new-issue-welcome
+
+# Comment to be posted to on first time issues
+newIssueWelcomeComment: >
+  Thanks for opening your first issue here! Be sure to follow the issue template and provide all the requested information to help us address your issue efficiently.
+
+# Configuration for new-pr-welcome - https://github.com/behaviorbot/new-pr-welcome
+
+# Comment to be posted to on PRs from first time contributors
+newPRWelcomeComment: >
+  Thanks for opening this pull request! Please make sure you've followed our contributing guidelines and filled out the pull request template.
+
+# Configuration for first-pr-merge - https://github.com/behaviorbot/first-pr-merge
+
+# Comment to be posted to on pull requests merged by a first time user
+firstPRMergeComment: >
+  Congratulations on your first pull request being merged! Thank you for your contribution to the project!
+
+# Configuration for request-info - https://github.com/behaviorbot/request-info
+
+# *Required* Comment to reply with
+requestInfoReplyComment: >
+  We would appreciate it if you could provide more information about this issue/PR. Please fill out the template completely to help us address your submission more efficiently.
+
+# *OPTIONAL* Label to be added to Issues and PRs with insufficient information
+requestInfoLabelToAdd: needs-more-info
