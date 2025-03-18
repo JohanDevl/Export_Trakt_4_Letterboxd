@@ -20,6 +20,9 @@ RUN mkdir -p /app/backup /app/logs /app/copy /app/brain_ops /app/TEMP /app/confi
 # Make scripts executable
 RUN chmod +x /app/Export_Trakt_4_Letterboxd.sh /app/setup_trakt.sh /app/docker-entrypoint.sh
 
+# Set proper permissions for volume directories
+RUN chmod -R 777 /app/backup /app/logs /app/copy /app/brain_ops /app/config
+
 # Set environment variables
 ENV DOSLOG=/app/logs \
     DOSCOPY=/app/copy \
