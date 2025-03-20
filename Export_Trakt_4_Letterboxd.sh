@@ -18,6 +18,17 @@
 SCRIPT_DIR=$(dirname "$(realpath "$0")")
 echo "$SCRIPT_DIR"
 
+# Debug options
+echo "=========== DEBUG INFORMATION ==========="
+echo "Script called with option: $1"
+echo "Number of arguments: $#"
+if [ -n "$1" ]; then
+  echo "Option value: '$1'"
+else
+  echo "No option provided, using default"
+fi
+echo "========================================="
+
 # Detect OS for sed compatibility
 if [[ "$OSTYPE" == "darwin"* ]]; then
     # macOS uses BSD sed

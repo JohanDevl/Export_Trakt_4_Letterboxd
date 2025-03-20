@@ -200,18 +200,26 @@ if [ ! -z "${CRON_SCHEDULE}" ]; then
     # Set default export option if not provided
     EXPORT_OPTION=${EXPORT_OPTION:-normal}
     
+    # Debug messages to help diagnose issues
+    echo "=================================================="
+    echo "DEBUG: Environment variables set:"
+    echo "EXPORT_OPTION = ${EXPORT_OPTION}"
+    echo "CRON_SCHEDULE = ${CRON_SCHEDULE}"
+    echo "=================================================="
+    
     echo "Setting up cron job with schedule: ${CRON_SCHEDULE}"
     echo "Export option: ${EXPORT_OPTION}"
     
     # Create a wrapper script for the cron job
-    cat > /app/cron_wrapper.sh << 'EOF'
+    cat > /app/cron_wrapper.sh << EOF
 #!/bin/bash
 # Get the start time
 START_TIME=$(date +"%Y-%m-%d %H:%M:%S")
 
 # Log to container stdout with a friendly message
 echo "🎬 [CRON] Starting Trakt to Letterboxd Export at ${START_TIME} 🎬" > /proc/1/fd/1
-echo "📊 Exporting your Trakt data... This may take a few minutes." > /proc/1/fd/1
+echo "📊 Exporting your Trakt data with option '${EXPORT_OPTION}'... This may take a few minutes." > /proc/1/fd/1
+echo "DEBUG: Using export option: ${EXPORT_OPTION}" > /proc/1/fd/1
 
 # Make sure directories have proper permissions
 chmod -R 777 /app/logs /app/copy /app/brain_ops /app/backup
@@ -224,11 +232,11 @@ echo "========================================================"
 echo "🎬 Starting Trakt to Letterboxd Export - $(date)"
 echo "========================================================"
 echo "🌟 Exporting your Trakt data to Letterboxd format..."
-echo "📊 This may take a few minutes depending on the amount of data."
+echo "📊 Using export option: ${EXPORT_OPTION}"
 echo "========================================================"
 
 # Run the export script
-cd /app && ./Export_Trakt_4_Letterboxd.sh $1
+cd /app && ./Export_Trakt_4_Letterboxd.sh ${EXPORT_OPTION}
 
 # Ensure the generated CSV file has the correct permissions
 chmod 666 /app/copy/letterboxd_import.csv
@@ -251,7 +259,7 @@ EOF
     chmod +x /app/cron_wrapper.sh
     
     # Create cron job using the wrapper script
-    echo "${CRON_SCHEDULE} /app/cron_wrapper.sh ${EXPORT_OPTION}" > /etc/crontabs/root
+    echo "${CRON_SCHEDULE} /app/cron_wrapper.sh" > /etc/crontabs/root
     
     # Make sure the log file exists and is writable
     touch /app/logs/cron_export.log

@@ -29,7 +29,7 @@ ENV DOSLOG=/app/logs \
     BRAIN_OPS=/app/brain_ops \
     BACKUP_DIR=/app/backup \
     CRON_SCHEDULE="" \
-    EXPORT_OPTION="normal"
+    EXPORT_OPTION="complete"
 
 # Set volume for persistent data
 VOLUME ["/app/logs", "/app/copy", "/app/brain_ops", "/app/backup", "/app/config"]
