@@ -320,7 +320,27 @@ if [ "$OPTION" == "complete" ]; then
   
   # Process movie ratings
   if [ -f "${BACKUP_DIR}/${USERNAME}-ratings_movies.json" ] && [ $(stat -c%s "${BACKUP_DIR}/${USERNAME}-ratings_movies.json") -gt 10 ]; then
-    jq -r '.[] | select(.type == "movie") | [.movie.title, .movie.year, .movie.ids.imdb, .movie.ids.tmdb, (.last_watched_at // .rated_at | split("T")[0]), .rating] | map(. | tostring) | join(",")' "${BACKUP_DIR}/${USERNAME}-ratings_movies.json" | 
+    echo "DEBUG: Processing ratings file - checking for date fields" | tee -a "${LOG}"
+    jq -r 'first | keys' "${BACKUP_DIR}/${USERNAME}-ratings_movies.json" | tee -a "${LOG}"
+    
+    # First get the watched history to create a lookup for watch dates
+    echo "DEBUG: Creating watched date lookup" | tee -a "${LOG}"
+    if [ -f "${BACKUP_DIR}/${USERNAME}-history_movies.json" ]; then
+      jq -c 'reduce .[] as $item ({}; .[$item.movie.ids.trakt] = $item.watched_at)' "${BACKUP_DIR}/${USERNAME}-history_movies.json" > "${TEMP_DIR}/watched_dates.json"
+      echo "DEBUG: Watched date lookup created" | tee -a "${LOG}"
+    elif [ -f "${BACKUP_DIR}/${USERNAME}-watched_movies.json" ]; then
+      jq -c 'reduce .[] as $item ({}; .[$item.movie.ids.trakt] = $item.last_watched_at)' "${BACKUP_DIR}/${USERNAME}-watched_movies.json" > "${TEMP_DIR}/watched_dates.json"
+      echo "DEBUG: Watched date lookup created from watched_movies" | tee -a "${LOG}"
+    else
+      echo "{}" > "${TEMP_DIR}/watched_dates.json"
+      echo "DEBUG: No watch history found, using empty lookup" | tee -a "${LOG}"
+    fi
+    
+    # Now process ratings with watched dates
+    jq -r --slurpfile dates "${TEMP_DIR}/watched_dates.json" '.[] | select(.type == "movie") | 
+      [.movie.title, .movie.year, .movie.ids.imdb, .movie.ids.tmdb, 
+      ($dates[0][.movie.ids.trakt | tostring] // .rated_at | split("T")[0]), 
+      .rating] | map(. | tostring) | join(",")' "${BACKUP_DIR}/${USERNAME}-ratings_movies.json" | 
     sed 's/\(.*\),\(.*\),\(.*\),\(.*\),\(.*\),\(.*\)/"\1",\2,"tt\3",\4,\5,\6/' | 
     sed 's/"tttt/"tt/g' >> "${TEMP_DIR}/ratings_movies.csv"
     echo -e "Movies ratings: Ratings Retrieved"
@@ -357,7 +377,27 @@ elif [ "$OPTION" == "initial" ]; then
   
   # Process movie ratings
   if [ -f "${BACKUP_DIR}/${USERNAME}-ratings_movies.json" ] && [ $(stat -c%s "${BACKUP_DIR}/${USERNAME}-ratings_movies.json") -gt 10 ]; then
-    jq -r '.[] | select(.type == "movie") | [.movie.title, .movie.year, .movie.ids.imdb, .movie.ids.tmdb, (.last_watched_at // .rated_at | split("T")[0]), .rating] | map(. | tostring) | join(",")' "${BACKUP_DIR}/${USERNAME}-ratings_movies.json" | 
+    echo "DEBUG: Processing ratings file - checking for date fields" | tee -a "${LOG}"
+    jq -r 'first | keys' "${BACKUP_DIR}/${USERNAME}-ratings_movies.json" | tee -a "${LOG}"
+    
+    # First get the watched history to create a lookup for watch dates
+    echo "DEBUG: Creating watched date lookup" | tee -a "${LOG}"
+    if [ -f "${BACKUP_DIR}/${USERNAME}-history_movies.json" ]; then
+      jq -c 'reduce .[] as $item ({}; .[$item.movie.ids.trakt] = $item.watched_at)' "${BACKUP_DIR}/${USERNAME}-history_movies.json" > "${TEMP_DIR}/watched_dates.json"
+      echo "DEBUG: Watched date lookup created" | tee -a "${LOG}"
+    elif [ -f "${BACKUP_DIR}/${USERNAME}-watched_movies.json" ]; then
+      jq -c 'reduce .[] as $item ({}; .[$item.movie.ids.trakt] = $item.last_watched_at)' "${BACKUP_DIR}/${USERNAME}-watched_movies.json" > "${TEMP_DIR}/watched_dates.json"
+      echo "DEBUG: Watched date lookup created from watched_movies" | tee -a "${LOG}"
+    else
+      echo "{}" > "${TEMP_DIR}/watched_dates.json"
+      echo "DEBUG: No watch history found, using empty lookup" | tee -a "${LOG}"
+    fi
+    
+    # Now process ratings with watched dates
+    jq -r --slurpfile dates "${TEMP_DIR}/watched_dates.json" '.[] | select(.type == "movie") | 
+      [.movie.title, .movie.year, .movie.ids.imdb, .movie.ids.tmdb, 
+      ($dates[0][.movie.ids.trakt | tostring] // .rated_at | split("T")[0]), 
+      .rating] | map(. | tostring) | join(",")' "${BACKUP_DIR}/${USERNAME}-ratings_movies.json" | 
     sed 's/\(.*\),\(.*\),\(.*\),\(.*\),\(.*\),\(.*\)/"\1",\2,"tt\3",\4,\5,\6/' | 
     sed 's/"tttt/"tt/g' >> "${TEMP_DIR}/ratings_movies.csv"
     echo -e "Movies ratings: Ratings Retrieved"
@@ -389,7 +429,27 @@ else
   
   # Process movie ratings
   if [ -f "${BACKUP_DIR}/${USERNAME}-ratings_movies.json" ] && [ $(stat -c%s "${BACKUP_DIR}/${USERNAME}-ratings_movies.json") -gt 10 ]; then
-    jq -r '.[] | select(.type == "movie") | [.movie.title, .movie.year, .movie.ids.imdb, .movie.ids.tmdb, (.last_watched_at // .rated_at | split("T")[0]), .rating] | map(. | tostring) | join(",")' "${BACKUP_DIR}/${USERNAME}-ratings_movies.json" | 
+    echo "DEBUG: Processing ratings file - checking for date fields" | tee -a "${LOG}"
+    jq -r 'first | keys' "${BACKUP_DIR}/${USERNAME}-ratings_movies.json" | tee -a "${LOG}"
+    
+    # First get the watched history to create a lookup for watch dates
+    echo "DEBUG: Creating watched date lookup" | tee -a "${LOG}"
+    if [ -f "${BACKUP_DIR}/${USERNAME}-history_movies.json" ]; then
+      jq -c 'reduce .[] as $item ({}; .[$item.movie.ids.trakt] = $item.watched_at)' "${BACKUP_DIR}/${USERNAME}-history_movies.json" > "${TEMP_DIR}/watched_dates.json"
+      echo "DEBUG: Watched date lookup created" | tee -a "${LOG}"
+    elif [ -f "${BACKUP_DIR}/${USERNAME}-watched_movies.json" ]; then
+      jq -c 'reduce .[] as $item ({}; .[$item.movie.ids.trakt] = $item.last_watched_at)' "${BACKUP_DIR}/${USERNAME}-watched_movies.json" > "${TEMP_DIR}/watched_dates.json"
+      echo "DEBUG: Watched date lookup created from watched_movies" | tee -a "${LOG}"
+    else
+      echo "{}" > "${TEMP_DIR}/watched_dates.json"
+      echo "DEBUG: No watch history found, using empty lookup" | tee -a "${LOG}"
+    fi
+    
+    # Now process ratings with watched dates
+    jq -r --slurpfile dates "${TEMP_DIR}/watched_dates.json" '.[] | select(.type == "movie") | 
+      [.movie.title, .movie.year, .movie.ids.imdb, .movie.ids.tmdb, 
+      ($dates[0][.movie.ids.trakt | tostring] // .rated_at | split("T")[0]), 
+      .rating] | map(. | tostring) | join(",")' "${BACKUP_DIR}/${USERNAME}-ratings_movies.json" | 
     sed 's/\(.*\),\(.*\),\(.*\),\(.*\),\(.*\),\(.*\)/"\1",\2,"tt\3",\4,\5,\6/' | 
     sed 's/"tttt/"tt/g' >> "${TEMP_DIR}/ratings_movies.csv"
     echo -e "Movies ratings: Ratings Retrieved"
