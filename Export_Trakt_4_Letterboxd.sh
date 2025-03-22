@@ -224,6 +224,7 @@ if [ ! -z $1 ]
 		then
 		echo -e "${SAISPAS}${BOLD}[`date`] - Initial Mode activated${NC}" | tee -a "${LOG}"
     endpoints=(
+    history/movies
     ratings/movies
     watched/movies
     )     
@@ -231,6 +232,7 @@ if [ ! -z $1 ]
 		echo -e "${SAISPAS}${BOLD}[`date`] - Unknown variable, normal mode activated${NC}" | tee -a "${LOG}"
 		OPTION=$(echo "normal")
     endpoints=(
+    history/movies
     ratings/movies
     ratings/episodes
     history/movies
@@ -244,6 +246,7 @@ else
   OPTION=$(echo "normal")
   echo -e "${SAISPAS}${BOLD}[`date`] - Normal Mode activated${NC}" | tee -a "${LOG}"
   endpoints=(
+    history/movies
     ratings/movies
     ratings/episodes
     history/movies
@@ -306,168 +309,115 @@ done
 
 echo -e "All files have been retrieved\n Starting processing" | tee -a "${LOG}"
 
-# Check the passed option
-debug_msg "Checking option: $OPTION"
+# Create the output directory if it doesn't exist
+mkdir -p "$DOSCOPY"
 
-if [ "$OPTION" == "complete" ]; then
-  debug_msg "Complete Mode activated - will process data and create backup"
+# Create empty CSV file with header
+echo "Title,Year,imdbID,tmdbID,WatchedDate,Rating10,Rewatch" > "${TEMP_DIR}/movies_export.csv"
+
+# Create ratings lookup
+if [ -f "${BACKUP_DIR}/${USERNAME}-ratings_movies.json" ]; then
+  echo "DEBUG: Creating ratings lookup file..." | tee -a "${LOG}"
+  jq -c 'reduce .[] as $item ({}; .[$item.movie.ids.trakt | tostring] = $item.rating)' "${BACKUP_DIR}/${USERNAME}-ratings_movies.json" > "${TEMP_DIR}/ratings_lookup.json"
+else
+  echo "{}" > "${TEMP_DIR}/ratings_lookup.json"
+fi
+
+# Create a plays count lookup from watched_movies to determine rewatches
+if [ -f "${BACKUP_DIR}/${USERNAME}-watched_movies.json" ]; then
+  echo "DEBUG: Creating plays count lookup from watched_movies..." | tee -a "${LOG}"
+  jq -c 'reduce .[] as $item ({}; if $item.movie.ids.imdb != null then .[$item.movie.ids.imdb] = $item.plays else . end)' "${BACKUP_DIR}/${USERNAME}-watched_movies.json" > "${TEMP_DIR}/plays_count_lookup.json"
+else
+  echo "{}" > "${TEMP_DIR}/plays_count_lookup.json"
+fi
+
+# Process watched movies history with ratings
+if [ -f "${BACKUP_DIR}/${USERNAME}-history_movies.json" ]; then
+  echo "DEBUG: Processing history_movies file with ratings..." | tee -a "${LOG}"
   
-  # Create empty CSV files to prevent errors
-  touch "${TEMP_DIR}/ratings_movies.csv"
+  # Extract watched movies with their date, rating, and rewatch status
+  jq -r --slurpfile ratings "${TEMP_DIR}/ratings_lookup.json" --slurpfile plays "${TEMP_DIR}/plays_count_lookup.json" '.[] | 
+    [.movie.title, .movie.year, .movie.ids.imdb, .movie.ids.tmdb, 
+     (if .watched_at then .watched_at | split("T")[0] else "" end),
+     ($ratings[0][.movie.ids.trakt | tostring] // ""),
+     (if ($plays[0][.movie.ids.imdb] // 1) > 1 then "true" else "false" end)] | 
+    @csv' "${BACKUP_DIR}/${USERNAME}-history_movies.json" > "${TEMP_DIR}/raw_output.csv"
   
-  # Add header to CSV file
-  echo "Title, Year, imdbID, tmdbID, WatchedDate, Rating10" > "${TEMP_DIR}/ratings_movies.csv"
+  # Process the CSV line by line to properly format
+  cat "${TEMP_DIR}/raw_output.csv" | while IFS=, read -r title year imdb tmdb date rating rewatch; do
+    # Remove any existing "tt" prefix from IMDb ID to avoid duplication
+    imdb=$(echo "$imdb" | sed 's/^"*tt//g' | sed 's/"*$//g')
+    # Properly quote title and format IMDb ID with tt prefix
+    echo "${title},${year},\"tt${imdb}\",${tmdb},${date},${rating},${rewatch}" >> "${TEMP_DIR}/movies_export.csv"
+  done
   
-  # Process movie ratings
-  if [ -f "${BACKUP_DIR}/${USERNAME}-ratings_movies.json" ] && [ $(stat -c%s "${BACKUP_DIR}/${USERNAME}-ratings_movies.json") -gt 10 ]; then
-    echo "DEBUG: Processing ratings file - checking for date fields" | tee -a "${LOG}"
-    jq -r 'first | keys' "${BACKUP_DIR}/${USERNAME}-ratings_movies.json" | tee -a "${LOG}"
+  echo "Movies history: $(wc -l < "${TEMP_DIR}/movies_export.csv") movies processed" | tee -a "${LOG}"
+fi
+
+# In complete mode, also process watched_movies to get a more complete list
+if [ "$OPTION" == "complete" ] && [ -f "${BACKUP_DIR}/${USERNAME}-watched_movies.json" ]; then
+  echo "DEBUG: Processing watched_movies file with ratings (complete mode)..." | tee -a "${LOG}"
+  
+  # Extract all movie IDs from movies_export.csv to avoid duplicates
+  awk -F, '{print $3}' "${TEMP_DIR}/movies_export.csv" | sed 's/"//g' > "${TEMP_DIR}/existing_imdb_ids.txt"
+  
+  # Use watched count from the API for rewatch status
+  jq -r --slurpfile ratings "${TEMP_DIR}/ratings_lookup.json" '.[] | 
+    [.movie.title, .movie.year, .movie.ids.imdb, .movie.ids.tmdb, 
+     (if .last_watched_at then .last_watched_at | split("T")[0] else "" end),
+     ($ratings[0][.movie.ids.trakt | tostring] // ""),
+     (if .plays > 1 then "true" else "false" end)] | 
+    @csv' "${BACKUP_DIR}/${USERNAME}-watched_movies.json" > "${TEMP_DIR}/watched_raw_output.csv"
+  
+  # Process the CSV line by line, only adding movies not already in the history
+  cat "${TEMP_DIR}/watched_raw_output.csv" | while IFS=, read -r title year imdb tmdb date rating rewatch; do
+    # Format IMDb ID consistently
+    clean_imdb=$(echo "$imdb" | sed 's/^"*tt//g' | sed 's/"*$//g')
+    formatted_imdb="tt${clean_imdb}"
     
-    # First get the watched history to create a lookup for watch dates
-    echo "DEBUG: Creating watched date lookup" | tee -a "${LOG}"
-    if [ -f "${BACKUP_DIR}/${USERNAME}-history_movies.json" ]; then
-      jq -c 'reduce .[] as $item ({}; .[$item.movie.ids.trakt] = $item.watched_at)' "${BACKUP_DIR}/${USERNAME}-history_movies.json" > "${TEMP_DIR}/watched_dates.json"
-      echo "DEBUG: Watched date lookup created" | tee -a "${LOG}"
-    elif [ -f "${BACKUP_DIR}/${USERNAME}-watched_movies.json" ]; then
-      jq -c 'reduce .[] as $item ({}; .[$item.movie.ids.trakt] = $item.last_watched_at)' "${BACKUP_DIR}/${USERNAME}-watched_movies.json" > "${TEMP_DIR}/watched_dates.json"
-      echo "DEBUG: Watched date lookup created from watched_movies" | tee -a "${LOG}"
-    else
-      echo "{}" > "${TEMP_DIR}/watched_dates.json"
-      echo "DEBUG: No watch history found, using empty lookup" | tee -a "${LOG}"
+    # Check if this movie is already in our list
+    if ! grep -q "$formatted_imdb" "${TEMP_DIR}/existing_imdb_ids.txt"; then
+      # Add this movie to our output
+      echo "${title},${year},\"${formatted_imdb}\",${tmdb},${date},${rating},${rewatch}" >> "${TEMP_DIR}/movies_export.csv"
+      # Add to our tracking of existing IDs
+      echo "$formatted_imdb" >> "${TEMP_DIR}/existing_imdb_ids.txt"
     fi
-    
-    # Now process ratings with watched dates
-    jq -r --slurpfile dates "${TEMP_DIR}/watched_dates.json" '.[] | select(.type == "movie") | 
-      [.movie.title, .movie.year, .movie.ids.imdb, .movie.ids.tmdb, 
-      ($dates[0][.movie.ids.trakt | tostring] // .rated_at | split("T")[0]), 
-      .rating] | map(. | tostring) | join(",")' "${BACKUP_DIR}/${USERNAME}-ratings_movies.json" | 
-    sed 's/\(.*\),\(.*\),\(.*\),\(.*\),\(.*\),\(.*\)/"\1",\2,"tt\3",\4,\5,\6/' | 
-    sed 's/"tttt/"tt/g' >> "${TEMP_DIR}/ratings_movies.csv"
-    echo -e "Movies ratings: Ratings Retrieved"
-  else
-    echo -e "Movies ratings: No Ratings Retrieved"
-  fi
+  done
+  
+  echo "Total movies after combining history and watched list: $(wc -l < "${TEMP_DIR}/movies_export.csv") movies processed" | tee -a "${LOG}"
+elif [ ! -f "${BACKUP_DIR}/${USERNAME}-history_movies.json" ] && [ -f "${BACKUP_DIR}/${USERNAME}-watched_movies.json" ]; then
+  echo "DEBUG: No history found. Processing watched_movies file with ratings..." | tee -a "${LOG}"
+  
+  # Extract watched movies with their date and rating
+  jq -r --slurpfile ratings "${TEMP_DIR}/ratings_lookup.json" '.[] | 
+    [.movie.title, .movie.year, .movie.ids.imdb, .movie.ids.tmdb, 
+     (if .last_watched_at then .last_watched_at | split("T")[0] else "" end),
+     ($ratings[0][.movie.ids.trakt | tostring] // ""),
+     (if .plays > 1 then "true" else "false" end)] | 
+    @csv' "${BACKUP_DIR}/${USERNAME}-watched_movies.json" > "${TEMP_DIR}/raw_output.csv"
+  
+  # Process the CSV line by line to properly format
+  cat "${TEMP_DIR}/raw_output.csv" | while IFS=, read -r title year imdb tmdb date rating rewatch; do
+    # Remove any existing "tt" prefix from IMDb ID to avoid duplication
+    imdb=$(echo "$imdb" | sed 's/^"*tt//g' | sed 's/"*$//g')
+    # Properly quote title and format IMDb ID with tt prefix
+    echo "${title},${year},\"tt${imdb}\",${tmdb},${date},${rating},${rewatch}" >> "${TEMP_DIR}/movies_export.csv"
+  done
+  
+  echo "Movies watched: $(wc -l < "${TEMP_DIR}/movies_export.csv") movies processed" | tee -a "${LOG}"
+else
+  echo -e "Movies history: No movies found in history or watched" | tee -a "${LOG}"
+fi
 
-  # Process watched history
-  if [ -f "${BACKUP_DIR}/${USERNAME}-watched_movies.json" ] && [ $(stat -c%s "${BACKUP_DIR}/${USERNAME}-watched_movies.json") -gt 10 ]; then
-    jq -r '.[] | [.movie.title, .movie.year, .movie.ids.imdb, .movie.ids.tmdb, (.last_watched_at // .rated_at | split("T")[0]), ""] | map(. | tostring) | join(",")' "${BACKUP_DIR}/${USERNAME}-watched_movies.json" |
-    sed 's/\(.*\),\(.*\),\(.*\),\(.*\),\(.*\),\(.*\)/"\1",\2,"tt\3",\4,\5,\6/' |
-    sed 's/"tttt/"tt/g' >> "${TEMP_DIR}/ratings_movies.csv"
-    echo -e "Movies history: History Retrieved"
-  else
-    echo -e "Movies history: No History Retrieved"
-  fi
-  
-  # Copy files to final destination
-  cp "${TEMP_DIR}/ratings_movies.csv" "${DOSCOPY}/letterboxd_import.csv"
-  debug_msg "CSV file created in ${DOSCOPY}/letterboxd_import.csv"
-  
-  # Now create the backup
+# Copy file to final destination
+cp "${TEMP_DIR}/movies_export.csv" "${DOSCOPY}/letterboxd_import.csv"
+debug_msg "CSV file created in ${DOSCOPY}/letterboxd_import.csv"
+
+# Create backup if in complete mode
+if [ "$OPTION" == "complete" ]; then
   debug_msg "Creating backup archive"
   tar -czvf "${BACKUP_DIR}/backup-$(date '+%Y%m%d%H%M%S').tar.gz" -C "$(dirname "${BACKUP_DIR}")" "$(basename "${BACKUP_DIR}")"
   echo -e "Backup completed"
-elif [ "$OPTION" == "initial" ]; then
-  debug_msg "Initial Mode activated - will process data"
-  
-  # Create empty CSV files to prevent errors
-  touch "${TEMP_DIR}/ratings_movies.csv"
-  
-  # Add header to CSV file
-  echo "Title, Year, imdbID, tmdbID, WatchedDate, Rating10" > "${TEMP_DIR}/ratings_movies.csv"
-  
-  # Process movie ratings
-  if [ -f "${BACKUP_DIR}/${USERNAME}-ratings_movies.json" ] && [ $(stat -c%s "${BACKUP_DIR}/${USERNAME}-ratings_movies.json") -gt 10 ]; then
-    echo "DEBUG: Processing ratings file - checking for date fields" | tee -a "${LOG}"
-    jq -r 'first | keys' "${BACKUP_DIR}/${USERNAME}-ratings_movies.json" | tee -a "${LOG}"
-    
-    # First get the watched history to create a lookup for watch dates
-    echo "DEBUG: Creating watched date lookup" | tee -a "${LOG}"
-    if [ -f "${BACKUP_DIR}/${USERNAME}-history_movies.json" ]; then
-      jq -c 'reduce .[] as $item ({}; .[$item.movie.ids.trakt] = $item.watched_at)' "${BACKUP_DIR}/${USERNAME}-history_movies.json" > "${TEMP_DIR}/watched_dates.json"
-      echo "DEBUG: Watched date lookup created" | tee -a "${LOG}"
-    elif [ -f "${BACKUP_DIR}/${USERNAME}-watched_movies.json" ]; then
-      jq -c 'reduce .[] as $item ({}; .[$item.movie.ids.trakt] = $item.last_watched_at)' "${BACKUP_DIR}/${USERNAME}-watched_movies.json" > "${TEMP_DIR}/watched_dates.json"
-      echo "DEBUG: Watched date lookup created from watched_movies" | tee -a "${LOG}"
-    else
-      echo "{}" > "${TEMP_DIR}/watched_dates.json"
-      echo "DEBUG: No watch history found, using empty lookup" | tee -a "${LOG}"
-    fi
-    
-    # Now process ratings with watched dates
-    jq -r --slurpfile dates "${TEMP_DIR}/watched_dates.json" '.[] | select(.type == "movie") | 
-      [.movie.title, .movie.year, .movie.ids.imdb, .movie.ids.tmdb, 
-      ($dates[0][.movie.ids.trakt | tostring] // .rated_at | split("T")[0]), 
-      .rating] | map(. | tostring) | join(",")' "${BACKUP_DIR}/${USERNAME}-ratings_movies.json" | 
-    sed 's/\(.*\),\(.*\),\(.*\),\(.*\),\(.*\),\(.*\)/"\1",\2,"tt\3",\4,\5,\6/' | 
-    sed 's/"tttt/"tt/g' >> "${TEMP_DIR}/ratings_movies.csv"
-    echo -e "Movies ratings: Ratings Retrieved"
-  else
-    echo -e "Movies ratings: No Ratings Retrieved"
-  fi
-
-  # Process watched history
-  if [ -f "${BACKUP_DIR}/${USERNAME}-watched_movies.json" ] && [ $(stat -c%s "${BACKUP_DIR}/${USERNAME}-watched_movies.json") -gt 10 ]; then
-    jq -r '.[] | [.movie.title, .movie.year, .movie.ids.imdb, .movie.ids.tmdb, (.last_watched_at // .rated_at | split("T")[0]), ""] | map(. | tostring) | join(",")' "${BACKUP_DIR}/${USERNAME}-watched_movies.json" |
-    sed 's/\(.*\),\(.*\),\(.*\),\(.*\),\(.*\),\(.*\)/"\1",\2,"tt\3",\4,\5,\6/' |
-    sed 's/"tttt/"tt/g' >> "${TEMP_DIR}/ratings_movies.csv"
-    echo -e "Movies history: History Retrieved"
-  else
-    echo -e "Movies history: No History Retrieved"
-  fi
-  
-  # Copy files to final destination
-  cp "${TEMP_DIR}/ratings_movies.csv" "${DOSCOPY}/letterboxd_import.csv"
-  debug_msg "CSV file created in ${DOSCOPY}/letterboxd_import.csv"
-else
-  debug_msg "Normal Mode activated - will process data"
-  
-  # Create empty CSV files to prevent errors
-  touch "${TEMP_DIR}/ratings_movies.csv"
-  
-  # Add header to CSV file
-  echo "Title, Year, imdbID, tmdbID, WatchedDate, Rating10" > "${TEMP_DIR}/ratings_movies.csv"
-  
-  # Process movie ratings
-  if [ -f "${BACKUP_DIR}/${USERNAME}-ratings_movies.json" ] && [ $(stat -c%s "${BACKUP_DIR}/${USERNAME}-ratings_movies.json") -gt 10 ]; then
-    echo "DEBUG: Processing ratings file - checking for date fields" | tee -a "${LOG}"
-    jq -r 'first | keys' "${BACKUP_DIR}/${USERNAME}-ratings_movies.json" | tee -a "${LOG}"
-    
-    # First get the watched history to create a lookup for watch dates
-    echo "DEBUG: Creating watched date lookup" | tee -a "${LOG}"
-    if [ -f "${BACKUP_DIR}/${USERNAME}-history_movies.json" ]; then
-      jq -c 'reduce .[] as $item ({}; .[$item.movie.ids.trakt] = $item.watched_at)' "${BACKUP_DIR}/${USERNAME}-history_movies.json" > "${TEMP_DIR}/watched_dates.json"
-      echo "DEBUG: Watched date lookup created" | tee -a "${LOG}"
-    elif [ -f "${BACKUP_DIR}/${USERNAME}-watched_movies.json" ]; then
-      jq -c 'reduce .[] as $item ({}; .[$item.movie.ids.trakt] = $item.last_watched_at)' "${BACKUP_DIR}/${USERNAME}-watched_movies.json" > "${TEMP_DIR}/watched_dates.json"
-      echo "DEBUG: Watched date lookup created from watched_movies" | tee -a "${LOG}"
-    else
-      echo "{}" > "${TEMP_DIR}/watched_dates.json"
-      echo "DEBUG: No watch history found, using empty lookup" | tee -a "${LOG}"
-    fi
-    
-    # Now process ratings with watched dates
-    jq -r --slurpfile dates "${TEMP_DIR}/watched_dates.json" '.[] | select(.type == "movie") | 
-      [.movie.title, .movie.year, .movie.ids.imdb, .movie.ids.tmdb, 
-      ($dates[0][.movie.ids.trakt | tostring] // .rated_at | split("T")[0]), 
-      .rating] | map(. | tostring) | join(",")' "${BACKUP_DIR}/${USERNAME}-ratings_movies.json" | 
-    sed 's/\(.*\),\(.*\),\(.*\),\(.*\),\(.*\),\(.*\)/"\1",\2,"tt\3",\4,\5,\6/' | 
-    sed 's/"tttt/"tt/g' >> "${TEMP_DIR}/ratings_movies.csv"
-    echo -e "Movies ratings: Ratings Retrieved"
-  else
-    echo -e "Movies ratings: No Ratings Retrieved"
-  fi
-
-  # Process watched history
-  if [ -f "${BACKUP_DIR}/${USERNAME}-history_movies.json" ] && [ $(stat -c%s "${BACKUP_DIR}/${USERNAME}-history_movies.json") -gt 10 ]; then
-    jq -r '.[] | [.movie.title, .movie.year, .movie.ids.imdb, .movie.ids.tmdb, (.last_watched_at // .rated_at | split("T")[0]), ""] | map(. | tostring) | join(",")' "${BACKUP_DIR}/${USERNAME}-history_movies.json" |
-    sed 's/\(.*\),\(.*\),\(.*\),\(.*\),\(.*\),\(.*\)/"\1",\2,"tt\3",\4,\5,\6/' |
-    sed 's/"tttt/"tt/g' >> "${TEMP_DIR}/ratings_movies.csv"
-    echo -e "Movies history: History Retrieved"
-  else
-    echo -e "Movies history: No History Retrieved"
-  fi
-  
-  # Copy files to final destination
-  cp "${TEMP_DIR}/ratings_movies.csv" "${DOSCOPY}/letterboxd_import.csv"
-  debug_msg "CSV file created in ${DOSCOPY}/letterboxd_import.csv"
 fi
+
+echo "Export process completed. CSV file is ready for Letterboxd import."
