@@ -320,7 +320,7 @@ if [ "$OPTION" == "complete" ]; then
   
   # Process movie ratings
   if [ -f "${BACKUP_DIR}/${USERNAME}-ratings_movies.json" ] && [ $(stat -c%s "${BACKUP_DIR}/${USERNAME}-ratings_movies.json") -gt 10 ]; then
-    jq -r '.[] | select(.type == "movie") | [.movie.title, .movie.year, .movie.ids.imdb, .movie.ids.tmdb, (.rated_at | split("T")[0]), .rating] | map(. | tostring) | join(",")' "${BACKUP_DIR}/${USERNAME}-ratings_movies.json" | 
+    jq -r '.[] | select(.type == "movie") | [.movie.title, .movie.year, .movie.ids.imdb, .movie.ids.tmdb, (.last_watched_at | split("T")[0]), .rating] | map(. | tostring) | join(",")' "${BACKUP_DIR}/${USERNAME}-ratings_movies.json" | 
     sed 's/\(.*\),\(.*\),\(.*\),\(.*\),\(.*\),\(.*\)/"\1",\2,"tt\3",\4,\5,\6/' | 
     sed 's/"tttt/"tt/g' >> "${TEMP_DIR}/ratings_movies.csv"
     echo -e "Movies ratings: Ratings Retrieved"
@@ -357,7 +357,7 @@ elif [ "$OPTION" == "initial" ]; then
   
   # Process movie ratings
   if [ -f "${BACKUP_DIR}/${USERNAME}-ratings_movies.json" ] && [ $(stat -c%s "${BACKUP_DIR}/${USERNAME}-ratings_movies.json") -gt 10 ]; then
-    jq -r '.[] | select(.type == "movie") | [.movie.title, .movie.year, .movie.ids.imdb, .movie.ids.tmdb, (.rated_at | split("T")[0]), .rating] | map(. | tostring) | join(",")' "${BACKUP_DIR}/${USERNAME}-ratings_movies.json" | 
+    jq -r '.[] | select(.type == "movie") | [.movie.title, .movie.year, .movie.ids.imdb, .movie.ids.tmdb, (.last_watched_at | split("T")[0]), .rating] | map(. | tostring) | join(",")' "${BACKUP_DIR}/${USERNAME}-ratings_movies.json" | 
     sed 's/\(.*\),\(.*\),\(.*\),\(.*\),\(.*\),\(.*\)/"\1",\2,"tt\3",\4,\5,\6/' | 
     sed 's/"tttt/"tt/g' >> "${TEMP_DIR}/ratings_movies.csv"
     echo -e "Movies ratings: Ratings Retrieved"
@@ -389,7 +389,7 @@ else
   
   # Process movie ratings
   if [ -f "${BACKUP_DIR}/${USERNAME}-ratings_movies.json" ] && [ $(stat -c%s "${BACKUP_DIR}/${USERNAME}-ratings_movies.json") -gt 10 ]; then
-    jq -r '.[] | select(.type == "movie") | [.movie.title, .movie.year, .movie.ids.imdb, .movie.ids.tmdb, (.rated_at | split("T")[0]), .rating] | map(. | tostring) | join(",")' "${BACKUP_DIR}/${USERNAME}-ratings_movies.json" | 
+    jq -r '.[] | select(.type == "movie") | [.movie.title, .movie.year, .movie.ids.imdb, .movie.ids.tmdb, (.last_watched_at | split("T")[0]), .rating] | map(. | tostring) | join(",")' "${BACKUP_DIR}/${USERNAME}-ratings_movies.json" | 
     sed 's/\(.*\),\(.*\),\(.*\),\(.*\),\(.*\),\(.*\)/"\1",\2,"tt\3",\4,\5,\6/' | 
     sed 's/"tttt/"tt/g' >> "${TEMP_DIR}/ratings_movies.csv"
     echo -e "Movies ratings: Ratings Retrieved"
