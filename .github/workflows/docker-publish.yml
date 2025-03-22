@@ -136,34 +136,3 @@ jobs:
           fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      # Create release body
-      - name: Create release body
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: |
-          {
-            cat /tmp/release/pr_body.txt
-            echo -e "\n\n### Docker Image"
-            echo -e "The Docker image is attached as an asset and can be loaded with:"
-            echo -e '```bash'
-            echo -e 'gunzip -c docker-image.tar.gz | docker load'
-            echo -e '```'
-            echo -e "\nOr directly pull from GitHub Container Registry:"
-            echo -e '```bash'
-            echo -e 'docker pull ghcr.io/${{ github.repository }}:latest'
-            echo -e '```'
-          } > /tmp/release/release_body.txt
-
-      # Create a single release when merging to main
-      - name: Create release
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        id: create_release
-        uses: softprops/action-gh-release@v1
-        with:
-          name: "Release ${{ github.run_number }}"
-          tag_name: "v0.1.${{ github.run_number }}"
-          draft: false
-          prerelease: false
-          files: |
-            /tmp/release/docker-image.tar.gz
-          body_path: /tmp/release/release_body.txt
