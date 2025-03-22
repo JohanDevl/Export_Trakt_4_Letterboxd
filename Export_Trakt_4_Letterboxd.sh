@@ -33,34 +33,107 @@ echo "========================================="
 if [[ "$OSTYPE" == "darwin"* ]]; then
     # macOS uses BSD sed
     SED_INPLACE="sed -i ''"
+    echo "Detected macOS: Using BSD sed with empty string backup parameter" | tee -a "${LOG}"
 else
     # Linux and others use GNU sed
     SED_INPLACE="sed -i"
+    echo "Detected Linux/other: Using GNU sed" | tee -a "${LOG}"
 fi
+
+# File manipulation debug function
+debug_file_info() {
+    local file="$1"
+    local message="$2"
+    
+    echo "📄 $message:" | tee -a "${LOG}"
+    if [ -f "$file" ]; then
+        echo "  - File exists: ✅" | tee -a "${LOG}"
+        echo "  - File size: $(stat -f%z "$file" 2>/dev/null || stat -c%s "$file" 2>/dev/null || echo "unknown") bytes" | tee -a "${LOG}"
+        echo "  - File permissions: $(ls -la "$file" | awk '{print $1}')" | tee -a "${LOG}"
+        echo "  - Owner: $(ls -la "$file" | awk '{print $3":"$4}')" | tee -a "${LOG}"
+        
+        # Check if file is readable
+        if [ -r "$file" ]; then
+            echo "  - File is readable: ✅" | tee -a "${LOG}"
+        else
+            echo "  - File is readable: ❌" | tee -a "${LOG}"
+        fi
+        
+        # Check if file is writable
+        if [ -w "$file" ]; then
+            echo "  - File is writable: ✅" | tee -a "${LOG}"
+        else
+            echo "  - File is writable: ❌" | tee -a "${LOG}"
+        fi
+        
+        # Check if file has content
+        if [ -s "$file" ]; then
+            echo "  - File has content: ✅" | tee -a "${LOG}"
+            echo "  - First line: $(head -n 1 "$file" 2>/dev/null || echo "Cannot read file")" | tee -a "${LOG}"
+            echo "  - Line count: $(wc -l < "$file" 2>/dev/null || echo "Cannot count lines")" | tee -a "${LOG}"
+        else
+            echo "  - File has content: ❌ (empty file)" | tee -a "${LOG}"
+        fi
+    else
+        echo "  - File exists: ❌ (not found)" | tee -a "${LOG}"
+        echo "  - Directory exists: $(if [ -d "$(dirname "$file")" ]; then echo "✅"; else echo "❌"; fi)" | tee -a "${LOG}"
+        echo "  - Directory permissions: $(ls -la "$(dirname "$file")" 2>/dev/null | head -n 1 | awk '{print $1}' || echo "Cannot access directory")" | tee -a "${LOG}"
+    fi
+    echo "-----------------------------------" | tee -a "${LOG}"
+}
 
 # Always use the config file from the config directory
 CONFIG_DIR="${SCRIPT_DIR}/config"
 if [ -f "/app/config/.config.cfg" ]; then
     # If running in Docker, use the absolute path
     source /app/config/.config.cfg
+    echo "Using Docker config file: /app/config/.config.cfg" | tee -a "${LOG}"
 else
     # If running locally, use the relative path
     source ${CONFIG_DIR}/.config.cfg
+    echo "Using local config file: ${CONFIG_DIR}/.config.cfg" | tee -a "${LOG}"
 fi
 
 # Use the user's temporary directory
 TEMP_DIR="/tmp/trakt_export_$USER"
 rm -rf "$TEMP_DIR"
 mkdir -p "$TEMP_DIR"
+echo "Created temporary directory: $TEMP_DIR" | tee -a "${LOG}"
 
 if [ ! -d $DOSLOG ]
 	then
 	mkdir -p $DOSLOG
+	echo "Created log directory: $DOSLOG" | tee -a "${LOG}"
 fi
 
+# Log environment information
+echo "🌍 Environment information:" | tee -a "${LOG}"
+echo "  - User: $(whoami)" | tee -a "${LOG}"
+echo "  - Working directory: $(pwd)" | tee -a "${LOG}"
+echo "  - Script directory: $SCRIPT_DIR" | tee -a "${LOG}"
+echo "  - Copy directory: $DOSCOPY" | tee -a "${LOG}"
+echo "  - Log directory: $DOSLOG" | tee -a "${LOG}"
+echo "  - Backup directory: $BACKUP_DIR" | tee -a "${LOG}"
+echo "  - OS Type: $OSTYPE" | tee -a "${LOG}"
+echo "-----------------------------------" | tee -a "${LOG}"
+
+# Check key directories
+if [ -d "$DOSCOPY" ]; then
+    echo "Copy directory exists: ✅" | tee -a "${LOG}"
+    echo "Copy directory permissions: $(ls -la "$DOSCOPY" | head -n 1 | awk '{print $1}')" | tee -a "${LOG}"
+else
+    echo "Copy directory exists: ❌ (will attempt to create)" | tee -a "${LOG}"
+fi
+
+# Check for existing CSV file
+if [ -f "${DOSCOPY}/letterboxd_import.csv" ]; then
+    debug_file_info "${DOSCOPY}/letterboxd_import.csv" "Existing CSV file check"
+fi
 
 refresh_access_token() {
     echo "🔄 Refreshing Trakt token..." | tee -a "${LOG}"
+    echo "  - Using refresh token: ${REFRESH_TOKEN:0:5}...${REFRESH_TOKEN: -5}" | tee -a "${LOG}"
+    echo "  - API key: ${API_KEY:0:5}...${API_KEY: -5}" | tee -a "${LOG}"
     
     RESPONSE=$(curl -s -X POST "https://api.trakt.tv/oauth/token" \
         -H "Content-Type: application/json" -v \
@@ -72,11 +145,16 @@ refresh_access_token() {
             \"grant_type\": \"refresh_token\"
         }")
 
+    # Debug response (without exposing sensitive data)
+    echo "  - Response received: $(if [ -n "$RESPONSE" ]; then echo "✅"; else echo "❌ (empty)"; fi)" | tee -a "${LOG}"
+    
     NEW_ACCESS_TOKEN=$(echo "$RESPONSE" | jq -r '.access_token')
     NEW_REFRESH_TOKEN=$(echo "$RESPONSE" | jq -r '.refresh_token')
 
     if [[ "$NEW_ACCESS_TOKEN" != "null" && "$NEW_REFRESH_TOKEN" != "null" ]]; then
         echo "✅ Token refreshed successfully." | tee -a "${LOG}"
+        echo "  - New access token: ${NEW_ACCESS_TOKEN:0:5}...${NEW_ACCESS_TOKEN: -5}" | tee -a "${LOG}"
+        echo "  - New refresh token: ${NEW_REFRESH_TOKEN:0:5}...${NEW_REFRESH_TOKEN: -5}" | tee -a "${LOG}"
         
         # Determine which config file to update
         CONFIG_FILE="/app/config/.config.cfg"
@@ -84,13 +162,31 @@ refresh_access_token() {
             CONFIG_FILE="${CONFIG_DIR}/.config.cfg"
         fi
         
+        echo "  - Updating config file: $CONFIG_FILE" | tee -a "${LOG}"
+        
+        # Check if config file exists and is writable
+        if [ -f "$CONFIG_FILE" ]; then
+            if [ -w "$CONFIG_FILE" ]; then
+                echo "  - Config file is writable: ✅" | tee -a "${LOG}"
+            else
+                echo "  - Config file is writable: ❌ - Permissions: $(ls -la "$CONFIG_FILE" | awk '{print $1}')" | tee -a "${LOG}"
+            fi
+        else
+            echo "  - Config file exists: ❌ (not found)" | tee -a "${LOG}"
+        fi
+        
         $SED_INPLACE "s|ACCESS_TOKEN=.*|ACCESS_TOKEN=\"$NEW_ACCESS_TOKEN\"|" "$CONFIG_FILE"
         $SED_INPLACE "s|REFRESH_TOKEN=.*|REFRESH_TOKEN=\"$NEW_REFRESH_TOKEN\"|" "$CONFIG_FILE"
         
+        echo "  - Config file updated: $(if [ $? -eq 0 ]; then echo "✅"; else echo "❌"; fi)" | tee -a "${LOG}"
+        
         # Re-source the config file to update variables
         source "$CONFIG_FILE"
+        echo "  - Config file re-sourced" | tee -a "${LOG}"
     else
         echo "❌ Error refreshing token. Check your configuration!" | tee -a "${LOG}"
+        echo "  - Response: $RESPONSE" | tee -a "${LOG}"
+        echo "  - Make sure your API credentials are correct and try again." | tee -a "${LOG}"
         exit 1
     fi
 }
@@ -262,11 +358,25 @@ else
             echo -e "Generating an empty letterboxd_import.csv file" | tee -a "${LOG}"
             # Create the DOSCOPY directory if it doesn't exist
             mkdir -p "$DOSCOPY"
+            echo "Created DOSCOPY directory: $DOSCOPY" | tee -a "${LOG}"
+            echo "Directory permissions: $(ls -la "$DOSCOPY" | head -n 1 | awk '{print $1}')" | tee -a "${LOG}"
+            
             chmod 755 "$DOSCOPY"
+            echo "Set directory permissions to 755" | tee -a "${LOG}"
+            echo "New directory permissions: $(ls -la "$DOSCOPY" | head -n 1 | awk '{print $1}')" | tee -a "${LOG}"
+            
             echo "Title, Year, imdbID, tmdbID, WatchedDate, Rating10" > "${DOSCOPY}/letterboxd_import.csv"
+            echo "Created empty CSV file with header" | tee -a "${LOG}"
+            
             chmod 644 "${DOSCOPY}/letterboxd_import.csv"
+            echo "Set CSV file permissions to 644" | tee -a "${LOG}"
+            
+            debug_file_info "${DOSCOPY}/letterboxd_import.csv" "Empty CSV file creation"
         fi
     else
+        echo "Processing movie data for CSV file" | tee -a "${LOG}"
+        echo "Found $(cat "$TEMP_DIR/temp.csv" | wc -l) movies to process" | tee -a "${LOG}"
+        
         COUNT=$(cat "$TEMP_DIR/temp.csv" | wc -l)
         for ((o=1; o<=$COUNT; o++))
         do
@@ -277,6 +387,7 @@ else
             if [[ -n $SCENEIN ]]
               then
               NOTE=$(echo "${SCENEIN}" | cut -d "," -f6 )
+              echo "Found rating $NOTE for movie entry: ${DEBUT:0:30}..." | tee -a "${LOG}"
               
               if [[ "$OSTYPE" == "darwin"* ]]; then
                   # macOS version
@@ -290,6 +401,9 @@ else
         done
 
         if [ -s "$TEMP_DIR/temp_show.csv" ]; then
+            echo "Processing show data for CSV file" | tee -a "${LOG}"
+            echo "Found $(cat "$TEMP_DIR/temp_show.csv" | wc -l) shows to process" | tee -a "${LOG}"
+            
             COUNT=$(cat "$TEMP_DIR/temp_show.csv" | wc -l)
             for ((o=1; o<=$COUNT; o++))
             do
@@ -300,6 +414,7 @@ else
                 if [[ -n $SCENEIN ]]
                   then
                   NOTE=$(echo "${SCENEIN}" | cut -d "," -f9 )
+                  echo "Found rating $NOTE for show entry: ${DEBUT:0:30}..." | tee -a "${LOG}"
                   
                   if [[ "$OSTYPE" == "darwin"* ]]; then
                       # macOS version
@@ -316,68 +431,155 @@ else
         if [[ -f "${DOSCOPY}/letterboxd_import.csv" ]]
             then
             echo -e "File exists, new movies will be appended" | tee -a "${LOG}"
+            debug_file_info "${DOSCOPY}/letterboxd_import.csv" "Existing CSV file check before appending"
         else
             echo -e "Generating letterboxd_import.csv file" | tee -a "${LOG}"
             # Create the DOSCOPY directory if it doesn't exist
             mkdir -p "$DOSCOPY"
+            echo "Created DOSCOPY directory: $DOSCOPY" | tee -a "${LOG}"
+            echo "Directory permissions: $(ls -la "$DOSCOPY" | head -n 1 | awk '{print $1}')" | tee -a "${LOG}"
+            
             chmod 755 "$DOSCOPY"
+            echo "Set directory permissions to 755" | tee -a "${LOG}"
+            echo "New directory permissions: $(ls -la "$DOSCOPY" | head -n 1 | awk '{print $1}')" | tee -a "${LOG}"
+            
             echo "Title, Year, imdbID, tmdbID, WatchedDate, Rating10" > "${DOSCOPY}/letterboxd_import.csv"
+            echo "Created CSV file with header" | tee -a "${LOG}"
+            
             chmod 644 "${DOSCOPY}/letterboxd_import.csv"
+            echo "Set CSV file permissions to 644" | tee -a "${LOG}"
+            
+            debug_file_info "${DOSCOPY}/letterboxd_import.csv" "New CSV file creation"
         fi
+        
         echo -e "Adding the following data: " | tee -a "${LOG}"
         COUNTTEMP=$(cat "$TEMP_DIR/temp.csv" | wc -l)
+        echo "Processing $COUNTTEMP movies to add to CSV" | tee -a "${LOG}"
+        
         for ((p=1; p<=$COUNTTEMP; p++))
         do
           LIGNETEMP=$(cat "$TEMP_DIR/temp.csv" | head -$p | tail +$p)
           DEBUT=$(echo "$LIGNETEMP" | cut -d "," -f1,2,3,4)
-          #echo "debut $DEBUT"
           DEBUTCOURT=$(echo "$LIGNETEMP" | cut -d "," -f1,2)
           MILIEU=$(echo "$LIGNETEMP" | cut -d "," -f5 | cut -d "T" -f1 | tr -d "\"")
-          #echo "MILIEU $MILIEU"
           FIN=$(echo "$LIGNETEMP" | cut -d "," -f6)
-         # echo "FIN $FIN"
+          
+          echo "Processing movie $p/$COUNTTEMP: ${DEBUTCOURT:0:30}..." | tee -a "${LOG}"
+          
+          # Check if the CSV file exists before trying to grep from it
+          if [ ! -f "${DOSCOPY}/letterboxd_import.csv" ]; then
+              echo "ERROR: CSV file doesn't exist at expected location: ${DOSCOPY}/letterboxd_import.csv" | tee -a "${LOG}"
+              debug_file_info "${DOSCOPY}/letterboxd_import.csv" "Missing CSV file"
+              echo "Attempting to create CSV file" | tee -a "${LOG}"
+              
+              mkdir -p "$DOSCOPY"
+              chmod 755 "$DOSCOPY"
+              echo "Title, Year, imdbID, tmdbID, WatchedDate, Rating10" > "${DOSCOPY}/letterboxd_import.csv"
+              chmod 644 "${DOSCOPY}/letterboxd_import.csv"
+              
+              debug_file_info "${DOSCOPY}/letterboxd_import.csv" "Created CSV file"
+          fi
+          
+          # Check if file is searchable before grepping
+          if [ ! -r "${DOSCOPY}/letterboxd_import.csv" ]; then
+              echo "ERROR: CSV file is not readable: ${DOSCOPY}/letterboxd_import.csv" | tee -a "${LOG}"
+              debug_file_info "${DOSCOPY}/letterboxd_import.csv" "Non-readable CSV file"
+              
+              # Try to fix permissions
+              chmod 644 "${DOSCOPY}/letterboxd_import.csv"
+              echo "Attempted to fix file permissions" | tee -a "${LOG}"
+              debug_file_info "${DOSCOPY}/letterboxd_import.csv" "After fixing CSV file permissions"
+          fi
+          
           SCENEIN1=$(grep -e "^${DEBUT},${MILIEU}" ${DOSCOPY}/letterboxd_import.csv 2>/dev/null || echo "")
           
-          #echo "SCENEIN1 $SCENEIN1"
             if [[ -n $SCENEIN1 ]]
               then
               FIN1=$(echo "$SCENEIN1" | cut -d "," -f6)
-              #echo "fin1 $FIN1"
               SCENEIN2=$(grep -n "^${DEBUT},${MILIEU}" ${DOSCOPY}/letterboxd_import.csv | cut -d ":" -f 1)
-              #echo "scenein2 $SCENEIN2"
+              
               if [[ "${DEBUT},${MILIEU},${FIN}" == "${DEBUT},${MILIEU},${FIN1}" ]]
                 then
                 echo "Movie: ${DEBUTCOURT} already present in import file" | tee -a "${LOG}"
               else
-                #FIN2=$(echo "$SCENEIN2" | cut -d "," -f6)
                 if [[ -n $FIN1 ]]
                   then
+                  echo "Movie: ${DEBUTCOURT} found with rating $FIN1, updating to $FIN" | tee -a "${LOG}"
+                  
                   if [[ "$OSTYPE" == "darwin"* ]]; then
                       # macOS version
                       sed -i '' "${SCENEIN2}s/$FIN1/$FIN/" ${DOSCOPY}/letterboxd_import.csv
+                      echo "Used macOS sed to update rating" | tee -a "${LOG}"
                   else
                       # Linux version
                       sed -i "${SCENEIN2}s/$FIN1/$FIN/" ${DOSCOPY}/letterboxd_import.csv
+                      echo "Used Linux sed to update rating" | tee -a "${LOG}"
                   fi
+                  
+                  # Verify the update was successful
+                  VERIFY=$(grep -e "^${DEBUT},${MILIEU}" ${DOSCOPY}/letterboxd_import.csv | grep -e "$FIN" || echo "")
+                  if [[ -n $VERIFY ]]; then
+                      echo "Rating update verified successfully" | tee -a "${LOG}"
                   else
+                      echo "WARNING: Rating update could not be verified" | tee -a "${LOG}"
+                      echo "Current line in CSV: $(grep -e "^${DEBUT},${MILIEU}" ${DOSCOPY}/letterboxd_import.csv || echo "Not found")" | tee -a "${LOG}"
+                  fi
+                  
+                else
+                  echo "Movie: ${DEBUTCOURT} found without rating, adding rating $FIN" | tee -a "${LOG}"
+                  
                   if [[ "$OSTYPE" == "darwin"* ]]; then
                       # macOS version
                       sed -i '' "${SCENEIN2}s/$/$FIN/" ${DOSCOPY}/letterboxd_import.csv
+                      echo "Used macOS sed to add rating" | tee -a "${LOG}"
                   else
                       # Linux version
                       sed -i "${SCENEIN2}s/$/$FIN/" ${DOSCOPY}/letterboxd_import.csv
+                      echo "Used Linux sed to add rating" | tee -a "${LOG}"
                   fi
+                  
+                  # Verify the update was successful
+                  VERIFY=$(grep -e "^${DEBUT},${MILIEU}" ${DOSCOPY}/letterboxd_import.csv | grep -e "$FIN" || echo "")
+                  if [[ -n $VERIFY ]]; then
+                      echo "Rating addition verified successfully" | tee -a "${LOG}"
+                  else
+                      echo "WARNING: Rating addition could not be verified" | tee -a "${LOG}"
+                      echo "Current line in CSV: $(grep -e "^${DEBUT},${MILIEU}" ${DOSCOPY}/letterboxd_import.csv || echo "Not found")" | tee -a "${LOG}"
                   fi
-                echo "Movie: ${DEBUTCOURT} already present but adding rating $FIN" | tee -a "${LOG}"
+                fi
+                echo "Updated: ${DEBUTCOURT} rating to $FIN" | tee -a "${LOG}"
               fi
             else
-              echo "${DEBUT},${MILIEU},${FIN}"
+              echo "New movie: ${DEBUTCOURT} with rating $FIN" | tee -a "${LOG}"
               echo "${DEBUT},${MILIEU},${FIN}" | tee -a "${LOG}" >> "${DOSCOPY}/letterboxd_import.csv"
+              
+              # Verify the addition was successful
+              VERIFY=$(grep -e "^${DEBUT},${MILIEU}" ${DOSCOPY}/letterboxd_import.csv || echo "")
+              if [[ -n $VERIFY ]]; then
+                  echo "Addition verified successfully" | tee -a "${LOG}"
+              else
+                  echo "WARNING: Addition could not be verified" | tee -a "${LOG}"
+                  debug_file_info "${DOSCOPY}/letterboxd_import.csv" "After attempting to add new entry"
+                  
+                  # Try direct file write with cat
+                  echo "Attempting alternative write method..." | tee -a "${LOG}"
+                  echo "${DEBUT},${MILIEU},${FIN}" > /tmp/new_entry.tmp
+                  cat /tmp/new_entry.tmp >> "${DOSCOPY}/letterboxd_import.csv"
+                  rm /tmp/new_entry.tmp
+                  
+                  VERIFY=$(grep -e "^${DEBUT},${MILIEU}" ${DOSCOPY}/letterboxd_import.csv || echo "")
+                  if [[ -n $VERIFY ]]; then
+                      echo "Addition succeeded with alternative method" | tee -a "${LOG}"
+                  else
+                      echo "ERROR: Failed to add entry with alternative method" | tee -a "${LOG}"
+                  fi
+              fi
             fi  
         done
         
         echo " " | tee -a "${LOG}"
         echo -e "File letterboxd_import.csv created in directory $DOSCOPY" | tee -a "${LOG}"
+        debug_file_info "${DOSCOPY}/letterboxd_import.csv" "Final CSV file check"
         echo -e "${BOLD}To be imported at: https://letterboxd.com/import/ ${NC}" | tee -a "${LOG}"
         echo " " | tee -a "${LOG}"
         echo -e "${BOLD}Don't forget to delete the csv file!!! ${NC}" | tee -a "${LOG}"
@@ -450,4 +652,13 @@ fi
 #rm -r ${SCRIPT_DIR}/TEMP/
 
 # Clean up temporary files
+echo "Cleaning up temporary files in $TEMP_DIR" | tee -a "${LOG}"
 rm -rf "$TEMP_DIR"
+echo "Temporary files cleaned up: $(if [ ! -d "$TEMP_DIR" ]; then echo "✅"; else echo "❌"; fi)" | tee -a "${LOG}"
+
+# Final verification of CSV file
+echo "🏁 Final verification:" | tee -a "${LOG}"
+debug_file_info "${DOSCOPY}/letterboxd_import.csv" "Final CSV file verification"
+
+echo "Script execution completed at $(date)" | tee -a "${LOG}"
+echo "=====================================================" | tee -a "${LOG}"
