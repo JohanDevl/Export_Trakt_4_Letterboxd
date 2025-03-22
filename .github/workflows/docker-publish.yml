@@ -101,7 +101,7 @@ jobs:
 
       # Export Docker image for release
       - name: Export Docker image
-        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request'
         run: |
           mkdir -p /tmp/release
           gzip -c /tmp/docker-image.tar > /tmp/release/docker-image.tar.gz
@@ -121,9 +121,42 @@ jobs:
         # against the sigstore community Fulcio instance.
         run: echo "${TAGS}" | xargs -I {} cosign sign --yes {}@${DIGEST}
 
-      # Create a release when merged to main
+      # Get PR information if available
+      - name: Get PR information
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        id: pr_info
+        run: |
+          PR_NUMBER=$(gh pr list --base main --head ${{ github.event.before }} --json number -q '.[0].number')
+          if [ -n "$PR_NUMBER" ]; then
+            PR_BODY=$(gh pr view $PR_NUMBER --json body -q '.body')
+            echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
+            echo "$PR_BODY" > /tmp/release/pr_body.txt
+          else
+            echo "This release includes the latest Docker image for Export Trakt 4 Letterboxd." > /tmp/release/pr_body.txt
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Create release body
+      - name: Create release body
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          {
+            cat /tmp/release/pr_body.txt
+            echo -e "\n\n### Docker Image"
+            echo -e "The Docker image is attached as an asset and can be loaded with:"
+            echo -e '```bash'
+            echo -e 'gunzip -c docker-image.tar.gz | docker load'
+            echo -e '```'
+            echo -e "\nOr directly pull from GitHub Container Registry:"
+            echo -e '```bash'
+            echo -e 'docker pull ghcr.io/${{ github.repository }}:latest'
+            echo -e '```'
+          } > /tmp/release/release_body.txt
+
+      # Create a single release when merging to main
       - name: Create release
-        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         id: create_release
         uses: softprops/action-gh-release@v1
         with:
@@ -133,16 +166,4 @@ jobs:
           prerelease: false
           files: |
             /tmp/release/docker-image.tar.gz
-          body: |
-            This release includes the latest Docker image for Export Trakt 4 Letterboxd.
-
-            ### Docker Image
-            The Docker image is attached as an asset and can be loaded with:
-            ```bash
-            gunzip -c docker-image.tar.gz | docker load
-            ```
-
-            Or directly pull from GitHub Container Registry:
-            ```bash
-            docker pull ghcr.io/${{ github.repository }}:latest
-            ```
+          body_path: /tmp/release/release_body.txt
