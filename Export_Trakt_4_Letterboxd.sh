@@ -18,38 +18,128 @@
 SCRIPT_DIR=$(dirname "$(realpath "$0")")
 echo "$SCRIPT_DIR"
 
+# Debug options
+echo "=========== DEBUG INFORMATION ==========="
+echo "Script called with option: $1"
+echo "Number of arguments: $#"
+if [ -n "$1" ]; then
+  echo "Option value: '$1'"
+else
+  echo "No option provided, using default"
+fi
+echo "========================================="
+
 # Detect OS for sed compatibility
 if [[ "$OSTYPE" == "darwin"* ]]; then
     # macOS uses BSD sed
     SED_INPLACE="sed -i ''"
+    echo "Detected macOS: Using BSD sed with empty string backup parameter" | tee -a "${LOG}"
 else
     # Linux and others use GNU sed
     SED_INPLACE="sed -i"
+    echo "Detected Linux/other: Using GNU sed" | tee -a "${LOG}"
 fi
+
+# Debug messaging function
+debug_msg() {
+    local message="$1"
+    echo -e "DEBUG: $message" | tee -a "${LOG}"
+}
+
+# File manipulation debug function
+debug_file_info() {
+    local file="$1"
+    local message="$2"
+    
+    echo "📄 $message:" | tee -a "${LOG}"
+    if [ -f "$file" ]; then
+        echo "  - File exists: ✅" | tee -a "${LOG}"
+        echo "  - File size: $(stat -f%z "$file" 2>/dev/null || stat -c%s "$file" 2>/dev/null || echo "unknown") bytes" | tee -a "${LOG}"
+        echo "  - File permissions: $(ls -la "$file" | awk '{print $1}')" | tee -a "${LOG}"
+        echo "  - Owner: $(ls -la "$file" | awk '{print $3":"$4}')" | tee -a "${LOG}"
+        
+        # Check if file is readable
+        if [ -r "$file" ]; then
+            echo "  - File is readable: ✅" | tee -a "${LOG}"
+        else
+            echo "  - File is readable: ❌" | tee -a "${LOG}"
+        fi
+        
+        # Check if file is writable
+        if [ -w "$file" ]; then
+            echo "  - File is writable: ✅" | tee -a "${LOG}"
+        else
+            echo "  - File is writable: ❌" | tee -a "${LOG}"
+        fi
+        
+        # Check if file has content
+        if [ -s "$file" ]; then
+            echo "  - File has content: ✅" | tee -a "${LOG}"
+            echo "  - First line: $(head -n 1 "$file" 2>/dev/null || echo "Cannot read file")" | tee -a "${LOG}"
+            echo "  - Line count: $(wc -l < "$file" 2>/dev/null || echo "Cannot count lines")" | tee -a "${LOG}"
+        else
+            echo "  - File has content: ❌ (empty file)" | tee -a "${LOG}"
+        fi
+    else
+        echo "  - File exists: ❌ (not found)" | tee -a "${LOG}"
+        echo "  - Directory exists: $(if [ -d "$(dirname "$file")" ]; then echo "✅"; else echo "❌"; fi)" | tee -a "${LOG}"
+        echo "  - Directory permissions: $(ls -la "$(dirname "$file")" 2>/dev/null | head -n 1 | awk '{print $1}' || echo "Cannot access directory")" | tee -a "${LOG}"
+    fi
+    echo "-----------------------------------" | tee -a "${LOG}"
+}
 
 # Always use the config file from the config directory
 CONFIG_DIR="${SCRIPT_DIR}/config"
 if [ -f "/app/config/.config.cfg" ]; then
     # If running in Docker, use the absolute path
     source /app/config/.config.cfg
+    echo "Using Docker config file: /app/config/.config.cfg" | tee -a "${LOG}"
 else
     # If running locally, use the relative path
     source ${CONFIG_DIR}/.config.cfg
+    echo "Using local config file: ${CONFIG_DIR}/.config.cfg" | tee -a "${LOG}"
 fi
 
 # Use the user's temporary directory
 TEMP_DIR="/tmp/trakt_export_$USER"
 rm -rf "$TEMP_DIR"
 mkdir -p "$TEMP_DIR"
+echo "Created temporary directory: $TEMP_DIR" | tee -a "${LOG}"
 
 if [ ! -d $DOSLOG ]
 	then
 	mkdir -p $DOSLOG
+	echo "Created log directory: $DOSLOG" | tee -a "${LOG}"
 fi
 
+# Log environment information
+echo "🌍 Environment information:" | tee -a "${LOG}"
+echo "  - User: $(whoami)" | tee -a "${LOG}"
+echo "  - Working directory: $(pwd)" | tee -a "${LOG}"
+echo "  - Script directory: $SCRIPT_DIR" | tee -a "${LOG}"
+echo "  - Copy directory: $DOSCOPY" | tee -a "${LOG}"
+echo "  - Log directory: $DOSLOG" | tee -a "${LOG}"
+echo "  - Backup directory: $BACKUP_DIR" | tee -a "${LOG}"
+echo "  - OS Type: $OSTYPE" | tee -a "${LOG}"
+echo "-----------------------------------" | tee -a "${LOG}"
+
+# Check key directories
+if [ -d "$DOSCOPY" ]; then
+    echo "Copy directory exists: ✅" | tee -a "${LOG}"
+    echo "Copy directory permissions: $(ls -la "$DOSCOPY" | head -n 1 | awk '{print $1}')" | tee -a "${LOG}"
+else
+    echo "Copy directory exists: ❌ (will attempt to create)" | tee -a "${LOG}"
+fi
+
+# Check for existing CSV file
+if [ -f "${DOSCOPY}/letterboxd_import.csv" ]; then
+    debug_file_info "${DOSCOPY}/letterboxd_import.csv" "Existing CSV file check"
+fi
 
 refresh_access_token() {
     echo "🔄 Refreshing Trakt token..." | tee -a "${LOG}"
+    echo "  - Using refresh token: ${REFRESH_TOKEN:0:5}...${REFRESH_TOKEN: -5}" | tee -a "${LOG}"
+    echo "  - API key: ${API_KEY:0:5}...${API_KEY: -5}" | tee -a "${LOG}"
     
     RESPONSE=$(curl -s -X POST "https://api.trakt.tv/oauth/token" \
         -H "Content-Type: application/json" -v \
@@ -61,11 +151,16 @@ refresh_access_token() {
             \"grant_type\": \"refresh_token\"
         }")
 
+    # Debug response (without exposing sensitive data)
+    echo "  - Response received: $(if [ -n "$RESPONSE" ]; then echo "✅"; else echo "❌ (empty)"; fi)" | tee -a "${LOG}"
+    
     NEW_ACCESS_TOKEN=$(echo "$RESPONSE" | jq -r '.access_token')
     NEW_REFRESH_TOKEN=$(echo "$RESPONSE" | jq -r '.refresh_token')
 
     if [[ "$NEW_ACCESS_TOKEN" != "null" && "$NEW_REFRESH_TOKEN" != "null" ]]; then
         echo "✅ Token refreshed successfully." | tee -a "${LOG}"
+        echo "  - New access token: ${NEW_ACCESS_TOKEN:0:5}...${NEW_ACCESS_TOKEN: -5}" | tee -a "${LOG}"
+        echo "  - New refresh token: ${NEW_REFRESH_TOKEN:0:5}...${NEW_REFRESH_TOKEN: -5}" | tee -a "${LOG}"
         
         # Determine which config file to update
         CONFIG_FILE="/app/config/.config.cfg"
@@ -73,13 +168,31 @@ refresh_access_token() {
             CONFIG_FILE="${CONFIG_DIR}/.config.cfg"
         fi
         
+        echo "  - Updating config file: $CONFIG_FILE" | tee -a "${LOG}"
+        
+        # Check if config file exists and is writable
+        if [ -f "$CONFIG_FILE" ]; then
+            if [ -w "$CONFIG_FILE" ]; then
+                echo "  - Config file is writable: ✅" | tee -a "${LOG}"
+            else
+                echo "  - Config file is writable: ❌ - Permissions: $(ls -la "$CONFIG_FILE" | awk '{print $1}')" | tee -a "${LOG}"
+            fi
+        else
+            echo "  - Config file exists: ❌ (not found)" | tee -a "${LOG}"
+        fi
+        
         $SED_INPLACE "s|ACCESS_TOKEN=.*|ACCESS_TOKEN=\"$NEW_ACCESS_TOKEN\"|" "$CONFIG_FILE"
         $SED_INPLACE "s|REFRESH_TOKEN=.*|REFRESH_TOKEN=\"$NEW_REFRESH_TOKEN\"|" "$CONFIG_FILE"
         
+        echo "  - Config file updated: $(if [ $? -eq 0 ]; then echo "✅"; else echo "❌"; fi)" | tee -a "${LOG}"
+        
         # Re-source the config file to update variables
         source "$CONFIG_FILE"
+        echo "  - Config file re-sourced" | tee -a "${LOG}"
     else
         echo "❌ Error refreshing token. Check your configuration!" | tee -a "${LOG}"
+        echo "  - Response: $RESPONSE" | tee -a "${LOG}"
+        echo "  - Make sure your API credentials are correct and try again." | tee -a "${LOG}"
         exit 1
     fi
 }
@@ -111,6 +224,7 @@ if [ ! -z $1 ]
 		then
 		echo -e "${SAISPAS}${BOLD}[`date`] - Initial Mode activated${NC}" | tee -a "${LOG}"
     endpoints=(
+    history/movies
     ratings/movies
     watched/movies
     )     
@@ -118,6 +232,7 @@ if [ ! -z $1 ]
 		echo -e "${SAISPAS}${BOLD}[`date`] - Unknown variable, normal mode activated${NC}" | tee -a "${LOG}"
 		OPTION=$(echo "normal")
     endpoints=(
+    history/movies
     ratings/movies
     ratings/episodes
     history/movies
@@ -131,6 +246,7 @@ else
   OPTION=$(echo "normal")
   echo -e "${SAISPAS}${BOLD}[`date`] - Normal Mode activated${NC}" | tee -a "${LOG}"
   endpoints=(
+    history/movies
     ratings/movies
     ratings/episodes
     history/movies
@@ -193,250 +309,115 @@ done
 
 echo -e "All files have been retrieved\n Starting processing" | tee -a "${LOG}"
 
-if [ $OPTION == "complete" ]
-	then
-# compress backup folder
-echo -e "Compressing backup..." | tee -a "${LOG}"
-tar -czvf ${BACKUP_DIR}.tar.gz ${BACKUP_DIR}
-echo -e "Backup compressed: \e[32m${BACKUP_DIR}.tar.gz\e[0m\n" | tee -a "${LOG}"
-echo -e "That's it, backup completed" | tee -a "${LOG}"
+# Create the output directory if it doesn't exist
+mkdir -p "$DOSCOPY"
+
+# Create empty CSV file with header
+echo "Title,Year,imdbID,tmdbID,WatchedDate,Rating10,Rewatch" > "${TEMP_DIR}/movies_export.csv"
+
+# Create ratings lookup
+if [ -f "${BACKUP_DIR}/${USERNAME}-ratings_movies.json" ]; then
+  echo "DEBUG: Creating ratings lookup file..." | tee -a "${LOG}"
+  jq -c 'reduce .[] as $item ({}; .[$item.movie.ids.trakt | tostring] = $item.rating)' "${BACKUP_DIR}/${USERNAME}-ratings_movies.json" > "${TEMP_DIR}/ratings_lookup.json"
 else
-    if [ $OPTION == "initial" ]
-      then
-      cat ${BACKUP_DIR}/${USERNAME}-ratings_movies.json | jq -r '.[]|[.movie.title, .movie.year, .movie.ids.imdb, .movie.ids.tmdb, .last_watched_at, .rating]|@csv' >> "$TEMP_DIR/temp_rating.csv"
-      cat ${BACKUP_DIR}/${USERNAME}-watched_movies.json | jq -r '.[]|[.movie.title, .movie.year, .movie.ids.imdb, .movie.ids.tmdb, .last_watched_at, .rating]|@csv' >> "$TEMP_DIR/temp.csv"
-    else
-      # Create empty files to avoid "No such file or directory" errors
-      touch "$TEMP_DIR/temp_rating.csv"
-      touch "$TEMP_DIR/temp_rating_episodes.csv"
-      touch "$TEMP_DIR/temp.csv"
-      touch "$TEMP_DIR/temp_show.csv"
-      touch "$TEMP_DIR/temp_watchlist.csv"
-      
-      # Make sure files have the correct permissions
-      chmod 644 "$TEMP_DIR/"*.csv
-      
-      # Process JSON files if they exist and contain data
-      if [ -f "${BACKUP_DIR}/${USERNAME}-ratings_movies.json" ] && [ -s "${BACKUP_DIR}/${USERNAME}-ratings_movies.json" ]; then
-        cat ${BACKUP_DIR}/${USERNAME}-ratings_movies.json | jq -r '.[]|[.movie.title, .movie.year, .movie.ids.imdb, .movie.ids.tmdb, .watched_at, .rating]|@csv' >> "$TEMP_DIR/temp_rating.csv"
-      fi
-      
-      if [ -f "${BACKUP_DIR}/${USERNAME}-ratings_episodes.json" ] && [ -s "${BACKUP_DIR}/${USERNAME}-ratings_episodes.json" ]; then
-        cat ${BACKUP_DIR}/${USERNAME}-ratings_episodes.json | jq -r '.[]|[.show.title, .show.year, .episode.title, .episode.season, .episode.number, .show.ids.imdb, .show.ids.tmdb, .watched_at, .rating]|@csv' >> "$TEMP_DIR/temp_rating_episodes.csv"
-      fi
-      
-      if [ -f "${BACKUP_DIR}/${USERNAME}-history_movies.json" ] && [ -s "${BACKUP_DIR}/${USERNAME}-history_movies.json" ]; then
-        cat ${BACKUP_DIR}/${USERNAME}-history_movies.json | jq -r '.[]|[.movie.title, .movie.year, .movie.ids.imdb, .movie.ids.tmdb, .watched_at, .rating]|@csv' >> "$TEMP_DIR/temp.csv"
-      fi
-      
-      if [ -f "${BACKUP_DIR}/${USERNAME}-history_shows.json" ] && [ -s "${BACKUP_DIR}/${USERNAME}-history_shows.json" ]; then
-        cat ${BACKUP_DIR}/${USERNAME}-history_shows.json | jq -r '.[]|[.show.title, .show.year, .episode.title, .episode.season, .episode.number, .show.ids.imdb, .show.ids.tmdb, .watched_at, .rating]|@csv' >> "$TEMP_DIR/temp_show.csv"
-      fi
-      
-      if [ -f "${BACKUP_DIR}/${USERNAME}-watchlist_movies.json" ] && [ -s "${BACKUP_DIR}/${USERNAME}-watchlist_movies.json" ]; then
-        cat ${BACKUP_DIR}/${USERNAME}-watchlist_movies.json | jq -r '.[]|[.type, .movie.title, .movie.year, .movie.ids.imdb, .movie.ids.tmdb, .listed_at]|@csv' >> "$TEMP_DIR/temp_watchlist.csv"
-      fi
-      
-      if [ -f "${BACKUP_DIR}/${USERNAME}-watchlist_shows.json" ] && [ -s "${BACKUP_DIR}/${USERNAME}-watchlist_shows.json" ]; then
-        cat ${BACKUP_DIR}/${USERNAME}-watchlist_shows.json | jq -r '.[]|[.type, .show.title, .show.year, .show.ids.imdb, .show.ids.tmdb, .listed_at]|@csv' >> "$TEMP_DIR/temp_watchlist.csv"
-      fi
-    fi   
-    
-    # Check if temporary files contain data
-    if [ ! -s "$TEMP_DIR/temp.csv" ]; then
-        echo -e "\e[33mWARNING: No movie data was retrieved from the Trakt API.\e[0m" | tee -a "${LOG}"
-        echo -e "The letterboxd_import.csv file will not be updated." | tee -a "${LOG}"
-        # Create an empty letterboxd_import.csv file if it doesn't exist
-        if [ ! -f "${DOSCOPY}/letterboxd_import.csv" ]; then
-            echo -e "Generating an empty letterboxd_import.csv file" | tee -a "${LOG}"
-            # Create the DOSCOPY directory if it doesn't exist
-            mkdir -p "$DOSCOPY"
-            chmod 755 "$DOSCOPY"
-            echo "Title, Year, imdbID, tmdbID, WatchedDate, Rating10" > "${DOSCOPY}/letterboxd_import.csv"
-            chmod 644 "${DOSCOPY}/letterboxd_import.csv"
-        fi
-    else
-        COUNT=$(cat "$TEMP_DIR/temp.csv" | wc -l)
-        for ((o=1; o<=$COUNT; o++))
-        do
-          LIGNE=$(cat "$TEMP_DIR/temp.csv" | head -$o | tail +$o)
-          DEBUT=$(echo "$LIGNE" | cut -d "," -f1,2,3,4)
-          SCENEIN=$(grep -e "^${DEBUT}" $TEMP_DIR/temp_rating.csv 2>/dev/null || echo "")
-          
-            if [[ -n $SCENEIN ]]
-              then
-              NOTE=$(echo "${SCENEIN}" | cut -d "," -f6 )
-              
-              if [[ "$OSTYPE" == "darwin"* ]]; then
-                  # macOS version
-                  sed -i '' "${o}s|$|$NOTE|" $TEMP_DIR/temp.csv
-              else
-                  # Linux version
-                  sed -i "${o}s|$|$NOTE|" $TEMP_DIR/temp.csv
-              fi
-            fi
-         
-        done
-
-        if [ -s "$TEMP_DIR/temp_show.csv" ]; then
-            COUNT=$(cat "$TEMP_DIR/temp_show.csv" | wc -l)
-            for ((o=1; o<=$COUNT; o++))
-            do
-              LIGNE=$(cat "$TEMP_DIR/temp_show.csv" | head -$o | tail +$o)
-              DEBUT=$(echo "$LIGNE" | cut -d "," -f1,2,3,4)
-              SCENEIN=$(grep -e "^${DEBUT}" $TEMP_DIR/temp_rating_episodes.csv 2>/dev/null || echo "")
-              
-                if [[ -n $SCENEIN ]]
-                  then
-                  NOTE=$(echo "${SCENEIN}" | cut -d "," -f9 )
-                  
-                  if [[ "$OSTYPE" == "darwin"* ]]; then
-                      # macOS version
-                      sed -i '' "${o}s|$|$NOTE|" $TEMP_DIR/temp_show.csv
-                  else
-                      # Linux version
-                      sed -i "${o}s|$|$NOTE|" $TEMP_DIR/temp_show.csv
-                  fi
-                fi
-             
-            done    
-        fi
-        
-        if [[ -f "${DOSCOPY}/letterboxd_import.csv" ]]
-            then
-            echo -e "File exists, new movies will be appended" | tee -a "${LOG}"
-        else
-            echo -e "Generating letterboxd_import.csv file" | tee -a "${LOG}"
-            # Create the DOSCOPY directory if it doesn't exist
-            mkdir -p "$DOSCOPY"
-            chmod 755 "$DOSCOPY"
-            echo "Title, Year, imdbID, tmdbID, WatchedDate, Rating10" > "${DOSCOPY}/letterboxd_import.csv"
-            chmod 644 "${DOSCOPY}/letterboxd_import.csv"
-        fi
-        echo -e "Adding the following data: " | tee -a "${LOG}"
-        COUNTTEMP=$(cat "$TEMP_DIR/temp.csv" | wc -l)
-        for ((p=1; p<=$COUNTTEMP; p++))
-        do
-          LIGNETEMP=$(cat "$TEMP_DIR/temp.csv" | head -$p | tail +$p)
-          DEBUT=$(echo "$LIGNETEMP" | cut -d "," -f1,2,3,4)
-          #echo "debut $DEBUT"
-          DEBUTCOURT=$(echo "$LIGNETEMP" | cut -d "," -f1,2)
-          MILIEU=$(echo "$LIGNETEMP" | cut -d "," -f5 | cut -d "T" -f1 | tr -d "\"")
-          #echo "MILIEU $MILIEU"
-          FIN=$(echo "$LIGNETEMP" | cut -d "," -f6)
-         # echo "FIN $FIN"
-          SCENEIN1=$(grep -e "^${DEBUT},${MILIEU}" ${DOSCOPY}/letterboxd_import.csv 2>/dev/null || echo "")
-          
-          #echo "SCENEIN1 $SCENEIN1"
-            if [[ -n $SCENEIN1 ]]
-              then
-              FIN1=$(echo "$SCENEIN1" | cut -d "," -f6)
-              #echo "fin1 $FIN1"
-              SCENEIN2=$(grep -n "^${DEBUT},${MILIEU}" ${DOSCOPY}/letterboxd_import.csv | cut -d ":" -f 1)
-              #echo "scenein2 $SCENEIN2"
-              if [[ "${DEBUT},${MILIEU},${FIN}" == "${DEBUT},${MILIEU},${FIN1}" ]]
-                then
-                echo "Movie: ${DEBUTCOURT} already present in import file" | tee -a "${LOG}"
-              else
-                #FIN2=$(echo "$SCENEIN2" | cut -d "," -f6)
-                if [[ -n $FIN1 ]]
-                  then
-                  if [[ "$OSTYPE" == "darwin"* ]]; then
-                      # macOS version
-                      sed -i '' "${SCENEIN2}s/$FIN1/$FIN/" ${DOSCOPY}/letterboxd_import.csv
-                  else
-                      # Linux version
-                      sed -i "${SCENEIN2}s/$FIN1/$FIN/" ${DOSCOPY}/letterboxd_import.csv
-                  fi
-                  else
-                  if [[ "$OSTYPE" == "darwin"* ]]; then
-                      # macOS version
-                      sed -i '' "${SCENEIN2}s/$/$FIN/" ${DOSCOPY}/letterboxd_import.csv
-                  else
-                      # Linux version
-                      sed -i "${SCENEIN2}s/$/$FIN/" ${DOSCOPY}/letterboxd_import.csv
-                  fi
-                  fi
-                echo "Movie: ${DEBUTCOURT} already present but adding rating $FIN" | tee -a "${LOG}"
-              fi
-            else
-              echo "${DEBUT},${MILIEU},${FIN}"
-              echo "${DEBUT},${MILIEU},${FIN}" | tee -a "${LOG}" >> "${DOSCOPY}/letterboxd_import.csv"
-            fi  
-        done
-        
-        echo " " | tee -a "${LOG}"
-        echo -e "File letterboxd_import.csv created in directory $DOSCOPY" | tee -a "${LOG}"
-        echo -e "${BOLD}To be imported at: https://letterboxd.com/import/ ${NC}" | tee -a "${LOG}"
-        echo " " | tee -a "${LOG}"
-        echo -e "${BOLD}Don't forget to delete the csv file!!! ${NC}" | tee -a "${LOG}"
-    fi
-
-  # Process temporary files only if they exist and contain data
-  if [ -s "$TEMP_DIR/temp.csv" ]; then
-      awk -F, 'BEGIN {OFS=","} {gsub(/"/, "", $1); $2=$2",NULL,NULL,NULL"}1' $TEMP_DIR/temp.csv > $TEMP_DIR/temp2.csv
-      if [[ "$OSTYPE" == "darwin"* ]]; then
-          # macOS version
-          sed -i '' 's/^/Movie,/; s/"//g' $TEMP_DIR/temp2.csv
-      else
-          # Linux version
-          sed -i 's/^/Movie,/; s/"//g' $TEMP_DIR/temp2.csv
-      fi
-  else
-      # Create an empty file
-      touch $TEMP_DIR/temp2.csv
-  fi
-  
-  if [ -s "$TEMP_DIR/temp_show.csv" ]; then
-      if [[ "$OSTYPE" == "darwin"* ]]; then
-          # macOS version
-          sed -i '' 's/^/Show,/; s/"//g' $TEMP_DIR/temp_show.csv
-      else
-          # Linux version
-          sed -i 's/^/Show,/; s/"//g' $TEMP_DIR/temp_show.csv
-      fi
-  fi
-  
-  if [ -s "$TEMP_DIR/temp_watchlist.csv" ]; then
-      if [[ "$OSTYPE" == "darwin"* ]]; then
-          # macOS version
-          sed -i '' 's/"//g' $TEMP_DIR/temp_watchlist.csv
-      else
-          # Linux version
-          sed -i 's/"//g' $TEMP_DIR/temp_watchlist.csv
-      fi
-  fi
-
-  # Define BRAIN_OPS if it's not defined
-  if [ -z "${BRAIN_OPS}" ]; then
-    BRAIN_OPS="${SCRIPT_DIR}"
-    echo "BRAIN_OPS variable not defined, using current directory: ${BRAIN_OPS}" | tee -a "${LOG}"
-  fi
-
-  # Check if the directory is writable
-  if [ ! -w "${BRAIN_OPS}" ]; then
-    echo "The directory ${BRAIN_OPS} is not writable. Using current directory." | tee -a "${LOG}"
-    BRAIN_OPS="${SCRIPT_DIR}"
-  fi
-
-  # Create the BRAIN_OPS directory if it doesn't exist
-  mkdir -p "${BRAIN_OPS}"
-
-  # Write to output files only if temporary files exist and contain data
-  if [ -s "$TEMP_DIR/temp2.csv" ]; then
-      cat $TEMP_DIR/temp2.csv >> ${BRAIN_OPS}/watched_${DATE}.csv
-  fi
-  
-  if [ -s "$TEMP_DIR/temp_show.csv" ]; then
-      cat $TEMP_DIR/temp_show.csv >> ${BRAIN_OPS}/watched_${DATE}.csv
-  fi
-  
-  if [ -s "$TEMP_DIR/temp_watchlist.csv" ]; then
-      cat $TEMP_DIR/temp_watchlist.csv >> ${BRAIN_OPS}/watchlist_${DATE}.csv
-  fi
+  echo "{}" > "${TEMP_DIR}/ratings_lookup.json"
 fi
-#rm -r ${BACKUP_DIR}/
-#rm -r ${SCRIPT_DIR}/TEMP/
 
-# Clean up temporary files
-rm -rf "$TEMP_DIR"
+# Create a plays count lookup from watched_movies to determine rewatches
+if [ -f "${BACKUP_DIR}/${USERNAME}-watched_movies.json" ]; then
+  echo "DEBUG: Creating plays count lookup from watched_movies..." | tee -a "${LOG}"
+  jq -c 'reduce .[] as $item ({}; if $item.movie.ids.imdb != null then .[$item.movie.ids.imdb] = $item.plays else . end)' "${BACKUP_DIR}/${USERNAME}-watched_movies.json" > "${TEMP_DIR}/plays_count_lookup.json"
+else
+  echo "{}" > "${TEMP_DIR}/plays_count_lookup.json"
+fi
+
+# Process watched movies history with ratings
+if [ -f "${BACKUP_DIR}/${USERNAME}-history_movies.json" ]; then
+  echo "DEBUG: Processing history_movies file with ratings..." | tee -a "${LOG}"
+  
+  # Extract watched movies with their date, rating, and rewatch status
+  jq -r --slurpfile ratings "${TEMP_DIR}/ratings_lookup.json" --slurpfile plays "${TEMP_DIR}/plays_count_lookup.json" '.[] | 
+    [.movie.title, .movie.year, .movie.ids.imdb, .movie.ids.tmdb, 
+     (if .watched_at then .watched_at | split("T")[0] else "" end),
+     ($ratings[0][.movie.ids.trakt | tostring] // ""),
+     (if ($plays[0][.movie.ids.imdb] // 1) > 1 then "true" else "false" end)] | 
+    @csv' "${BACKUP_DIR}/${USERNAME}-history_movies.json" > "${TEMP_DIR}/raw_output.csv"
+  
+  # Process the CSV line by line to properly format
+  cat "${TEMP_DIR}/raw_output.csv" | while IFS=, read -r title year imdb tmdb date rating rewatch; do
+    # Remove any existing "tt" prefix from IMDb ID to avoid duplication
+    imdb=$(echo "$imdb" | sed 's/^"*tt//g' | sed 's/"*$//g')
+    # Properly quote title and format IMDb ID with tt prefix
+    echo "${title},${year},\"tt${imdb}\",${tmdb},${date},${rating},${rewatch}" >> "${TEMP_DIR}/movies_export.csv"
+  done
+  
+  echo "Movies history: $(wc -l < "${TEMP_DIR}/movies_export.csv") movies processed" | tee -a "${LOG}"
+fi
+
+# In complete mode, also process watched_movies to get a more complete list
+if [ "$OPTION" == "complete" ] && [ -f "${BACKUP_DIR}/${USERNAME}-watched_movies.json" ]; then
+  echo "DEBUG: Processing watched_movies file with ratings (complete mode)..." | tee -a "${LOG}"
+  
+  # Extract all movie IDs from movies_export.csv to avoid duplicates
+  awk -F, '{print $3}' "${TEMP_DIR}/movies_export.csv" | sed 's/"//g' > "${TEMP_DIR}/existing_imdb_ids.txt"
+  
+  # Use watched count from the API for rewatch status
+  jq -r --slurpfile ratings "${TEMP_DIR}/ratings_lookup.json" '.[] | 
+    [.movie.title, .movie.year, .movie.ids.imdb, .movie.ids.tmdb, 
+     (if .last_watched_at then .last_watched_at | split("T")[0] else "" end),
+     ($ratings[0][.movie.ids.trakt | tostring] // ""),
+     (if .plays > 1 then "true" else "false" end)] | 
+    @csv' "${BACKUP_DIR}/${USERNAME}-watched_movies.json" > "${TEMP_DIR}/watched_raw_output.csv"
+  
+  # Process the CSV line by line, only adding movies not already in the history
+  cat "${TEMP_DIR}/watched_raw_output.csv" | while IFS=, read -r title year imdb tmdb date rating rewatch; do
+    # Format IMDb ID consistently
+    clean_imdb=$(echo "$imdb" | sed 's/^"*tt//g' | sed 's/"*$//g')
+    formatted_imdb="tt${clean_imdb}"
+    
+    # Check if this movie is already in our list
+    if ! grep -q "$formatted_imdb" "${TEMP_DIR}/existing_imdb_ids.txt"; then
+      # Add this movie to our output
+      echo "${title},${year},\"${formatted_imdb}\",${tmdb},${date},${rating},${rewatch}" >> "${TEMP_DIR}/movies_export.csv"
+      # Add to our tracking of existing IDs
+      echo "$formatted_imdb" >> "${TEMP_DIR}/existing_imdb_ids.txt"
+    fi
+  done
+  
+  echo "Total movies after combining history and watched list: $(wc -l < "${TEMP_DIR}/movies_export.csv") movies processed" | tee -a "${LOG}"
+elif [ ! -f "${BACKUP_DIR}/${USERNAME}-history_movies.json" ] && [ -f "${BACKUP_DIR}/${USERNAME}-watched_movies.json" ]; then
+  echo "DEBUG: No history found. Processing watched_movies file with ratings..." | tee -a "${LOG}"
+  
+  # Extract watched movies with their date and rating
+  jq -r --slurpfile ratings "${TEMP_DIR}/ratings_lookup.json" '.[] | 
+    [.movie.title, .movie.year, .movie.ids.imdb, .movie.ids.tmdb, 
+     (if .last_watched_at then .last_watched_at | split("T")[0] else "" end),
+     ($ratings[0][.movie.ids.trakt | tostring] // ""),
+     (if .plays > 1 then "true" else "false" end)] | 
+    @csv' "${BACKUP_DIR}/${USERNAME}-watched_movies.json" > "${TEMP_DIR}/raw_output.csv"
+  
+  # Process the CSV line by line to properly format
+  cat "${TEMP_DIR}/raw_output.csv" | while IFS=, read -r title year imdb tmdb date rating rewatch; do
+    # Remove any existing "tt" prefix from IMDb ID to avoid duplication
+    imdb=$(echo "$imdb" | sed 's/^"*tt//g' | sed 's/"*$//g')
+    # Properly quote title and format IMDb ID with tt prefix
+    echo "${title},${year},\"tt${imdb}\",${tmdb},${date},${rating},${rewatch}" >> "${TEMP_DIR}/movies_export.csv"
+  done
+  
+  echo "Movies watched: $(wc -l < "${TEMP_DIR}/movies_export.csv") movies processed" | tee -a "${LOG}"
+else
+  echo -e "Movies history: No movies found in history or watched" | tee -a "${LOG}"
+fi
+
+# Copy file to final destination
+cp "${TEMP_DIR}/movies_export.csv" "${DOSCOPY}/letterboxd_import.csv"
+debug_msg "CSV file created in ${DOSCOPY}/letterboxd_import.csv"
+
+# Create backup if in complete mode
+if [ "$OPTION" == "complete" ]; then
+  debug_msg "Creating backup archive"
+  tar -czvf "${BACKUP_DIR}/backup-$(date '+%Y%m%d%H%M%S').tar.gz" -C "$(dirname "${BACKUP_DIR}")" "$(basename "${BACKUP_DIR}")"
+  echo -e "Backup completed"
+fi
+
+echo "Export process completed. CSV file is ready for Letterboxd import."

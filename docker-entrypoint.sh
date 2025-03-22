@@ -1,6 +1,74 @@
 #!/bin/bash
 set -e
 
+# Improved logging function
+log_message() {
+    local level="$1"
+    local message="$2"
+    local timestamp=$(date "+%Y-%m-%d %H:%M:%S")
+    
+    case "$level" in
+        "INFO")  echo -e "ℹ️ [INFO] $timestamp - $message" ;;
+        "WARN")  echo -e "⚠️ [WARNING] $timestamp - $message" ;;
+        "ERROR") echo -e "❌ [ERROR] $timestamp - $message" ;;
+        "DEBUG") echo -e "🔍 [DEBUG] $timestamp - $message" ;;
+        "SUCCESS") echo -e "✅ [SUCCESS] $timestamp - $message" ;;
+    esac
+}
+
+# Debug function for file and directory information
+debug_file_info() {
+    local path="$1"
+    local type="$2"
+    
+    if [ -e "$path" ]; then
+        log_message "DEBUG" "$type exists: $path"
+        if [ -d "$path" ]; then
+            log_message "DEBUG" "Directory permissions: $(stat -c '%a %n' "$path" 2>/dev/null || ls -la "$path" | head -n 1)"
+            log_message "DEBUG" "Owner/Group: $(stat -c '%U:%G' "$path" 2>/dev/null || ls -la "$path" | head -n 1 | awk '{print $3":"$4}')"
+            log_message "DEBUG" "Content count: $(ls -la "$path" | wc -l) items"
+        elif [ -f "$path" ]; then
+            log_message "DEBUG" "File permissions: $(stat -c '%a %n' "$path" 2>/dev/null || ls -la "$path" | head -n 1)"
+            log_message "DEBUG" "Owner/Group: $(stat -c '%U:%G' "$path" 2>/dev/null || ls -la "$path" | head -n 1 | awk '{print $3":"$4}')"
+            log_message "DEBUG" "File size: $(stat -c '%s' "$path" 2>/dev/null || ls -la "$path" | awk '{print $5}') bytes"
+            
+            if [ -s "$path" ]; then
+                log_message "DEBUG" "File has content"
+            else
+                log_message "WARN" "File is empty"
+            fi
+            
+            if [ -r "$path" ]; then
+                log_message "DEBUG" "File is readable"
+            else
+                log_message "ERROR" "File is not readable"
+            fi
+            
+            if [ -w "$path" ]; then
+                log_message "DEBUG" "File is writable"
+            else
+                log_message "ERROR" "File is not writable"
+            fi
+        fi
+    else
+        log_message "ERROR" "$type does not exist: $path"
+        log_message "DEBUG" "Parent directory exists: $(if [ -d "$(dirname "$path")" ]; then echo "Yes"; else echo "No"; fi)"
+        if [ -d "$(dirname "$path")" ]; then
+            log_message "DEBUG" "Parent directory permissions: $(stat -c '%a %n' "$(dirname "$path")" 2>/dev/null || ls -la "$(dirname "$path")" | head -n 1)"
+        fi
+    fi
+}
+
+# Initial system information
+log_message "INFO" "Starting Docker container for Export_Trakt_4_Letterboxd"
+log_message "DEBUG" "Container environment:"
+log_message "DEBUG" "User: $(id)"
+log_message "DEBUG" "Working directory: $(pwd)"
+log_message "DEBUG" "Environment variables:"
+log_message "DEBUG" "- TZ: ${TZ:-Not set}"
+log_message "DEBUG" "- CRON_SCHEDULE: ${CRON_SCHEDULE:-Not set}"
+log_message "DEBUG" "- EXPORT_OPTION: ${EXPORT_OPTION:-Not set}"
+
 # Create config directory if it doesn't exist
 mkdir -p /app/config
 
@@ -85,7 +153,7 @@ verify_config_variables() {
     local missing_vars=0
     local added_vars=0
     
-    echo "Verifying configuration variables..."
+    log_message "INFO" "Verifying configuration variables..."
     
     # Create a temporary file to store the list of required variables
     cat > /tmp/required_vars.txt << 'EOF'
@@ -112,7 +180,7 @@ EOF
     # Check each required variable
     while IFS= read -r var; do
         if ! grep -q "^${var}=" "$config_file"; then
-            echo "Missing variable: ${var}"
+            log_message "WARN" "Missing variable: ${var}"
             missing_vars=$((missing_vars + 1))
             
             # Extract the variable definition from the example file
@@ -122,16 +190,16 @@ EOF
                 # Add the variable to the config file
                 echo "$var_line" >> "$config_file"
                 added_vars=$((added_vars + 1))
-                echo "Added ${var} to config file"
+                log_message "INFO" "Added ${var} to config file"
             else
-                echo "Warning: Could not find ${var} in example file"
+                log_message "ERROR" "Could not find ${var} in example file"
             fi
         fi
     done < /tmp/required_vars.txt
     
     # Check for initialization section
     if ! grep -q "INITIALIZATION" "$config_file"; then
-        echo "Missing INITIALIZATION section"
+        log_message "WARN" "Missing INITIALIZATION section"
         
         # Extract the initialization section from the example file
         sed -n '/INITIALIZATION/,/^fi$/p' "$example_file" > /tmp/init_section.txt
@@ -143,7 +211,7 @@ EOF
         echo "############################################################################" >> "$config_file"
         cat /tmp/init_section.txt >> "$config_file"
         
-        echo "Added INITIALIZATION section to config file"
+        log_message "INFO" "Added INITIALIZATION section to config file"
         added_vars=$((added_vars + 1))
     fi
     
@@ -152,69 +220,96 @@ EOF
     
     # Report results
     if [ $missing_vars -eq 0 ]; then
-        echo "✅ All required variables are present in the config file."
+        log_message "SUCCESS" "All required variables are present in the config file."
     else
         if [ $added_vars -eq $missing_vars ]; then
-            echo "✅ Added $added_vars missing variables to the config file."
+            log_message "SUCCESS" "Added $added_vars missing variables to the config file."
         else
-            echo "⚠️ Found $missing_vars missing variables, but could only add $added_vars."
-            echo "   Please check your config file manually."
+            log_message "WARN" "Found $missing_vars missing variables, but could only add $added_vars."
+            log_message "WARN" "Please check your config file manually."
         fi
     fi
 }
 
 # Remove any existing symlink or config file in the root directory
 if [ -L /app/.config.cfg ] || [ -f /app/.config.cfg ]; then
+    log_message "INFO" "Removing old config file from root directory"
     rm -f /app/.config.cfg
+    log_message "SUCCESS" "Removed old config file from root directory"
 fi
 
 # Create necessary directories with proper permissions
+log_message "INFO" "Creating necessary directories with proper permissions"
 mkdir -p /app/logs /app/copy /app/brain_ops /app/backup /app/TEMP
 chmod -R 777 /app/logs /app/copy /app/brain_ops /app/backup /app/TEMP /app/config
+log_message "SUCCESS" "Directories created with permissions 777"
+
+# Debug directory information
+debug_file_info "/app/logs" "Logs directory"
+debug_file_info "/app/copy" "Copy directory"
+debug_file_info "/app/brain_ops" "Brain ops directory"
+debug_file_info "/app/backup" "Backup directory"
+debug_file_info "/app/TEMP" "Temp directory"
 
 # Ensure the config file is writable
+log_message "INFO" "Setting config file permissions"
 chmod 666 /app/config/.config.cfg 2>/dev/null || true
 chmod 666 /app/config/.config.cfg.example 2>/dev/null || true
+log_message "SUCCESS" "Config file permissions set to 666"
 
 # Verify and add missing variables to the config file
 verify_config_variables
 
 # Make scripts executable
+log_message "INFO" "Making scripts executable"
 chmod +x /app/Export_Trakt_4_Letterboxd.sh /app/setup_trakt.sh
+log_message "SUCCESS" "Scripts are now executable"
 
 # Update scripts to use the config file in the config directory
+log_message "INFO" "Updating scripts to use config file in the config directory"
 sed -i 's|CONFIG_FILE="${SCRIPT_DIR}/.config.cfg"|CONFIG_FILE="/app/config/.config.cfg"|g' /app/setup_trakt.sh
 sed -i 's|source ${SCRIPT_DIR}/.config.cfg|source /app/config/.config.cfg|g' /app/Export_Trakt_4_Letterboxd.sh
+log_message "SUCCESS" "Scripts updated to use config file in the config directory"
 
 # Modify the permission settings in the Export_Trakt_4_Letterboxd.sh script
+log_message "INFO" "Updating CSV file permissions in main script"
 sed -i 's|chmod 644 "${DOSCOPY}/letterboxd_import.csv"|chmod 666 "${DOSCOPY}/letterboxd_import.csv"|g' /app/Export_Trakt_4_Letterboxd.sh
+log_message "SUCCESS" "Updated CSV file permissions in main script"
 
 # Setup cron job if CRON_SCHEDULE is provided
 if [ ! -z "${CRON_SCHEDULE}" ]; then
     # Install cron if not already installed
     if ! command -v cron &> /dev/null; then
-        echo "Installing cron..."
+        log_message "INFO" "Installing cron..."
         apk add --no-cache dcron
+        log_message "SUCCESS" "Cron installed"
+    else
+        log_message "INFO" "Cron is already installed"
     fi
 
     # Set default export option if not provided
     EXPORT_OPTION=${EXPORT_OPTION:-normal}
     
-    echo "Setting up cron job with schedule: ${CRON_SCHEDULE}"
-    echo "Export option: ${EXPORT_OPTION}"
+    # Debug messages to help diagnose issues
+    log_message "INFO" "Setting up cron job with the following parameters:"
+    log_message "DEBUG" "EXPORT_OPTION = ${EXPORT_OPTION}"
+    log_message "DEBUG" "CRON_SCHEDULE = ${CRON_SCHEDULE}"
     
     # Create a wrapper script for the cron job
-    cat > /app/cron_wrapper.sh << 'EOF'
+    log_message "INFO" "Creating cron wrapper script"
+    cat > /app/cron_wrapper.sh << EOF
 #!/bin/bash
 # Get the start time
 START_TIME=$(date +"%Y-%m-%d %H:%M:%S")
 
 # Log to container stdout with a friendly message
 echo "🎬 [CRON] Starting Trakt to Letterboxd Export at ${START_TIME} 🎬" > /proc/1/fd/1
-echo "📊 Exporting your Trakt data... This may take a few minutes." > /proc/1/fd/1
+echo "📊 Exporting your Trakt data with option '${EXPORT_OPTION}'... This may take a few minutes." > /proc/1/fd/1
+echo "DEBUG: Using export option: ${EXPORT_OPTION}" > /proc/1/fd/1
 
 # Make sure directories have proper permissions
 chmod -R 777 /app/logs /app/copy /app/brain_ops /app/backup
+echo "Permissions set on directories: logs, copy, brain_ops, backup" > /proc/1/fd/1
 
 # Redirect all output to the log file
 exec > /app/logs/cron_export.log 2>&1
@@ -224,14 +319,38 @@ echo "========================================================"
 echo "🎬 Starting Trakt to Letterboxd Export - $(date)"
 echo "========================================================"
 echo "🌟 Exporting your Trakt data to Letterboxd format..."
-echo "📊 This may take a few minutes depending on the amount of data."
+echo "📊 Using export option: ${EXPORT_OPTION}"
 echo "========================================================"
 
-# Run the export script
-cd /app && ./Export_Trakt_4_Letterboxd.sh $1
+# Debug directory structure and permissions
+echo "Directory permissions before export:"
+ls -la /app/copy /app/logs /app/brain_ops /app/backup
 
-# Ensure the generated CSV file has the correct permissions
-chmod 666 /app/copy/letterboxd_import.csv
+# Run the export script
+cd /app && ./Export_Trakt_4_Letterboxd.sh ${EXPORT_OPTION}
+
+# Check if the script executed correctly
+EXIT_CODE=$?
+if [ $EXIT_CODE -eq 0 ]; then
+    echo "Export script finished successfully with exit code 0"
+else
+    echo "WARNING: Export script exited with code $EXIT_CODE"
+fi
+
+# Check if the CSV file exists
+if [ -f /app/copy/letterboxd_import.csv ]; then
+    echo "CSV file exists after export"
+    ls -la /app/copy/letterboxd_import.csv
+    
+    # Ensure the generated CSV file has the correct permissions
+    chmod 666 /app/copy/letterboxd_import.csv
+    echo "CSV file permissions updated to 666"
+    ls -la /app/copy/letterboxd_import.csv
+else
+    echo "ERROR: CSV file was not created at /app/copy/letterboxd_import.csv"
+    echo "Contents of copy directory:"
+    ls -la /app/copy
+fi
 
 # Get the end time
 END_TIME=$(date +"%Y-%m-%d %H:%M:%S")
@@ -249,24 +368,33 @@ EOF
     
     # Make the wrapper script executable
     chmod +x /app/cron_wrapper.sh
+    log_message "SUCCESS" "Cron wrapper script created at /app/cron_wrapper.sh"
+    debug_file_info "/app/cron_wrapper.sh" "Cron wrapper script"
     
     # Create cron job using the wrapper script
-    echo "${CRON_SCHEDULE} /app/cron_wrapper.sh ${EXPORT_OPTION}" > /etc/crontabs/root
+    echo "${CRON_SCHEDULE} /app/cron_wrapper.sh" > /etc/crontabs/root
+    log_message "SUCCESS" "Cron job schedule set: ${CRON_SCHEDULE}"
+    log_message "DEBUG" "Cron content: $(cat /etc/crontabs/root)"
     
     # Make sure the log file exists and is writable
     touch /app/logs/cron_export.log
     chmod 666 /app/logs/cron_export.log
+    log_message "INFO" "Created cron log file with permissions 666"
+    debug_file_info "/app/logs/cron_export.log" "Cron log file"
     
     # Start cron daemon with appropriate logging
-    echo "Starting cron daemon..."
+    log_message "INFO" "Starting cron daemon..."
     crond -b -L 8
+    log_message "SUCCESS" "Cron daemon started in background"
     
-    echo "Cron job has been set up. Logs will be written to /app/logs/cron_export.log"
-    echo "You can also see cron execution messages in the container logs."
+    log_message "INFO" "Cron job has been set up. Logs will be written to /app/logs/cron_export.log"
+    log_message "INFO" "You can also see cron execution messages in the container logs."
+else
+    log_message "INFO" "No CRON_SCHEDULE provided, skipping cron setup"
 fi
 
 # Display help message
-echo "=== Export Trakt 4 Letterboxd ==="
+log_message "INFO" "=== Export Trakt 4 Letterboxd ==="
 echo ""
 echo "Available commands:"
 echo "  setup_trakt.sh - Configure Trakt API authentication"
@@ -280,11 +408,20 @@ echo ""
 
 # Execute command if provided, otherwise keep container running
 if [ $# -gt 0 ]; then
+    log_message "INFO" "Executing provided command: $@"
     exec "$@"
 else
-    echo "No command provided. Container will stay alive for use with docker exec."
-    echo "Use 'docker exec -it <container_name> bash' to connect to this container."
+    log_message "INFO" "No command provided. Container will stay alive for use with docker exec."
+    log_message "INFO" "Use 'docker exec -it <container_name> bash' to connect to this container."
+    
+    # Final file checks before keeping container alive
+    log_message "DEBUG" "Final directory and permission checks:"
+    debug_file_info "/app/copy" "Copy directory"
+    if [ -f "/app/copy/letterboxd_import.csv" ]; then
+        debug_file_info "/app/copy/letterboxd_import.csv" "Letterboxd import CSV file"
+    fi
     
     # Keep the container running
+    log_message "INFO" "Container is now running in standby mode"
     tail -f /dev/null
 fi 
