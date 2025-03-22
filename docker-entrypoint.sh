@@ -1,6 +1,74 @@
 #!/bin/bash
 set -e
 
+# Improved logging function
+log_message() {
+    local level="$1"
+    local message="$2"
+    local timestamp=$(date "+%Y-%m-%d %H:%M:%S")
+    
+    case "$level" in
+        "INFO")  echo -e "ℹ️ [INFO] $timestamp - $message" ;;
+        "WARN")  echo -e "⚠️ [WARNING] $timestamp - $message" ;;
+        "ERROR") echo -e "❌ [ERROR] $timestamp - $message" ;;
+        "DEBUG") echo -e "🔍 [DEBUG] $timestamp - $message" ;;
+        "SUCCESS") echo -e "✅ [SUCCESS] $timestamp - $message" ;;
+    esac
+}
+
+# Debug function for file and directory information
+debug_file_info() {
+    local path="$1"
+    local type="$2"
+    
+    if [ -e "$path" ]; then
+        log_message "DEBUG" "$type exists: $path"
+        if [ -d "$path" ]; then
+            log_message "DEBUG" "Directory permissions: $(stat -c '%a %n' "$path" 2>/dev/null || ls -la "$path" | head -n 1)"
+            log_message "DEBUG" "Owner/Group: $(stat -c '%U:%G' "$path" 2>/dev/null || ls -la "$path" | head -n 1 | awk '{print $3":"$4}')"
+            log_message "DEBUG" "Content count: $(ls -la "$path" | wc -l) items"
+        elif [ -f "$path" ]; then
+            log_message "DEBUG" "File permissions: $(stat -c '%a %n' "$path" 2>/dev/null || ls -la "$path" | head -n 1)"
+            log_message "DEBUG" "Owner/Group: $(stat -c '%U:%G' "$path" 2>/dev/null || ls -la "$path" | head -n 1 | awk '{print $3":"$4}')"
+            log_message "DEBUG" "File size: $(stat -c '%s' "$path" 2>/dev/null || ls -la "$path" | awk '{print $5}') bytes"
+            
+            if [ -s "$path" ]; then
+                log_message "DEBUG" "File has content"
+            else
+                log_message "WARN" "File is empty"
+            fi
+            
+            if [ -r "$path" ]; then
+                log_message "DEBUG" "File is readable"
+            else
+                log_message "ERROR" "File is not readable"
+            fi
+            
+            if [ -w "$path" ]; then
+                log_message "DEBUG" "File is writable"
+            else
+                log_message "ERROR" "File is not writable"
+            fi
+        fi
+    else
+        log_message "ERROR" "$type does not exist: $path"
+        log_message "DEBUG" "Parent directory exists: $(if [ -d "$(dirname "$path")" ]; then echo "Yes"; else echo "No"; fi)"
+        if [ -d "$(dirname "$path")" ]; then
+            log_message "DEBUG" "Parent directory permissions: $(stat -c '%a %n' "$(dirname "$path")" 2>/dev/null || ls -la "$(dirname "$path")" | head -n 1)"
+        fi
+    fi
+}
+
+# Initial system information
+log_message "INFO" "Starting Docker container for Export_Trakt_4_Letterboxd"
+log_message "DEBUG" "Container environment:"
+log_message "DEBUG" "User: $(id)"
+log_message "DEBUG" "Working directory: $(pwd)"
+log_message "DEBUG" "Environment variables:"
+log_message "DEBUG" "- TZ: ${TZ:-Not set}"
+log_message "DEBUG" "- CRON_SCHEDULE: ${CRON_SCHEDULE:-Not set}"
+log_message "DEBUG" "- EXPORT_OPTION: ${EXPORT_OPTION:-Not set}"
+
 # Create config directory if it doesn't exist
 mkdir -p /app/config
 
