@@ -8,7 +8,6 @@ services:
       - ./config:/app/config
       - ./logs:/app/logs
       - ./copy:/app/copy
-      - ./brain_ops:/app/brain_ops
       - ./backup:/app/backup
     environment:
       - TZ=Europe/Paris
