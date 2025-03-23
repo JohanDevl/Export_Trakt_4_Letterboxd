@@ -318,20 +318,86 @@ process_data() {
     local final_csv="${temp_dir}/final_export.csv"
     deduplicate_movies "$csv_output" "$final_csv" "$log"
     
-    # Copy file to final destination
-    cp "${final_csv}" "${doscopy}/letterboxd_import.csv"
+    # Make sure the final CSV file was created
+    if [ ! -f "$final_csv" ]; then
+        echo "❌ ERROR: Final CSV file was not created in temp directory" | tee -a "${log}"
+        return 1
+    fi
+    
+    # Ensure target directory exists with proper permissions
+    if [ ! -d "$doscopy" ]; then
+        echo "📁 Creating copy directory: $doscopy" | tee -a "${log}"
+        mkdir -p "$doscopy"
+        chmod 777 "$doscopy"
+    else
+        echo "📁 Ensuring copy directory has proper permissions" | tee -a "${log}"
+        chmod 777 "$doscopy"
+    fi
+    
+    # Try to copy file to final destination with verbose output
+    echo "📋 Copying final CSV to: ${doscopy}/letterboxd_import.csv" | tee -a "${log}"
+    
+    # Debug information for paths
+    echo "🔍 DEBUG: Current directory: $(pwd)" | tee -a "${log}"
+    echo "🔍 DEBUG: Source file: ${final_csv}" | tee -a "${log}"
+    echo "🔍 DEBUG: Target directory: ${doscopy}" | tee -a "${log}"
+    
+    # Try to convert relative paths to absolute if needed
+    if [[ "$doscopy" == "./"* ]]; then
+        echo "🔍 Converting relative path to absolute path" | tee -a "${log}"
+        local abs_doscopy="$(cd "$(dirname "$doscopy")" || exit; pwd)/$(basename "$doscopy")"
+        echo "🔍 Absolute target directory: $abs_doscopy" | tee -a "${log}"
+        
+        # Create directory with full permissions if it doesn't exist
+        if [ ! -d "$abs_doscopy" ]; then
+            echo "📁 Creating absolute copy directory: $abs_doscopy" | tee -a "${log}"
+            mkdir -p "$abs_doscopy"
+            chmod 777 "$abs_doscopy"
+        fi
+        
+        # Copy to absolute path instead
+        cp -v "${final_csv}" "${abs_doscopy}/letterboxd_import.csv" 2>&1 | tee -a "${log}"
+        
+        # Also copy to the original path as fallback
+        cp -v "${final_csv}" "${doscopy}/letterboxd_import.csv" 2>&1 | tee -a "${log}"
+    else
+        # Use original path
+        cp -v "${final_csv}" "${doscopy}/letterboxd_import.csv" 2>&1 | tee -a "${log}"
+    fi
+    
+    # Check both possible locations
+    if [ -f "${doscopy}/letterboxd_import.csv" ]; then
+        echo "✅ CSV file created in ${doscopy}/letterboxd_import.csv" | tee -a "${log}"
+        local output_file="${doscopy}/letterboxd_import.csv"
+    elif [[ "$doscopy" == "./"* ]] && [ -f "${abs_doscopy}/letterboxd_import.csv" ]; then
+        echo "✅ CSV file created in ${abs_doscopy}/letterboxd_import.csv" | tee -a "${log}"
+        local output_file="${abs_doscopy}/letterboxd_import.csv"
+    else
+        echo "❌ ERROR: Failed to create final CSV file" | tee -a "${log}"
+        echo "🔍 DEBUG: Checking target directory permissions" | tee -a "${log}"
+        ls -la "$doscopy" >> "${log}" 2>&1
+        if [[ "$doscopy" == "./"* ]]; then
+            ls -la "$abs_doscopy" >> "${log}" 2>&1
+        fi
+        return 1
+    fi
+    
+    # Ensure the final file has the right permissions
+    chmod 666 "${output_file}"
     
     # Get file stats for logging
-    local file_size=$(wc -c < "${doscopy}/letterboxd_import.csv")
-    local movie_count=$(($(wc -l < "${doscopy}/letterboxd_import.csv") - 1)) # Subtract header line
+    local file_size=$(wc -c < "${output_file}")
+    local movie_count=$(($(wc -l < "${output_file}") - 1)) # Subtract header line
     
-    echo "✅ CSV file created in ${doscopy}/letterboxd_import.csv" | tee -a "${log}"
     echo "📊 Exported $movie_count movies (file size: $file_size bytes)" | tee -a "${log}"
     
     # Create backup if in complete mode
     if [ "$option" = "complete" ]; then
         create_backup_archive "$backup_dir" "$log"
     fi
+    
+    # Return success
+    return 0
 }
 
 # Main function - entry point for the script
@@ -364,6 +430,13 @@ run_export() {
     
     # Process data and create Letterboxd CSV
     process_data "$mode" "$USERNAME" "$BACKUP_DIR_WITH_TIMESTAMP" "$TEMP_DIR" "$DOSCOPY" "${LOG}"
+    local process_result=$?
     
-    echo "Export process completed. CSV file is ready for Letterboxd import." | tee -a "${LOG}"
+    if [ $process_result -eq 0 ]; then
+        echo "✅ Export process completed. CSV file is ready for Letterboxd import." | tee -a "${LOG}"
+        return 0
+    else
+        echo "❌ Export process completed with errors. CSV file may not be available." | tee -a "${LOG}"
+        return 1
+    fi
 } 

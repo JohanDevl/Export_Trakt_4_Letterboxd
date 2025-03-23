@@ -253,14 +253,40 @@ END_TIME=$(date +"%Y-%m-%d %H:%M:%S")
 if [ $EXIT_CODE -eq 0 ]; then
     echo "======================================================================"
     echo "✅ [CRON] Export completed successfully at ${END_TIME}"
-    echo "🎉 Your Letterboxd import file is ready in the copy directory!"
+    
+    # Wait longer for file operations to complete
+    sleep 3
+    
+    # Search for the CSV file in multiple possible locations
+    CSV_FOUND=false
+    CSV_LOCATIONS=(
+        "/app/copy/letterboxd_import.csv"
+        "/app/copy/copy/letterboxd_import.csv"
+        "/app/letterboxd_import.csv"
+        "./copy/letterboxd_import.csv"
+    )
+    
+    for csv_path in "${CSV_LOCATIONS[@]}"; do
+        if [ -f "$csv_path" ]; then
+            CSV_FOUND=true
+            CSV_FILE="$csv_path"
+            
+            # Copy it to the standard location if not already there
+            if [ "$csv_path" != "/app/copy/letterboxd_import.csv" ]; then
+                cp -v "$csv_path" "/app/copy/letterboxd_import.csv"
+                CSV_FILE="/app/copy/letterboxd_import.csv"
+            fi
+            break
+        fi
+    done
     
     # Show CSV file info if it exists
-    if [ -f /app/copy/letterboxd_import.csv ]; then
-        MOVIES_COUNT=$(wc -l < /app/copy/letterboxd_import.csv)
+    if [ "$CSV_FOUND" = true ]; then
+        echo "🎉 Your Letterboxd import file is ready in the copy directory!"
+        MOVIES_COUNT=$(wc -l < "$CSV_FILE")
         MOVIES_COUNT=$((MOVIES_COUNT - 1))  # Subtract header row
         echo "📋 Exported ${MOVIES_COUNT} movies to CSV file"
-        echo "📂 File: /app/copy/letterboxd_import.csv ($(du -h /app/copy/letterboxd_import.csv | cut -f1) size)"
+        echo "📂 File: /app/copy/letterboxd_import.csv ($(du -h "$CSV_FILE" | cut -f1) size)"
     else
         echo "⚠️ No CSV file was created. Check the logs for errors."
     fi
@@ -269,7 +295,7 @@ if [ $EXIT_CODE -eq 0 ]; then
 else
     echo "======================================================================"
     echo "❌ [CRON] Export failed with exit code ${EXIT_CODE} at ${END_TIME}"
-    echo "⚠️ Please check the logs for errors: /app/logs/cron_export.log"
+    echo "⚠️ Please check the logs for errors: /app/logs/cron_export_*.log"
     echo "======================================================================"
     echo ""
 fi
