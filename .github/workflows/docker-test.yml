@@ -102,7 +102,8 @@ jobs:
           echo "🔍 Testing Docker image with mock data..."
 
           # Create a test container with mounted volumes
-          mkdir -p ./test-data/config ./test-data/logs ./test-data/copy ./test-data/backup
+          mkdir -p ./test-data/config ./test-data/logs ./test-data/copy ./test-data/backup ./test-data/TEMP
+          chmod -R 777 ./test-data/config ./test-data/logs ./test-data/copy ./test-data/backup ./test-data/TEMP
 
           # Create a mock configuration file
           cat > ./test-data/config/.config.cfg << 'EOF'
@@ -129,12 +130,80 @@ jobs:
           # Create example config file in the test directory
           cp ./test-data/config/.config.cfg ./test-data/config/.config.cfg.example
 
+          # Create mock data files that would normally be fetched from the API
+          mkdir -p ./test-data/backup
+
+          # Create mock history JSON file
+          cat > ./test-data/backup/test_user-history_movies.json << 'EOF'
+          [
+            {
+              "id": 123456,
+              "watched_at": "2025-01-01T12:00:00.000Z",
+              "action": "watch",
+              "type": "movie",
+              "movie": {
+                "title": "Test Movie",
+                "year": 2024,
+                "ids": {
+                  "trakt": 1,
+                  "slug": "test-movie-2024",
+                  "imdb": "tt0000001",
+                  "tmdb": 1
+                }
+              }
+            }
+          ]
+          EOF
+
+          # Create mock ratings JSON file
+          cat > ./test-data/backup/test_user-ratings_movies.json << 'EOF'
+          [
+            {
+              "rated_at": "2025-01-01T12:00:00.000Z",
+              "rating": 8,
+              "type": "movie",
+              "movie": {
+                "title": "Test Movie",
+                "year": 2024,
+                "ids": {
+                  "trakt": 1,
+                  "slug": "test-movie-2024",
+                  "imdb": "tt0000001",
+                  "tmdb": 1
+                }
+              }
+            }
+          ]
+          EOF
+
+          # Create mock watched JSON file
+          cat > ./test-data/backup/test_user-watched_movies.json << 'EOF'
+          [
+            {
+              "plays": 1,
+              "last_watched_at": "2025-01-01T12:00:00.000Z",
+              "last_updated_at": "2025-01-01T12:00:00.000Z",
+              "movie": {
+                "title": "Test Movie",
+                "year": 2024,
+                "ids": {
+                  "trakt": 1,
+                  "slug": "test-movie-2024",
+                  "imdb": "tt0000001",
+                  "tmdb": 1
+                }
+              }
+            }
+          ]
+          EOF
+
           # Start the container with the mock data and keep it running with sleep
           docker run -d --name test-container-mock \
             -v $(pwd)/test-data/config:/app/config \
             -v $(pwd)/test-data/logs:/app/logs \
             -v $(pwd)/test-data/copy:/app/copy \
             -v $(pwd)/test-data/backup:/app/backup \
+            -v $(pwd)/test-data/TEMP:/app/TEMP \
             trakt-export:test sleep 60
 
           # Wait a moment to ensure the container is running
@@ -144,10 +213,21 @@ jobs:
           docker ps | grep test-container-mock
 
           # Check if the container can access the mounted volumes
-          docker exec test-container-mock bash -c "ls -la /app/config /app/logs /app/copy /app/backup"
+          docker exec test-container-mock bash -c "ls -la /app/config /app/logs /app/copy /app/backup /app/TEMP"
 
           # Check if the configuration file is accessible
           docker exec test-container-mock bash -c "cat /app/config/.config.cfg | grep API_KEY"
+
+          # Run the export script with the initial option
+          docker exec test-container-mock bash -c "cd /app && TEMP_DIR=/app/TEMP ./Export_Trakt_4_Letterboxd.sh initial"
+
+          # Add some debug commands to check what's happening
+          docker exec test-container-mock bash -c "ls -la /app/backup/*"
+          docker exec test-container-mock bash -c "ls -la /app/logs/"
+          docker exec test-container-mock bash -c "ls -la /app/TEMP/ || echo 'TEMP directory is empty'"
+
+          # Check if any output was created
+          docker exec test-container-mock bash -c "ls -la /app/copy || echo 'No output files generated'"
 
           # Clean up
           docker stop test-container-mock
