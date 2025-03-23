@@ -244,7 +244,7 @@ echo "📊 Exporting your Trakt data with option '${EXPORT_OPTION}'..."
 echo "======================================================================"
 
 # Run the export script and capture exit code
-/app/Export_Trakt_4_Letterboxd.sh ${EXPORT_OPTION} > /app/logs/cron_export_$(date '+%Y-%m-%d').log 2>&1
+/app/Export_Trakt_4_Letterboxd.sh ${EXPORT_OPTION} > /app/logs/cron_export_$(date '+%Y-%m-%d_%H-%M-%S').log 2>&1
 EXIT_CODE=$?
 
 END_TIME=$(date +"%Y-%m-%d %H:%M:%S")
