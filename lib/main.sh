@@ -261,6 +261,13 @@ process_data() {
     # Create output directory if it doesn't exist
     mkdir -p "$doscopy"
     
+    # Check if the output file exists and remove it
+    local final_output_file="${doscopy}/letterboxd_import.csv"
+    if [ -f "$final_output_file" ]; then
+        echo "🗑️ Removing existing Letterboxd import file: $final_output_file" | tee -a "${log}"
+        rm -f "$final_output_file"
+    fi
+    
     # Create empty CSV file with header
     echo "Title,Year,imdbID,tmdbID,WatchedDate,Rating10,Rewatch" > "${temp_dir}/movies_export.csv"
     
