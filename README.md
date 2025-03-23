@@ -101,10 +101,52 @@ Export_Trakt_4_Letterboxd/
 ├── backup/                  # Backup of API responses
 ├── TEMP/                    # Temporary processing files
 ├── copy/                    # Output CSV files
+├── tests/                   # Automated tests
+│   ├── unit/                # Unit tests for library modules
+│   ├── integration/         # Integration tests
+│   ├── mocks/               # Mock API responses
+│   ├── run_tests.sh         # Test runner script
+│   └── test_helper.bash     # Test helper functions
 ├── Export_Trakt_4_Letterboxd.sh # Main script (simplified)
 ├── setup_trakt.sh           # Authentication setup
 └── install.sh               # Installation script
 ```
+
+## Testing
+
+The project includes comprehensive automated tests to ensure code quality and prevent regressions:
+
+### Running Tests
+
+To run the tests, you need to have the following dependencies installed:
+
+- jq
+- bats-core (installed as Git submodule)
+
+Run all tests:
+
+```bash
+./tests/run_tests.sh
+```
+
+Generate a coverage report (requires kcov):
+
+```bash
+./tests/run_tests.sh coverage
+```
+
+### Testing Framework
+
+The testing framework uses:
+
+- Bats (Bash Automated Testing System) for running tests
+- Mock API responses to test without real API calls
+- Integration tests to verify the complete export process
+- Unit tests for core library functions
+
+### Continuous Integration
+
+Tests are automatically run in the CI/CD pipeline for every pull request to ensure code quality before merging.
 
 ## Documentation
 
@@ -115,6 +157,7 @@ For more detailed information, please refer to the documentation in the `docs` f
 - [Docker Testing](docs/DOCKER_TESTING.md)
 - [GitHub Actions](docs/GITHUB_ACTIONS.md)
 - [Automatic Version Tagging](docs/AUTO_TAGGING.md)
+- [Testing Framework](docs/TESTING.md)
 
 ## Troubleshooting
 
