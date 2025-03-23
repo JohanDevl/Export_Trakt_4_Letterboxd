@@ -1,0 +1,19 @@
+feat(refactor): Implement code restructuring and modularization (#12)
+
+This commit restructures the codebase to follow a modular pattern, improving maintainability, readability,
+and extensibility. The changes address Issue #12 (Code Restructuring and Modularization).
+
+Key improvements:
+- Split monolithic script into focused modules with specific responsibilities
+- Created a lib/ directory with 5 specialized modules:
+  - config.sh: Configuration management
+  - utils.sh: Utility functions and debugging
+  - trakt_api.sh: API interaction functions
+  - data_processing.sh: Data transformation functions
+  - main.sh: Main orchestration module
+- Added new install.sh script for streamlined setup
+- Simplified the main Export_Trakt_4_Letterboxd.sh script
+- Updated README.md to reflect new structure
+- Added detailed documentation in docs/MODULARIZATION.md
+
+The functionality remains intact while providing a more maintainable foundation for future enhancements. 
