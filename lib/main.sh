@@ -53,7 +53,7 @@ initialize_environment() {
     log_environment "$log" "$script_dir" "$DOSCOPY" "$DOSLOG" "$BACKUP_DIR"
     
     # Initialize backup directory
-    init_backup_dir "$BACKUP_DIR"
+    init_backup_dir "$BACKUP_DIR" "$log"
     
     # Check for existing CSV file
     if [ -f "${DOSCOPY}/letterboxd_import.csv" ]; then
@@ -74,10 +74,44 @@ process_arguments() {
     if [ ! -z "$arg" ]; then
         local option=$(echo "$arg" | tr '[:upper:]' '[:lower:]')
         echo -e "${SAISPAS}${BOLD}[$(date)] - Processing option: $option${NC}" | tee -a "${log}"
-        echo "$option"
+        
+        # Normalize mode to one of our supported values
+        local mode
+        case "$option" in
+            "complete"|"full")
+                mode="complete"
+                ;;
+            "initial"|"init")
+                mode="initial"
+                ;;
+            *)
+                mode="normal"
+                ;;
+        esac
+        
+        echo -e "Option '$option' translated to mode: $mode" | tee -a "${log}"
+        echo "$mode"
     else
         echo -e "${SAISPAS}${BOLD}[$(date)] - No option provided, using default${NC}" | tee -a "${log}"
         echo "normal"
+    fi
+}
+
+# Find the most recent backup directory
+find_latest_backup_dir() {
+    local base_dir="$1"
+    local log_file="$2"
+    
+    # Find the most recent backup directory (based on modification time)
+    local latest_dir=$(find "${base_dir}" -maxdepth 1 -type d -name "*_trakt-backup" -print0 | xargs -0 ls -td 2>/dev/null | head -n 1)
+    
+    if [ -z "$latest_dir" ]; then
+        echo "⚠️ No backup directory found. Will create a new one." | tee -a "${log_file}"
+        return 1
+    else
+        echo "📁 Found latest backup directory: $latest_dir" | tee -a "${log_file}"
+        echo "$latest_dir"
+        return 0
     fi
 }
 
@@ -96,9 +130,67 @@ fetch_all_data() {
     local sed_inplace="${11}"
     local log="${12}"
     
+    # Debug the received mode
+    echo "🔍 fetch_all_data received mode: '$option'" | tee -a "${log}"
+    
+    # Set the backup directory
+    export CURRENT_BACKUP_DIR="$backup_dir"  # Export for use in other functions
+    
+    # Debug the backup directory
+    echo "📁 Using backup directory: $backup_dir" | tee -a "${log}"
+    
+    # Ensure backup directory exists
+    if [ ! -d "$backup_dir" ]; then
+        mkdir -p "$backup_dir"
+        echo "📁 Created backup directory: $backup_dir" | tee -a "${log}"
+    fi
+    
     # Get endpoints based on mode
-    local endpoints_string=$(get_endpoints_for_mode "$option" "$log")
-    IFS=' ' read -r -a endpoints <<< "$endpoints_string"
+    local endpoints=()
+    
+    echo -e "🔄 Processing with mode: '$option'" | tee -a "${log}"
+    
+    case "$option" in
+        "complete")
+            echo -e "📚 Complete Mode activated - Will fetch all data from Trakt" | tee -a "${log}"
+            endpoints=(
+                "watchlist/movies"
+                "watchlist/shows"
+                "watchlist/episodes"
+                "watchlist/seasons"
+                "ratings/movies"
+                "ratings/shows"
+                "ratings/episodes"
+                "ratings/seasons"
+                "collection/movies"
+                "collection/shows"
+                "watched/movies"
+                "watched/shows"
+                "history/movies"
+                "history/shows"
+                "history/episodes"
+            )
+            ;;
+        "initial")
+            echo -e "🚀 Initial Mode activated - Will fetch only essential movie data" | tee -a "${log}"
+            endpoints=(
+                "history/movies"
+                "ratings/movies"
+                "watched/movies"
+            )
+            ;;
+        *)
+            echo -e "🔄 Normal Mode activated - Will fetch standard movie and show data" | tee -a "${log}"
+            endpoints=(
+                "history/movies"
+                "ratings/movies"
+                "watched/movies"
+                "watchlist/movies"
+            )
+            ;;
+    esac
+    
+    echo "🔄 Endpoints to fetch: ${endpoints[*]}" | tee -a "${log}"
     
     # Check token validity before proceeding
     if ! check_token_validity "$api_url" "$api_key" "$access_token" "$log"; then
@@ -126,11 +218,13 @@ fetch_all_data() {
         local filename="${username}-${endpoint//\//_}.json"
         local output_file="${backup_dir}/${filename}"
         
+        echo "📥 Fetching endpoint: $endpoint" | tee -a "${log}"
         fetch_trakt_data "$api_url" "$api_key" "$access_token" "$endpoint" "$output_file" "$username" "$log"
         success=$((success + $?))
     done
     
-    echo -e "All files have been retrieved\n Starting processing" | tee -a "${log}"
+    echo -e "🎉 Data fetching completed with $((total-success))/$total successful requests" | tee -a "${log}"
+    echo -e "🔄 Starting processing phase" | tee -a "${log}"
     
     if [ $success -gt 0 ]; then
         echo "⚠️ Some fetches failed. Check the log for details." | tee -a "${log}"
@@ -146,6 +240,24 @@ process_data() {
     local doscopy="$5"
     local log="$6"
     
+    # Use the current backup directory (should already be set in run_export)
+    if [ -n "$CURRENT_BACKUP_DIR" ]; then
+        backup_dir="$CURRENT_BACKUP_DIR"
+    fi
+    
+    echo "📊 Processing data from: $backup_dir" | tee -a "${log}"
+    
+    # Debug: List files in backup directory
+    if [ -d "$backup_dir" ]; then
+        echo "📄 Files in backup directory:" | tee -a "${log}"
+        ls -la "$backup_dir" >> "$log" 2>&1 || echo "Cannot list directory" | tee -a "${log}"
+    else
+        echo "❌ Backup directory does not exist: $backup_dir" | tee -a "${log}"
+        # Create backup directory as a fallback
+        mkdir -p "$backup_dir"
+        echo "Created backup directory as fallback" | tee -a "${log}"
+    fi
+    
     # Create output directory if it doesn't exist
     mkdir -p "$doscopy"
     
@@ -154,16 +266,19 @@ process_data() {
     
     # Create ratings lookup
     local ratings_file="${backup_dir}/${username}-ratings_movies.json"
+    echo "📄 Looking for ratings file: $ratings_file" | tee -a "${log}"
     local ratings_lookup="${temp_dir}/ratings_lookup.json"
     create_ratings_lookup "$ratings_file" "$ratings_lookup" "$log"
     
     # Create plays count lookup
     local watched_file="${backup_dir}/${username}-watched_movies.json"
+    echo "📄 Looking for watched file: $watched_file" | tee -a "${log}"
     local plays_lookup="${temp_dir}/plays_count_lookup.json"
     create_plays_count_lookup "$watched_file" "$plays_lookup" "$log"
     
     # Process history movies
     local history_file="${backup_dir}/${username}-history_movies.json"
+    echo "📄 Looking for history file: $history_file" | tee -a "${log}"
     local raw_output="${temp_dir}/raw_output.csv"
     local csv_output="${temp_dir}/movies_export.csv"
     local history_processed=false
@@ -205,17 +320,28 @@ run_export() {
     # Import all modules
     import_modules "$script_dir"
     
-    # Parse mode from option
-    mode=$(process_arguments "$option" "${LOG}")
+    # Parse mode from option - capture only the last line of output
+    mode=$(process_arguments "$option" "${LOG}" | tail -n 1)
+    echo "Debug: Mode after processing is: '$mode'" | tee -a "${LOG}"
     
     # Initialize script environment
     initialize_environment "$script_dir" "$option" "${LOG}"
     
+    # Create timestamped backup directory
+    TIMESTAMP=$(date '+%Y-%m-%d_%H-%M-%S')
+    BACKUP_DIR_WITH_TIMESTAMP="${BACKUP_DIR}/${TIMESTAMP}_trakt-backup"
+    mkdir -p "$BACKUP_DIR_WITH_TIMESTAMP"
+    echo "📂 Created backup directory: $BACKUP_DIR_WITH_TIMESTAMP" | tee -a "${LOG}"
+    
+    # Set a global variable for the current backup directory to avoid nested paths
+    export CURRENT_BACKUP_DIR="$BACKUP_DIR_WITH_TIMESTAMP"
+    
+    echo "🚀 Starting fetch_all_data with mode: '$mode'" | tee -a "${LOG}"
     # Fetch all data from Trakt
-    fetch_all_data "$API_URL" "$API_KEY" "$API_SECRET" "$ACCESS_TOKEN" "$REFRESH_TOKEN" "$REDIRECT_URI" "$USERNAME" "$mode" "$BACKUP_DIR" "${CONFIG_DIR}/.config.cfg" "$SED_INPLACE" "${LOG}"
+    fetch_all_data "$API_URL" "$API_KEY" "$API_SECRET" "$ACCESS_TOKEN" "$REFRESH_TOKEN" "$REDIRECT_URI" "$USERNAME" "$mode" "$BACKUP_DIR_WITH_TIMESTAMP" "${CONFIG_DIR}/.config.cfg" "$SED_INPLACE" "${LOG}"
     
     # Process data and create Letterboxd CSV
-    process_data "$mode" "$USERNAME" "$BACKUP_DIR" "$TEMP_DIR" "$DOSCOPY" "${LOG}"
+    process_data "$mode" "$USERNAME" "$BACKUP_DIR_WITH_TIMESTAMP" "$TEMP_DIR" "$DOSCOPY" "${LOG}"
     
     echo "Export process completed. CSV file is ready for Letterboxd import." | tee -a "${LOG}"
 } 

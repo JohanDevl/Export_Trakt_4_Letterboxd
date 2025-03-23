@@ -99,6 +99,17 @@ check_token_validity() {
     fi
 }
 
+# Get the latest backup directory
+get_latest_backup_dir() {
+    local base_dir="$1"
+    local log_file="$2"
+    
+    echo "🔍 Using provided backup directory: $base_dir" | tee -a "${log_file}"
+    
+    # Just return the base_dir since it's already a timestamped directory created in run_export
+    echo "$base_dir"
+}
+
 # Fetch data from Trakt API
 fetch_trakt_data() {
     local api_url="$1"
@@ -116,32 +127,52 @@ fetch_trakt_data() {
         return 1
     fi
     
-    # Make the API request
+    # Create directory for output file if it doesn't exist
+    mkdir -p "$(dirname "$output_file")"
+    
+    echo "📥 Requesting data from: ${api_url}/users/me/${endpoint}" | tee -a "${log_file}"
+    echo "🔑 Using access token: ${access_token:0:5}...${access_token: -5}" | tee -a "${log_file}"
+    echo "💾 Saving to: ${output_file}" | tee -a "${log_file}"
+    
+    # Make the API request directly to save the JSON response
     curl -s -X GET "${api_url}/users/me/${endpoint}" \
         -H "Content-Type: application/json" \
         -H "trakt-api-key: ${api_key}" \
         -H "trakt-api-version: 2" \
         -H "Authorization: Bearer ${access_token}" \
-        -o "${output_file}" \
-        && echo -e "\e[32m${username}/${endpoint}\e[0m Retrieved successfully" | tee -a "${log_file}" \
-        || { echo -e "\e[31m${username}/${endpoint}\e[0m Request failed" | tee -a "${log_file}"; return 1; }
+        -o "${output_file}"
     
-    # Validate the response
+    # Check if file exists and has content
     if [ -f "${output_file}" ]; then
+        file_size=$(wc -c < "${output_file}")
+        echo "📄 Response saved to file: ${output_file} (size: ${file_size} bytes)" | tee -a "${log_file}"
+        
+        if [ "$file_size" -eq 0 ]; then
+            echo -e "\e[31mWARNING: The response file is empty (0 bytes).\e[0m" | tee -a "${log_file}"
+            echo -e "\e[31m${username}/${endpoint}\e[0m Request resulted in empty response" | tee -a "${log_file}"
+            return 1
+        fi
+        
+        # Validate the response as JSON
         if ! jq empty "${output_file}" 2>/dev/null; then
             echo -e "\e[31mERROR: The file $(basename "${output_file}") does not contain valid JSON.\e[0m" | tee -a "${log_file}"
+            # Show file contents for debugging
+            echo -e "File contents:" | tee -a "${log_file}"
+            cat "${output_file}" | tee -a "${log_file}"
             return 1
-        elif [ "$(jq '. | length' "${output_file}")" = "0" ]; then
-            echo -e "\e[33mWARNING: The file $(basename "${output_file}") does not contain any data.\e[0m" | tee -a "${log_file}"
-            # This is a warning, not an error, so still return success
+        elif [ "$(jq '. | length' "${output_file}" 2>/dev/null)" = "0" ]; then
+            echo -e "\e[33mWARNING: The file $(basename "${output_file}") contains an empty array [].\e[0m" | tee -a "${log_file}"
+            # This is just a warning, not an error - you might have no history
+            echo -e "\e[32m${username}/${endpoint}\e[0m Retrieved successfully (empty array)" | tee -a "${log_file}"
             return 0
         fi
+        
+        echo -e "\e[32m${username}/${endpoint}\e[0m Retrieved successfully" | tee -a "${log_file}"
+        return 0
     else
         echo -e "\e[31mERROR: The file $(basename "${output_file}") was not created.\e[0m" | tee -a "${log_file}"
         return 1
     fi
-    
-    return 0
 }
 
 # Get endpoints based on mode

@@ -149,6 +149,9 @@ create_backup_archive() {
     local log_file="$2"
     
     debug_msg "Creating backup archive" "$log_file"
-    tar -czvf "${backup_dir}/backup-$(date '+%Y%m%d%H%M%S').tar.gz" -C "$(dirname "${backup_dir}")" "$(basename "${backup_dir}")"
-    echo -e "Backup completed" | tee -a "${log_file}"
+    # Generate a unique backup archive name
+    backup_archive_name="backup-$(date '+%Y%m%d%H%M%S').tar.gz"
+    # Create the archive
+    tar -czvf "${backup_dir}/${backup_archive_name}" -C "$(dirname "${backup_dir}")" "$(basename "${backup_dir}")" > /dev/null 2>&1
+    echo -e "Backup completed: ${backup_dir}/${backup_archive_name}" | tee -a "${log_file}"
 } 

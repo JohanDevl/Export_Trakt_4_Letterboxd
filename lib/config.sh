@@ -91,7 +91,23 @@ detect_os_sed() {
 # Initialize backup directory
 init_backup_dir() {
     local backup_dir="$1"
+    local log_file="$2"
     
-    # Create backup folder
-    mkdir -p "${backup_dir}"
+    # Create backup folder if it doesn't exist
+    if [ ! -d "${backup_dir}" ]; then
+        mkdir -p "${backup_dir}"
+        echo "Created backup directory: ${backup_dir}" | tee -a "${log_file}"
+    else
+        echo "Backup directory exists: ${backup_dir}" | tee -a "${log_file}"
+    fi
+    
+    # Check permissions
+    if [ -w "${backup_dir}" ]; then
+        echo "Backup directory is writable: ✅" | tee -a "${log_file}"
+    else
+        echo "WARNING: Backup directory is not writable. Check permissions." | tee -a "${log_file}"
+    fi
+    
+    # Return the backup directory for use
+    echo "${backup_dir}"
 } 
