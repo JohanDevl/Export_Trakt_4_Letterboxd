@@ -25,17 +25,29 @@ BLUE='\033[0;34m'
 BOLD='\033[1m'
 NC='\033[0m'
 
+# Function to log to both console and file
+log_both() {
+  echo -e "$1" | tee -a "$LOGFILE"
+}
+
 # Log start time with export option
 export_option="${1:-complete}"
 start_time=$(date +"%Y-%m-%d %H:%M:%S")
-echo -e "\n${BOLD}================================================================================${NC}" >> "$LOGFILE"
-echo -e "${BLUE}[CRON] Starting Trakt to Letterboxd Export at ${start_time}${NC} 🚀" >> "$LOGFILE"
-echo -e "${YELLOW}Exporting your Trakt data with option '${export_option}'...${NC}" >> "$LOGFILE"
-echo -e "${BOLD}================================================================================${NC}\n" >> "$LOGFILE"
 
-# Run the export script
-"$EXPORT_SCRIPT" "$export_option" >> "$LOGFILE" 2>&1
+# Visual separator for better readability
+log_both "\n${BOLD}================================================================================${NC}"
+log_both "${BLUE}[CRON] Starting Trakt to Letterboxd Export at ${start_time}${NC} 🚀"
+log_both "${YELLOW}Exporting your Trakt data with option '${export_option}'...${NC}"
+log_both "${BOLD}================================================================================${NC}\n"
+
+# Run the export script and capture output
+# We use a temporary file to capture the output
+temp_output_file=$(mktemp)
+"$EXPORT_SCRIPT" "$export_option" > "$temp_output_file" 2>&1
 exit_code=$?
+
+# Append the script output to our log file
+cat "$temp_output_file" >> "$LOGFILE"
 
 # Get end time
 end_time=$(date +"%Y-%m-%d %H:%M:%S")
@@ -49,25 +61,28 @@ if [ $exit_code -eq 0 ]; then
     movie_count=$(($(wc -l < "$csv_file") - 1))
     file_size=$(du -h "$csv_file" | cut -f1)
     
-    echo -e "\n${BOLD}================================================================================${NC}" >> "$LOGFILE"
-    echo -e "${GREEN}[CRON] Export completed successfully at ${end_time}${NC} ✅" >> "$LOGFILE"
-    echo -e "${BLUE}Your Letterboxd import file is ready in the copy directory!${NC}" >> "$LOGFILE"
-    echo -e "${GREEN}Exported ${BOLD}${movie_count}${NC}${GREEN} movies to CSV file${NC}" >> "$LOGFILE"
-    echo -e "${YELLOW}File: ${SCRIPT_DIR}/copy/letterboxd_import.csv (${file_size} size)${NC}" >> "$LOGFILE"
-    echo -e "${BOLD}================================================================================${NC}\n" >> "$LOGFILE"
+    log_both "\n${BOLD}================================================================================${NC}"
+    log_both "${GREEN}[CRON] Export completed successfully at ${end_time}${NC} ✅"
+    log_both "${BLUE}Your Letterboxd import file is ready in the copy directory!${NC}"
+    log_both "${GREEN}Exported ${BOLD}${movie_count}${NC}${GREEN} movies to CSV file${NC}"
+    log_both "${YELLOW}File: ${SCRIPT_DIR}/copy/letterboxd_import.csv (${file_size} size)${NC}"
+    log_both "${BOLD}================================================================================${NC}\n"
   else
-    echo -e "\n${BOLD}================================================================================${NC}" >> "$LOGFILE"
-    echo -e "${GREEN}[CRON] Export completed successfully at ${end_time}${NC} ✅" >> "$LOGFILE"
-    echo -e "${YELLOW}Warning: CSV file not found at expected location.${NC}" >> "$LOGFILE"
-    echo -e "${BOLD}================================================================================${NC}\n" >> "$LOGFILE"
+    log_both "\n${BOLD}================================================================================${NC}"
+    log_both "${GREEN}[CRON] Export completed successfully at ${end_time}${NC} ✅"
+    log_both "${YELLOW}Warning: CSV file not found at expected location.${NC}"
+    log_both "${BOLD}================================================================================${NC}\n"
   fi
 else
   # If export failed
-  echo -e "\n${BOLD}================================================================================${NC}" >> "$LOGFILE"
-  echo -e "${RED}[CRON] Export failed at ${end_time} with exit code ${exit_code}${NC} ❌" >> "$LOGFILE"
-  echo -e "${YELLOW}Check the logs for details: ${LOGFILE}${NC}" >> "$LOGFILE"
-  echo -e "${BOLD}================================================================================${NC}\n" >> "$LOGFILE"
+  log_both "\n${BOLD}================================================================================${NC}"
+  log_both "${RED}[CRON] Export failed at ${end_time} with exit code ${exit_code}${NC} ❌"
+  log_both "${YELLOW}Check the logs for details: ${LOGFILE}${NC}"
+  log_both "${BOLD}================================================================================${NC}\n"
 fi
+
+# Clean up
+rm -f "$temp_output_file"
 
 # Exit with the same exit code as the export script
 exit $exit_code 

@@ -311,16 +311,17 @@ EOF
     # Ensure cron.d directory exists
     mkdir -p /etc/cron.d
     
-    # Create the crontab file
-    cat > /etc/cron.d/trakt-export << EOF
+    # Create the crontab file for Alpine Linux
+    cat > /etc/crontab << EOF
 # Trakt Export Cron Job
-$CRON_SCHEDULE root /app/cron_wrapper.sh $EXPORT_OPTION > /proc/1/fd/1 2>&1
+$CRON_SCHEDULE /bin/sh -c '/app/cron_wrapper.sh $EXPORT_OPTION 2>&1 | tee -a /proc/1/fd/1'
 # Empty line required at the end
+
 EOF
     
     # Apply cron job
-    chmod 0644 /etc/cron.d/trakt-export
-    crontab /etc/cron.d/trakt-export
+    chmod 0644 /etc/crontab
+    crontab /etc/crontab
     
     log_message "SUCCESS" "Cron job installed successfully"
 }
