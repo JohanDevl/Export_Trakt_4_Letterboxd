@@ -266,7 +266,28 @@ process_data() {
     if [ -f "$final_output_file" ]; then
         echo "🗑️ Removing existing Letterboxd import file: $final_output_file" | tee -a "${log}"
         rm -f "$final_output_file"
+        
+        # Verify removal was successful
+        if [ -f "$final_output_file" ]; then
+            echo "❌ ERROR: Failed to remove existing CSV file. Trying with force option." | tee -a "${log}"
+            rm -f "$final_output_file"
+            sleep 1
+        fi
     fi
+    
+    # Also check alternative paths and remove any existing files
+    local alt_paths=(
+        "${SCRIPT_DIR}/copy/letterboxd_import.csv"
+        "/app/copy/letterboxd_import.csv"
+        "./copy/letterboxd_import.csv"
+    )
+    
+    for alt_path in "${alt_paths[@]}"; do
+        if [ -f "$alt_path" ] && [ "$alt_path" != "$final_output_file" ]; then
+            echo "🗑️ Removing CSV file at alternate location: $alt_path" | tee -a "${log}"
+            rm -f "$alt_path"
+        fi
+    done
     
     # Create empty CSV file with header
     echo "Title,Year,imdbID,tmdbID,WatchedDate,Rating10,Rewatch" > "${temp_dir}/movies_export.csv"

@@ -243,6 +243,21 @@ echo "🎬 [CRON] Starting Trakt to Letterboxd Export at ${START_TIME} 🎬"
 echo "📊 Exporting your Trakt data with option '${EXPORT_OPTION}'..."
 echo "======================================================================"
 
+# Make sure any existing CSV file is removed
+CSV_LOCATIONS=(
+    "/app/copy/letterboxd_import.csv"
+    "/app/copy/copy/letterboxd_import.csv"
+    "/app/letterboxd_import.csv"
+    "./copy/letterboxd_import.csv"
+)
+
+for csv_path in "${CSV_LOCATIONS[@]}"; do
+    if [ -f "$csv_path" ]; then
+        echo "🗑️ Removing existing CSV file at: $csv_path"
+        rm -f "$csv_path"
+    fi
+done
+
 # Run the export script and capture exit code
 /app/Export_Trakt_4_Letterboxd.sh ${EXPORT_OPTION} > /app/logs/cron_export_$(date '+%Y-%m-%d_%H-%M-%S').log 2>&1
 EXIT_CODE=$?
