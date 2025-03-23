@@ -32,10 +32,10 @@ check_dependencies() {
         missing=1
     fi
     
-    # Check for kcov if coverage is requested
+    # Check for kcov if coverage is requested but don't fail
     if [ "$1" = "coverage" ] && ! command -v kcov &> /dev/null; then
-        echo "❌ kcov not found (install with your package manager for test coverage)"
-        missing=1
+        echo "⚠️ kcov not found - coverage report will be skipped"
+        export SKIP_COVERAGE=1
     fi
     
     if [ $missing -eq 1 ]; then
@@ -66,6 +66,11 @@ run_tests() {
 
 # Generate coverage report
 generate_coverage() {
+    if [ "${SKIP_COVERAGE}" = "1" ]; then
+        echo -e "\n⏩ Skipping coverage report generation (kcov not installed)"
+        return 0
+    fi
+    
     echo -e "\n📊 Generating test coverage report..."
     
     # Create coverage directory
