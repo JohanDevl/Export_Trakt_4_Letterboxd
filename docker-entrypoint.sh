@@ -224,13 +224,15 @@ if grep -q '^API_KEY="YOUR_API_KEY_HERE"' /app/config/.config.cfg || \
     log_message "INFO" "You can get API credentials at https://trakt.tv/oauth/applications"
 fi
 
-# Install cron job
-install_cron_job() {
-    log_message "INFO" "Installing cron job with schedule: $CRON_SCHEDULE"
+# Check for CRON_SCHEDULE environment variable
+if [ -n "$CRON_SCHEDULE" ]; then
+    log_message "INFO" "Setting up cron job with schedule: $CRON_SCHEDULE"
     
-    # Create wrapper script for cron with improved logging
+    # Create a simple wrapper script with visual logs
     cat > /app/cron_wrapper.sh << 'EOF'
 #!/bin/bash
+# Simple wrapper for cron to provide visual logs
+
 START_TIME=$(date +"%Y-%m-%d %H:%M:%S")
 EXPORT_OPTION=${1:-normal}
 
@@ -241,8 +243,8 @@ echo "🎬 [CRON] Starting Trakt to Letterboxd Export at ${START_TIME} 🎬"
 echo "📊 Exporting your Trakt data with option '${EXPORT_OPTION}'..."
 echo "======================================================================"
 
-# Run the export script and redirect output to log file
-/app/Export_Trakt_4_Letterboxd.sh ${EXPORT_OPTION} > /app/logs/cron_export.log 2>&1
+# Run the export script and capture exit code
+/app/Export_Trakt_4_Letterboxd.sh ${EXPORT_OPTION} > /app/logs/cron_export_$(date '+%Y-%m-%d').log 2>&1
 EXIT_CODE=$?
 
 END_TIME=$(date +"%Y-%m-%d %H:%M:%S")
@@ -271,15 +273,18 @@ else
     echo "======================================================================"
     echo ""
 fi
-EOF
 
-    # Make wrapper script executable
+exit $EXIT_CODE
+EOF
+    
+    # Make the wrapper script executable
     chmod +x /app/cron_wrapper.sh
+    log_message "SUCCESS" "Created visual log wrapper script"
     
     # Ensure cron.d directory exists
     mkdir -p /etc/cron.d
     
-    # Create cron job file using the wrapper script
+    # Create the crontab file to execute the wrapper script
     cat > /etc/crontab << EOF
 # Trakt Export Cron Job
 $CRON_SCHEDULE /app/cron_wrapper.sh ${EXPORT_OPTION:-normal}
@@ -290,16 +295,7 @@ EOF
     # Install the cron job
     chmod 0644 /etc/crontab
     crontab /etc/crontab
-    
-    log_message "SUCCESS" "Cron job installed with friendly logging"
-}
-
-# Check for CRON_SCHEDULE environment variable
-if [ -n "$CRON_SCHEDULE" ]; then
-    log_message "INFO" "Setting up cron job with schedule: $CRON_SCHEDULE"
-    
-    # Install cron job
-    install_cron_job
+    log_message "SUCCESS" "Cron job installed with schedule: $CRON_SCHEDULE"
     
     # Start crond in the foreground
     log_message "INFO" "Starting crond in the foreground"
