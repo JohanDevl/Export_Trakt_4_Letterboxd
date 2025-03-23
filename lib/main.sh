@@ -287,24 +287,39 @@ process_data() {
         history_processed=true
     fi
     
-    # Process watched movies if in complete mode or if history processing failed
-    if [ "$option" = "complete" ] && [ -f "$watched_file" ]; then
+    # Process watched movies in all cases to ensure maximum data recovery
+    if [ -f "$watched_file" ]; then
         local existing_ids="${temp_dir}/existing_imdb_ids.txt"
         local watched_raw="${temp_dir}/watched_raw_output.csv"
-        process_watched_movies "$watched_file" "$ratings_lookup" "$csv_output" "$existing_ids" "$watched_raw" "false" "$log"
-    elif [ "$history_processed" = "false" ] && [ -f "$watched_file" ]; then
-        local existing_ids="${temp_dir}/existing_imdb_ids.txt"
-        local watched_raw="${temp_dir}/watched_raw_output.csv"
-        process_watched_movies "$watched_file" "$ratings_lookup" "$csv_output" "$existing_ids" "$watched_raw" "true" "$log"
+        
+        # If history processing failed, use watched as primary source
+        # Otherwise, supplement history with watched data
+        if [ "$history_processed" = "false" ]; then
+            echo "⚠️ No history data found, using watched data as primary source" | tee -a "${log}"
+            process_watched_movies "$watched_file" "$ratings_lookup" "$csv_output" "$existing_ids" "$watched_raw" "true" "$log"
+        else
+            echo "📊 Supplementing history data with watched data" | tee -a "${log}"
+            process_watched_movies "$watched_file" "$ratings_lookup" "$csv_output" "$existing_ids" "$watched_raw" "false" "$log"
+        fi
     else
         if [ "$history_processed" = "false" ]; then
-            echo -e "Movies history: No movies found in history or watched" | tee -a "${log}"
+            echo -e "⚠️ Movies history: No movies found in history or watched" | tee -a "${log}"
         fi
     fi
     
+    # Deduplicate the final CSV to ensure no duplicate entries
+    local final_csv="${temp_dir}/final_export.csv"
+    deduplicate_movies "$csv_output" "$final_csv" "$log"
+    
     # Copy file to final destination
-    cp "${temp_dir}/movies_export.csv" "${doscopy}/letterboxd_import.csv"
-    debug_msg "CSV file created in ${doscopy}/letterboxd_import.csv" "$log"
+    cp "${final_csv}" "${doscopy}/letterboxd_import.csv"
+    
+    # Get file stats for logging
+    local file_size=$(wc -c < "${doscopy}/letterboxd_import.csv")
+    local movie_count=$(($(wc -l < "${doscopy}/letterboxd_import.csv") - 1)) # Subtract header line
+    
+    echo "✅ CSV file created in ${doscopy}/letterboxd_import.csv" | tee -a "${log}"
+    echo "📊 Exported $movie_count movies (file size: $file_size bytes)" | tee -a "${log}"
     
     # Create backup if in complete mode
     if [ "$option" = "complete" ]; then

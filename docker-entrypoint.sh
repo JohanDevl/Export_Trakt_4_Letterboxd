@@ -224,73 +224,117 @@ if grep -q '^API_KEY="YOUR_API_KEY_HERE"' /app/config/.config.cfg || \
     log_message "INFO" "You can get API credentials at https://trakt.tv/oauth/applications"
 fi
 
+# Install cron job
+install_cron_job() {
+    log_msg "Installing cron job with schedule: $CRON_SCHEDULE"
+    
+    # Create cron wrapper script
+    cat > /app/cron_wrapper.sh << 'EOF'
+#!/bin/bash
+#
+# Cron wrapper for Export_Trakt_4_Letterboxd.sh
+#
+
+# Set script variables
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+EXPORT_SCRIPT="${SCRIPT_DIR}/Export_Trakt_4_Letterboxd.sh"
+LOGFILE="${SCRIPT_DIR}/logs/cron_export.log"
+CONFIG_FILE="${SCRIPT_DIR}/config/.config.cfg"
+
+# Load config if it exists
+if [ -f "$CONFIG_FILE" ]; then
+  source "$CONFIG_FILE"
+fi
+
+# Make sure log directory exists
+mkdir -p "$(dirname "$LOGFILE")"
+
+# Define colors for better log readability
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+# Log start time with export option
+export_option="${1:-complete}"
+start_time=$(date +"%Y-%m-%d %H:%M:%S")
+echo -e "\n${BOLD}================================================================================${NC}" >> "$LOGFILE"
+echo -e "${BLUE}[CRON] Starting Trakt to Letterboxd Export at ${start_time}${NC} 🚀" >> "$LOGFILE"
+echo -e "${YELLOW}Exporting your Trakt data with option '${export_option}'...${NC}" >> "$LOGFILE"
+echo -e "${BOLD}================================================================================${NC}\n" >> "$LOGFILE"
+
+# Run the export script
+"$EXPORT_SCRIPT" "$export_option" >> "$LOGFILE" 2>&1
+exit_code=$?
+
+# Get end time
+end_time=$(date +"%Y-%m-%d %H:%M:%S")
+
+# If export was successful
+if [ $exit_code -eq 0 ]; then
+  # Try to count the number of films exported by checking the CSV file
+  csv_file="${SCRIPT_DIR}/copy/letterboxd_import.csv"
+  if [ -f "$csv_file" ]; then
+    # Count movies (subtract 1 for header)
+    movie_count=$(($(wc -l < "$csv_file") - 1))
+    file_size=$(du -h "$csv_file" | cut -f1)
+    
+    echo -e "\n${BOLD}================================================================================${NC}" >> "$LOGFILE"
+    echo -e "${GREEN}[CRON] Export completed successfully at ${end_time}${NC} ✅" >> "$LOGFILE"
+    echo -e "${BLUE}Your Letterboxd import file is ready in the copy directory!${NC}" >> "$LOGFILE"
+    echo -e "${GREEN}Exported ${BOLD}${movie_count}${NC}${GREEN} movies to CSV file${NC}" >> "$LOGFILE"
+    echo -e "${YELLOW}File: ${SCRIPT_DIR}/copy/letterboxd_import.csv (${file_size} size)${NC}" >> "$LOGFILE"
+    echo -e "${BOLD}================================================================================${NC}\n" >> "$LOGFILE"
+  else
+    echo -e "\n${BOLD}================================================================================${NC}" >> "$LOGFILE"
+    echo -e "${GREEN}[CRON] Export completed successfully at ${end_time}${NC} ✅" >> "$LOGFILE"
+    echo -e "${YELLOW}Warning: CSV file not found at expected location.${NC}" >> "$LOGFILE"
+    echo -e "${BOLD}================================================================================${NC}\n" >> "$LOGFILE"
+  fi
+else
+  # If export failed
+  echo -e "\n${BOLD}================================================================================${NC}" >> "$LOGFILE"
+  echo -e "${RED}[CRON] Export failed at ${end_time} with exit code ${exit_code}${NC} ❌" >> "$LOGFILE"
+  echo -e "${YELLOW}Check the logs for details: ${LOGFILE}${NC}" >> "$LOGFILE"
+  echo -e "${BOLD}================================================================================${NC}\n" >> "$LOGFILE"
+fi
+
+# Exit with the same exit code as the export script
+exit $exit_code
+EOF
+
+    # Make the wrapper script executable
+    chmod +x /app/cron_wrapper.sh
+    
+    # Create the crontab file
+    cat > /etc/cron.d/trakt-export << EOF
+# Trakt Export Cron Job
+$CRON_SCHEDULE root /app/cron_wrapper.sh $EXPORT_OPTION > /proc/1/fd/1 2>&1
+# Empty line required at the end
+EOF
+    
+    # Apply cron job
+    chmod 0644 /etc/cron.d/trakt-export
+    crontab /etc/cron.d/trakt-export
+    
+    log_success "Cron job installed successfully"
+}
+
 # Check for CRON_SCHEDULE environment variable
 if [ -n "$CRON_SCHEDULE" ]; then
     log_message "INFO" "Setting up cron job with schedule: $CRON_SCHEDULE"
     
-    # Create wrapper script for cron with improved logging
-    cat > /app/cron_wrapper.sh << 'EOF'
-#!/bin/bash
-START_TIME=$(date +"%Y-%m-%d %H:%M:%S")
-EXPORT_OPTION=${1:-normal}
-
-# Log to container stdout with friendly messages
-echo ""
-echo "======================================================================"
-echo "🎬 [CRON] Starting Trakt to Letterboxd Export at ${START_TIME} 🎬"
-echo "📊 Exporting your Trakt data with option '${EXPORT_OPTION}'..."
-echo "======================================================================"
-
-# Run the export script and redirect output to log file
-/app/Export_Trakt_4_Letterboxd.sh ${EXPORT_OPTION} > /app/logs/cron_export.log 2>&1
-EXIT_CODE=$?
-
-END_TIME=$(date +"%Y-%m-%d %H:%M:%S")
-
-# Check result and show friendly message
-if [ $EXIT_CODE -eq 0 ]; then
-    echo "======================================================================"
-    echo "✅ [CRON] Export completed successfully at ${END_TIME}"
-    echo "🎉 Your Letterboxd import file is ready in the copy directory!"
-    
-    # Show CSV file info if it exists
-    if [ -f /app/copy/letterboxd_import.csv ]; then
-        MOVIES_COUNT=$(wc -l < /app/copy/letterboxd_import.csv)
-        MOVIES_COUNT=$((MOVIES_COUNT - 1))  # Subtract header row
-        echo "📋 Exported ${MOVIES_COUNT} movies to CSV file"
-        echo "📂 File: /app/copy/letterboxd_import.csv ($(du -h /app/copy/letterboxd_import.csv | cut -f1) size)"
-    else
-        echo "⚠️ No CSV file was created. Check the logs for errors."
-    fi
-    echo "======================================================================"
-    echo ""
-else
-    echo "======================================================================"
-    echo "❌ [CRON] Export failed with exit code ${EXIT_CODE} at ${END_TIME}"
-    echo "⚠️ Please check the logs for errors: /app/logs/cron_export.log"
-    echo "======================================================================"
-    echo ""
-fi
-EOF
-
-    # Make wrapper script executable
-    chmod +x /app/cron_wrapper.sh
-    
-    # Create cron job file using the wrapper script
-    echo "$CRON_SCHEDULE /app/cron_wrapper.sh ${EXPORT_OPTION:-normal}" > /tmp/export_cron
-    
-    # Install the cron job
-    crontab /tmp/export_cron
-    rm /tmp/export_cron
-    
-    log_message "SUCCESS" "Cron job installed with friendly logging"
-    log_message "INFO" "Starting crond in the foreground"
+    # Install cron job
+    install_cron_job
     
     # Start crond in the foreground
+    log_message "INFO" "Starting crond in the foreground"
     exec crond -f
 else
     log_message "INFO" "No cron schedule specified. Running export script once with option: ${EXPORT_OPTION:-normal}"
     
-    # Run script once
+    # Run the export script once
     exec /app/Export_Trakt_4_Letterboxd.sh "${EXPORT_OPTION:-normal}"
 fi 

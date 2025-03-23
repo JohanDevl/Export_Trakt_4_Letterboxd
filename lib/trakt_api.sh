@@ -134,43 +134,92 @@ fetch_trakt_data() {
     echo "🔑 Using access token: ${access_token:0:5}...${access_token: -5}" | tee -a "${log_file}"
     echo "💾 Saving to: ${output_file}" | tee -a "${log_file}"
     
-    # Make the API request directly to save the JSON response
-    curl -s -X GET "${api_url}/users/me/${endpoint}" \
-        -H "Content-Type: application/json" \
-        -H "trakt-api-key: ${api_key}" \
-        -H "trakt-api-version: 2" \
-        -H "Authorization: Bearer ${access_token}" \
-        -o "${output_file}"
+    # Set up initial pagination parameters
+    local page=1
+    local limit=100 # Maximum allowed by Trakt API
+    local max_pages=30 # Safety limit to prevent infinite loops
+    local total_items=0
+    local temp_file="${output_file}.temp"
+    local success=false
+    local max_retries=3
+    local retry_count=0
     
-    # Check if file exists and has content
-    if [ -f "${output_file}" ]; then
-        file_size=$(wc -c < "${output_file}")
-        echo "📄 Response saved to file: ${output_file} (size: ${file_size} bytes)" | tee -a "${log_file}"
+    # Initialize an empty array in our temp file
+    echo "[]" > "$temp_file"
+    
+    # Make paginated API requests until we get all data
+    while [ $page -le $max_pages ]; do
+        retry_count=0
+        local page_success=false
         
-        if [ "$file_size" -eq 0 ]; then
-            echo -e "\e[31mWARNING: The response file is empty (0 bytes).\e[0m" | tee -a "${log_file}"
-            echo -e "\e[31m${username}/${endpoint}\e[0m Request resulted in empty response" | tee -a "${log_file}"
-            return 1
+        while [ $retry_count -lt $max_retries ] && [ "$page_success" != "true" ]; do
+            echo "📄 Fetching page $page of endpoint $endpoint..." | tee -a "${log_file}"
+            
+            # Make the paginated API request
+            local page_data=$(curl -s -X GET "${api_url}/users/me/${endpoint}?page=${page}&limit=${limit}" \
+                -H "Content-Type: application/json" \
+                -H "trakt-api-key: ${api_key}" \
+                -H "trakt-api-version: 2" \
+                -H "Authorization: Bearer ${access_token}")
+            
+            # Check if the response is valid JSON and not empty
+            if echo "$page_data" | jq empty 2>/dev/null && [ "$(echo "$page_data" | jq 'length')" -gt 0 ]; then
+                # Save the current items and merge with previous pages
+                echo "$page_data" > "${temp_file}.page${page}"
+                
+                # Merge with existing data
+                jq -s 'add' "$temp_file" "${temp_file}.page${page}" > "${temp_file}.new"
+                mv "${temp_file}.new" "$temp_file"
+                rm "${temp_file}.page${page}"
+                
+                # Get item count for this page
+                local items_count=$(echo "$page_data" | jq 'length')
+                total_items=$((total_items + items_count))
+                echo "✅ Page $page: Retrieved $items_count items (total: $total_items)" | tee -a "${log_file}"
+                
+                # If fewer items than the limit, we've reached the end
+                if [ $items_count -lt $limit ]; then
+                    echo "🏁 Reached end of data for endpoint $endpoint" | tee -a "${log_file}"
+                    success=true
+                    break
+                fi
+                
+                page_success=true
+                page=$((page + 1))
+            elif [ $retry_count -lt $((max_retries - 1)) ]; then
+                retry_count=$((retry_count + 1))
+                echo "⚠️ Retry $retry_count for page $page (endpoint: $endpoint)" | tee -a "${log_file}"
+                sleep 2 # Wait before retrying
+            else
+                echo -e "\e[33mWARNING: Failed to retrieve page $page for endpoint $endpoint after $max_retries attempts.\e[0m" | tee -a "${log_file}"
+                # If we got at least one page successfully, consider it a partial success
+                if [ $total_items -gt 0 ]; then
+                    success=true
+                    echo "⚠️ Continuing with partial data ($total_items items)" | tee -a "${log_file}"
+                    break
+                else
+                    echo -e "\e[31mERROR: Failed to retrieve any data for endpoint $endpoint.\e[0m" | tee -a "${log_file}"
+                    return 1
+                fi
+            fi
+        done
+        
+        # If we've exhausted all pages or reached the end, break
+        if [ "$page_success" != "true" ] || [ "$success" = "true" ]; then
+            break
         fi
-        
-        # Validate the response as JSON
-        if ! jq empty "${output_file}" 2>/dev/null; then
-            echo -e "\e[31mERROR: The file $(basename "${output_file}") does not contain valid JSON.\e[0m" | tee -a "${log_file}"
-            # Show file contents for debugging
-            echo -e "File contents:" | tee -a "${log_file}"
-            cat "${output_file}" | tee -a "${log_file}"
-            return 1
-        elif [ "$(jq '. | length' "${output_file}" 2>/dev/null)" = "0" ]; then
-            echo -e "\e[33mWARNING: The file $(basename "${output_file}") contains an empty array [].\e[0m" | tee -a "${log_file}"
-            # This is just a warning, not an error - you might have no history
-            echo -e "\e[32m${username}/${endpoint}\e[0m Retrieved successfully (empty array)" | tee -a "${log_file}"
-            return 0
-        fi
-        
+    done
+    
+    # If we got here with data, move the temporary file to the final location
+    if [ "$success" = "true" ] || [ $total_items -gt 0 ]; then
+        mv "$temp_file" "$output_file"
+        echo "📊 Successfully saved $total_items items for endpoint $endpoint" | tee -a "${log_file}"
         echo -e "\e[32m${username}/${endpoint}\e[0m Retrieved successfully" | tee -a "${log_file}"
         return 0
     else
-        echo -e "\e[31mERROR: The file $(basename "${output_file}") was not created.\e[0m" | tee -a "${log_file}"
+        echo -e "\e[31mERROR: Failed to retrieve data for endpoint ${endpoint}.\e[0m" | tee -a "${log_file}"
+        # If we have a temporary file but no data, clean up
+        rm -f "$temp_file"
         return 1
     fi
 }

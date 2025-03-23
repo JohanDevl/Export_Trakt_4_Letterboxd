@@ -154,4 +154,64 @@ create_backup_archive() {
     # Create the archive
     tar -czvf "${backup_dir}/${backup_archive_name}" -C "$(dirname "${backup_dir}")" "$(basename "${backup_dir}")" > /dev/null 2>&1
     echo -e "Backup completed: ${backup_dir}/${backup_archive_name}" | tee -a "${log_file}"
-} 
+}
+
+# Improved function to deduplicate movies based on IMDb ID
+deduplicate_movies() {
+    local input_csv="$1"
+    local output_csv="$2"
+    local log_file="$3"
+    
+    echo "🔄 Deduplicating movies in CSV file..." | tee -a "${log_file}"
+    
+    # Create a temporary file for the deduplicated content
+    local temp_csv="${input_csv}.dedup"
+    
+    # Keep header line
+    head -n 1 "$input_csv" > "$temp_csv"
+    
+    # Track IMDb IDs we've seen
+    local seen_ids=()
+    local id_file=$(mktemp)
+    
+    # Count total movies
+    local total_lines=$(wc -l < "$input_csv")
+    local total_movies=$((total_lines - 1))
+    echo "📊 Total movies before deduplication: $total_movies" | tee -a "${log_file}"
+    
+    # Process each line (skipping header)
+    cat "$input_csv" | tail -n +2 | while IFS=, read -r title year imdb tmdb date rating rewatch; do
+        # Extract IMDb ID (remove quotes if present)
+        clean_imdb=$(echo "$imdb" | sed 's/"//g' | sed 's/^tt//g')
+        
+        # Skip if no IMDb ID
+        if [ -z "$clean_imdb" ]; then
+            echo "⚠️ Skipping movie with no IMDb ID: $title ($year)" | tee -a "${log_file}"
+            continue
+        fi
+        
+        # Use a file to track seen IDs (more reliable than array in a subshell)
+        if ! grep -q "^$clean_imdb$" "$id_file"; then
+            echo "$clean_imdb" >> "$id_file"
+            # Ensure IMDb ID has tt prefix
+            formatted_imdb="\"tt${clean_imdb}\""
+            echo "${title},${year},${formatted_imdb},${tmdb},${date},${rating},${rewatch}" >> "$temp_csv"
+        fi
+    done
+    
+    # Move the deduplicated file to the output
+    mv "$temp_csv" "$output_csv"
+    
+    # Count deduplicated movies
+    local dedup_lines=$(wc -l < "$output_csv")
+    local dedup_movies=$((dedup_lines - 1))
+    echo "📊 Total movies after deduplication: $dedup_movies" | tee -a "${log_file}"
+    echo "🔄 Removed $((total_movies - dedup_movies)) duplicate entries" | tee -a "${log_file}"
+    
+    # Clean up
+    rm -f "$id_file"
+    
+    return 0
+}
+
+# Add this function call at the end of process_data function 
