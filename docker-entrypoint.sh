@@ -96,14 +96,14 @@ USERNAME="YOUR_TRAKT_USERNAME"
 # DIRECTORY PATHS
 ############################################################################
 # Backup and output directories
-BACKUP_DIR="./backup/$(date +"%Y-%m-%d_%H-%M-%S")_trakt-backup"
+BACKUP_DIR="./backup"
 DOSLOG="./logs"
 DOSCOPY="./copy"
-BRAIN_OPS="./brain_ops"
+CONFIG_DIR="./config"
 
 # Date format for filenames
 DATE=$(date +%Y%m%d_%H%M)
-LOG="${DOSLOG}/${DATE}-Export_Trakt.txt"
+LOG="${DOSLOG}/Export_Trakt_4_Letterboxd_$(date '+%Y-%m-%d_%H-%M-%S').log"
 
 ############################################################################
 # DISPLAY SETTINGS
@@ -114,27 +114,6 @@ GREEN='\033[0;32m'   # Color code for success messages
 NC='\033[0m'         # No Color 
 BOLD='\033[1m'       # Code for bold text
 SAISPAS='\e[1;33;41m' # Background color code: 1;33 for yellow, 44 for red
-
-############################################################################
-# INITIALIZATION
-############################################################################
-# Create necessary directories if they don't exist
-if [ -d ./TEMP ]; then
-    rm -r ./TEMP
-fi
-mkdir TEMP
-
-if [ ! -d $DOSLOG ]; then
-    mkdir $DOSLOG
-fi
-
-if [ ! -d $DOSCOPY ]; then
-    mkdir $DOSCOPY
-fi
-
-if [ ! -d $BRAIN_OPS ]; then
-    mkdir $BRAIN_OPS
-fi
 EOF
     echo "Example config file created at /app/config/.config.cfg.example"
 fi
@@ -167,7 +146,7 @@ USERNAME
 BACKUP_DIR
 DOSLOG
 DOSCOPY
-BRAIN_OPS
+CONFIG_DIR
 DATE
 LOG
 RED
@@ -197,26 +176,8 @@ EOF
         fi
     done < /tmp/required_vars.txt
     
-    # Check for initialization section
-    if ! grep -q "INITIALIZATION" "$config_file"; then
-        log_message "WARN" "Missing INITIALIZATION section"
-        
-        # Extract the initialization section from the example file
-        sed -n '/INITIALIZATION/,/^fi$/p' "$example_file" > /tmp/init_section.txt
-        
-        # Add the initialization section to the config file
-        echo "" >> "$config_file"
-        echo "############################################################################" >> "$config_file"
-        echo "# INITIALIZATION" >> "$config_file"
-        echo "############################################################################" >> "$config_file"
-        cat /tmp/init_section.txt >> "$config_file"
-        
-        log_message "INFO" "Added INITIALIZATION section to config file"
-        added_vars=$((added_vars + 1))
-    fi
-    
     # Clean up temporary files
-    rm -f /tmp/required_vars.txt /tmp/init_section.txt
+    rm -f /tmp/required_vars.txt
     
     # Report results
     if [ $missing_vars -eq 0 ]; then
@@ -240,188 +201,149 @@ fi
 
 # Create necessary directories with proper permissions
 log_message "INFO" "Creating necessary directories with proper permissions"
-mkdir -p /app/logs /app/copy /app/brain_ops /app/backup /app/TEMP
-chmod -R 777 /app/logs /app/copy /app/brain_ops /app/backup /app/TEMP /app/config
+mkdir -p /app/logs /app/copy /app/backup /app/TEMP
+chmod -R 777 /app/logs /app/copy /app/backup /app/TEMP /app/config
 log_message "SUCCESS" "Directories created with permissions 777"
 
 # Debug directory information
 debug_file_info "/app/logs" "Logs directory"
 debug_file_info "/app/copy" "Copy directory"
-debug_file_info "/app/brain_ops" "Brain ops directory"
 debug_file_info "/app/backup" "Backup directory"
 debug_file_info "/app/TEMP" "Temp directory"
+debug_file_info "/app/config" "Config directory"
+debug_file_info "/app/lib" "Library directory"
 
-# Ensure the config file is writable
-log_message "INFO" "Setting config file permissions"
-chmod 666 /app/config/.config.cfg 2>/dev/null || true
-chmod 666 /app/config/.config.cfg.example 2>/dev/null || true
-log_message "SUCCESS" "Config file permissions set to 666"
-
-# Verify and add missing variables to the config file
+# Verify config file variables
 verify_config_variables
 
-# Make scripts executable
-log_message "INFO" "Making scripts executable"
-chmod +x /app/Export_Trakt_4_Letterboxd.sh /app/setup_trakt.sh
-log_message "SUCCESS" "Scripts are now executable"
+# Check if Trakt API credentials are set
+if grep -q '^API_KEY="YOUR_API_KEY_HERE"' /app/config/.config.cfg || \
+   grep -q '^API_SECRET="YOUR_API_SECRET_HERE"' /app/config/.config.cfg; then
+    log_message "WARN" "API credentials not configured in .config.cfg"
+    log_message "INFO" "Please edit /app/config/.config.cfg with your Trakt API credentials"
+    log_message "INFO" "You can get API credentials at https://trakt.tv/oauth/applications"
+fi
 
-# Update scripts to use the config file in the config directory
-log_message "INFO" "Updating scripts to use config file in the config directory"
-sed -i 's|CONFIG_FILE="${SCRIPT_DIR}/.config.cfg"|CONFIG_FILE="/app/config/.config.cfg"|g' /app/setup_trakt.sh
-sed -i 's|source ${SCRIPT_DIR}/.config.cfg|source /app/config/.config.cfg|g' /app/Export_Trakt_4_Letterboxd.sh
-log_message "SUCCESS" "Scripts updated to use config file in the config directory"
-
-# Modify the permission settings in the Export_Trakt_4_Letterboxd.sh script
-log_message "INFO" "Updating CSV file permissions in main script"
-sed -i 's|chmod 644 "${DOSCOPY}/letterboxd_import.csv"|chmod 666 "${DOSCOPY}/letterboxd_import.csv"|g' /app/Export_Trakt_4_Letterboxd.sh
-log_message "SUCCESS" "Updated CSV file permissions in main script"
-
-# Setup cron job if CRON_SCHEDULE is provided
-if [ ! -z "${CRON_SCHEDULE}" ]; then
-    # Install cron if not already installed
-    if ! command -v cron &> /dev/null; then
-        log_message "INFO" "Installing cron..."
-        apk add --no-cache dcron
-        log_message "SUCCESS" "Cron installed"
-    else
-        log_message "INFO" "Cron is already installed"
-    fi
-
-    # Set default export option if not provided
-    EXPORT_OPTION=${EXPORT_OPTION:-normal}
+# Check for CRON_SCHEDULE environment variable
+if [ -n "$CRON_SCHEDULE" ]; then
+    log_message "INFO" "Setting up cron job with schedule: $CRON_SCHEDULE"
     
-    # Debug messages to help diagnose issues
-    log_message "INFO" "Setting up cron job with the following parameters:"
-    log_message "DEBUG" "EXPORT_OPTION = ${EXPORT_OPTION}"
-    log_message "DEBUG" "CRON_SCHEDULE = ${CRON_SCHEDULE}"
-    
-    # Create a wrapper script for the cron job
-    log_message "INFO" "Creating cron wrapper script"
-    cat > /app/cron_wrapper.sh << EOF
+    # Create a simple wrapper script with visual logs
+    cat > /app/cron_wrapper.sh << 'EOF'
 #!/bin/bash
-# Get the start time
+# Simple wrapper for cron to provide visual logs
+
 START_TIME=$(date +"%Y-%m-%d %H:%M:%S")
+EXPORT_OPTION=${1:-normal}
 
-# Log to container stdout with a friendly message
-echo "🎬 [CRON] Starting Trakt to Letterboxd Export at ${START_TIME} 🎬" > /proc/1/fd/1
-echo "📊 Exporting your Trakt data with option '${EXPORT_OPTION}'... This may take a few minutes." > /proc/1/fd/1
-echo "DEBUG: Using export option: ${EXPORT_OPTION}" > /proc/1/fd/1
+# Log to container stdout with friendly messages
+echo ""
+echo "======================================================================"
+echo "🎬 [CRON] Starting Trakt to Letterboxd Export at ${START_TIME} 🎬"
+echo "📊 Exporting your Trakt data with option '${EXPORT_OPTION}'..."
+echo "======================================================================"
 
-# Make sure directories have proper permissions
-chmod -R 777 /app/logs /app/copy /app/brain_ops /app/backup
-echo "Permissions set on directories: logs, copy, brain_ops, backup" > /proc/1/fd/1
+# Make sure any existing CSV file is removed
+CSV_LOCATIONS=(
+    "/app/copy/letterboxd_import.csv"
+    "/app/copy/copy/letterboxd_import.csv"
+    "/app/letterboxd_import.csv"
+    "./copy/letterboxd_import.csv"
+)
 
-# Redirect all output to the log file
-exec > /app/logs/cron_export.log 2>&1
+for csv_path in "${CSV_LOCATIONS[@]}"; do
+    if [ -f "$csv_path" ]; then
+        echo "🗑️ Removing existing CSV file at: $csv_path"
+        rm -f "$csv_path"
+    fi
+done
 
-# Print friendly messages
-echo "========================================================"
-echo "🎬 Starting Trakt to Letterboxd Export - $(date)"
-echo "========================================================"
-echo "🌟 Exporting your Trakt data to Letterboxd format..."
-echo "📊 Using export option: ${EXPORT_OPTION}"
-echo "========================================================"
-
-# Debug directory structure and permissions
-echo "Directory permissions before export:"
-ls -la /app/copy /app/logs /app/brain_ops /app/backup
-
-# Run the export script
-cd /app && ./Export_Trakt_4_Letterboxd.sh ${EXPORT_OPTION}
-
-# Check if the script executed correctly
+# Run the export script and capture exit code
+/app/Export_Trakt_4_Letterboxd.sh ${EXPORT_OPTION} > /app/logs/cron_export_$(date '+%Y-%m-%d_%H-%M-%S').log 2>&1
 EXIT_CODE=$?
-if [ $EXIT_CODE -eq 0 ]; then
-    echo "Export script finished successfully with exit code 0"
-else
-    echo "WARNING: Export script exited with code $EXIT_CODE"
-fi
 
-# Check if the CSV file exists
-if [ -f /app/copy/letterboxd_import.csv ]; then
-    echo "CSV file exists after export"
-    ls -la /app/copy/letterboxd_import.csv
-    
-    # Ensure the generated CSV file has the correct permissions
-    chmod 666 /app/copy/letterboxd_import.csv
-    echo "CSV file permissions updated to 666"
-    ls -la /app/copy/letterboxd_import.csv
-else
-    echo "ERROR: CSV file was not created at /app/copy/letterboxd_import.csv"
-    echo "Contents of copy directory:"
-    ls -la /app/copy
-fi
-
-# Get the end time
 END_TIME=$(date +"%Y-%m-%d %H:%M:%S")
 
-# Print completion message
-echo "========================================================"
-echo "✅ Export completed at $(date)"
-echo "🎉 Your Letterboxd import file is ready in the copy directory!"
-echo "========================================================"
+# Check result and show friendly message
+if [ $EXIT_CODE -eq 0 ]; then
+    echo "======================================================================"
+    echo "✅ [CRON] Export completed successfully at ${END_TIME}"
+    
+    # Wait longer for file operations to complete
+    sleep 3
+    
+    # Search for the CSV file in multiple possible locations
+    CSV_FOUND=false
+    CSV_LOCATIONS=(
+        "/app/copy/letterboxd_import.csv"
+        "/app/copy/copy/letterboxd_import.csv"
+        "/app/letterboxd_import.csv"
+        "./copy/letterboxd_import.csv"
+    )
+    
+    for csv_path in "${CSV_LOCATIONS[@]}"; do
+        if [ -f "$csv_path" ]; then
+            CSV_FOUND=true
+            CSV_FILE="$csv_path"
+            
+            # Copy it to the standard location if not already there
+            if [ "$csv_path" != "/app/copy/letterboxd_import.csv" ]; then
+                cp -v "$csv_path" "/app/copy/letterboxd_import.csv"
+                CSV_FILE="/app/copy/letterboxd_import.csv"
+            fi
+            break
+        fi
+    done
+    
+    # Show CSV file info if it exists
+    if [ "$CSV_FOUND" = true ]; then
+        echo "🎉 Your Letterboxd import file is ready in the copy directory!"
+        MOVIES_COUNT=$(wc -l < "$CSV_FILE")
+        MOVIES_COUNT=$((MOVIES_COUNT - 1))  # Subtract header row
+        echo "📋 Exported ${MOVIES_COUNT} movies to CSV file"
+        echo "📂 File: /app/copy/letterboxd_import.csv ($(du -h "$CSV_FILE" | cut -f1) size)"
+    else
+        echo "⚠️ No CSV file was created. Check the logs for errors."
+    fi
+    echo "======================================================================"
+    echo ""
+else
+    echo "======================================================================"
+    echo "❌ [CRON] Export failed with exit code ${EXIT_CODE} at ${END_TIME}"
+    echo "⚠️ Please check the logs for errors: /app/logs/cron_export_*.log"
+    echo "======================================================================"
+    echo ""
+fi
 
-# Log to container stdout with a friendly completion message
-echo "✅ [CRON] Trakt to Letterboxd Export completed at ${END_TIME} ✅" > /proc/1/fd/1
-echo "🎉 Your Letterboxd import file is ready in the copy directory! 🎉" > /proc/1/fd/1
+exit $EXIT_CODE
 EOF
     
     # Make the wrapper script executable
     chmod +x /app/cron_wrapper.sh
-    log_message "SUCCESS" "Cron wrapper script created at /app/cron_wrapper.sh"
-    debug_file_info "/app/cron_wrapper.sh" "Cron wrapper script"
+    log_message "SUCCESS" "Created visual log wrapper script"
     
-    # Create cron job using the wrapper script
-    echo "${CRON_SCHEDULE} /app/cron_wrapper.sh" > /etc/crontabs/root
-    log_message "SUCCESS" "Cron job schedule set: ${CRON_SCHEDULE}"
-    log_message "DEBUG" "Cron content: $(cat /etc/crontabs/root)"
+    # Ensure cron.d directory exists
+    mkdir -p /etc/cron.d
     
-    # Make sure the log file exists and is writable
-    touch /app/logs/cron_export.log
-    chmod 666 /app/logs/cron_export.log
-    log_message "INFO" "Created cron log file with permissions 666"
-    debug_file_info "/app/logs/cron_export.log" "Cron log file"
-    
-    # Start cron daemon with appropriate logging
-    log_message "INFO" "Starting cron daemon..."
-    crond -b -L 8
-    log_message "SUCCESS" "Cron daemon started in background"
-    
-    log_message "INFO" "Cron job has been set up. Logs will be written to /app/logs/cron_export.log"
-    log_message "INFO" "You can also see cron execution messages in the container logs."
-else
-    log_message "INFO" "No CRON_SCHEDULE provided, skipping cron setup"
-fi
+    # Create the crontab file to execute the wrapper script
+    cat > /etc/crontab << EOF
+# Trakt Export Cron Job
+$CRON_SCHEDULE /app/cron_wrapper.sh ${EXPORT_OPTION:-normal}
+# Empty line required at the end
 
-# Display help message
-log_message "INFO" "=== Export Trakt 4 Letterboxd ==="
-echo ""
-echo "Available commands:"
-echo "  setup_trakt.sh - Configure Trakt API authentication"
-echo "  Export_Trakt_4_Letterboxd.sh [option] - Export Trakt data"
-echo ""
-echo "Options for Export_Trakt_4_Letterboxd.sh:"
-echo "  normal (default) - Export rated movies, episodes, history, and watchlist"
-echo "  initial - Export only rated and watched movies"
-echo "  complete - Export all available data"
-echo ""
-
-# Execute command if provided, otherwise keep container running
-if [ $# -gt 0 ]; then
-    log_message "INFO" "Executing provided command: $@"
-    exec "$@"
+EOF
+    
+    # Install the cron job
+    chmod 0644 /etc/crontab
+    crontab /etc/crontab
+    log_message "SUCCESS" "Cron job installed with schedule: $CRON_SCHEDULE"
+    
+    # Start crond in the foreground
+    log_message "INFO" "Starting crond in the foreground"
+    exec crond -f
 else
-    log_message "INFO" "No command provided. Container will stay alive for use with docker exec."
-    log_message "INFO" "Use 'docker exec -it <container_name> bash' to connect to this container."
+    log_message "INFO" "No cron schedule specified. Running export script once with option: ${EXPORT_OPTION:-normal}"
     
-    # Final file checks before keeping container alive
-    log_message "DEBUG" "Final directory and permission checks:"
-    debug_file_info "/app/copy" "Copy directory"
-    if [ -f "/app/copy/letterboxd_import.csv" ]; then
-        debug_file_info "/app/copy/letterboxd_import.csv" "Letterboxd import CSV file"
-    fi
-    
-    # Keep the container running
-    log_message "INFO" "Container is now running in standby mode"
-    tail -f /dev/null
+    # Run the export script once
+    exec /app/Export_Trakt_4_Letterboxd.sh "${EXPORT_OPTION:-normal}"
 fi 

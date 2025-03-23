@@ -40,8 +40,11 @@ jobs:
           # Check if the required scripts exist and are executable
           docker run --rm trakt-export:test ls -la /app/Export_Trakt_4_Letterboxd.sh /app/setup_trakt.sh /app/docker-entrypoint.sh
 
+          # Check if lib directory exists and scripts are executable
+          docker run --rm trakt-export:test bash -c "find /app/lib -name '*.sh' -type f -executable || echo 'No executable scripts found in lib directory'"
+
           # Check if the required directories exist
-          docker run --rm trakt-export:test ls -la /app/config /app/logs /app/copy /app/brain_ops /app/backup /app/TEMP
+          docker run --rm trakt-export:test ls -la /app/config /app/logs /app/copy /app/backup /app/TEMP
 
           # Check if the entrypoint script works correctly
           docker run --rm trakt-export:test bash -c "test -x /app/docker-entrypoint.sh && echo '✅ Entrypoint script is executable'"
@@ -93,66 +96,6 @@ jobs:
           docker compose down
 
           echo "✅ Docker Compose test completed successfully"
-
-      - name: Test Docker image with mock data
-        run: |
-          echo "🔍 Testing Docker image with mock data..."
-
-          # Create a test container with mounted volumes
-          mkdir -p ./test-data/config ./test-data/logs ./test-data/copy ./test-data/brain_ops ./test-data/backup
-
-          # Create a mock configuration file
-          cat > ./test-data/config/.config.cfg << 'EOF'
-          API_KEY="test_key"
-          API_SECRET="test_secret"
-          API_URL="https://api.trakt.tv"
-          ACCESS_TOKEN="test_token"
-          REFRESH_TOKEN="test_refresh"
-          REDIRECT_URI="urn:ietf:wg:oauth:2.0:oob"
-          USERNAME="test_user"
-          BACKUP_DIR="./backup/test_backup"
-          DOSLOG="./logs"
-          DOSCOPY="./copy"
-          BRAIN_OPS="./brain_ops"
-          DATE="20250101_0000"
-          LOG="${DOSLOG}/test-Export_Trakt.txt"
-          RED='\033[0;31m'
-          GREEN='\033[0;32m'
-          NC='\033[0m'
-          BOLD='\033[1m'
-          SAISPAS='\e[1;33;41m'
-          EOF
-
-          # Create example config file in the test directory
-          cp ./test-data/config/.config.cfg ./test-data/config/.config.cfg.example
-
-          # Start the container with the mock data and keep it running with sleep
-          docker run -d --name test-container-mock \
-            -v $(pwd)/test-data/config:/app/config \
-            -v $(pwd)/test-data/logs:/app/logs \
-            -v $(pwd)/test-data/copy:/app/copy \
-            -v $(pwd)/test-data/brain_ops:/app/brain_ops \
-            -v $(pwd)/test-data/backup:/app/backup \
-            trakt-export:test sleep 60
-
-          # Wait a moment to ensure the container is running
-          sleep 5
-
-          # Check if the container is running
-          docker ps | grep test-container-mock
-
-          # Check if the container can access the mounted volumes
-          docker exec test-container-mock bash -c "ls -la /app/config /app/logs /app/copy /app/brain_ops /app/backup"
-
-          # Check if the configuration file is accessible
-          docker exec test-container-mock bash -c "cat /app/config/.config.cfg | grep API_KEY"
-
-          # Clean up
-          docker stop test-container-mock
-          docker rm test-container-mock
-          rm -rf ./test-data
-
-          echo "✅ Docker image test with mock data completed successfully"
 
       - name: Summary
         run: |

@@ -37,6 +37,16 @@ creds.js
 # Cursor
 .cursor/
 
+# Temporary directory
+/TEMP
+/TEMP/
+TEMP/
+
+# Backup directory
+/backup
+/backup/
+backup/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -53,7 +63,6 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
 lib64/
 parts/
 sdist/
@@ -177,3 +186,4 @@ dmypy.json
 cython_debug/
 *.tar.gz
 /logs
+

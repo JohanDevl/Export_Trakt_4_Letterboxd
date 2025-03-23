@@ -21,7 +21,7 @@ USERNAME="YOUR_TRAKT_USERNAME"
 BACKUP_DIR="./backup/$(date +"%Y-%m-%d_%H-%M-%S")_trakt-backup"
 DOSLOG="./logs"
 DOSCOPY="./copy"
-BRAIN_OPS="./brain_ops"
+CONFIG_DIR="./config"
 
 # Date format for filenames
 DATE=$(date +%Y%m%d_%H%M)

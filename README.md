@@ -4,6 +4,7 @@
 [![GitHub stars](https://img.shields.io/github/stars/JohanDevl/Export_Trakt_4_Letterboxd)](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/stargazers)
 [![GitHub issues](https://img.shields.io/github/issues/JohanDevl/Export_Trakt_4_Letterboxd)](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/issues)
 [![GitHub license](https://img.shields.io/github/license/JohanDevl/Export_Trakt_4_Letterboxd)](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/blob/main/LICENSE)
+[![Docker Image Test](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/actions/workflows/docker-test.yml/badge.svg)](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/actions/workflows/docker-test.yml)
 [![Docker Build](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/actions/workflows/docker-publish.yml)
 [![Docker Package](https://img.shields.io/badge/Docker-ghcr.io-blue?logo=docker)](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkgs/container/export_trakt_4_letterboxd)
 [![GitHub package size](https://img.shields.io/github/repo-size/JohanDevl/Export_Trakt_4_Letterboxd?logo=docker&label=Image%20Size)](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkgs/container/export_trakt_4_letterboxd)
@@ -29,13 +30,19 @@ This project allows you to export your Trakt.tv data to a format compatible with
    cd Export_Trakt_4_Letterboxd
    ```
 
-2. Configure Trakt authentication:
+2. Run the installation script:
+
+   ```bash
+   ./install.sh
+   ```
+
+3. Configure Trakt authentication:
 
    ```bash
    ./setup_trakt.sh
    ```
 
-3. Export your data:
+4. Export your data:
    ```bash
    ./Export_Trakt_4_Letterboxd.sh [option]
    ```
@@ -69,10 +76,35 @@ docker pull ghcr.io/johandevl/export_trakt_4_letterboxd:latest
 ## Features
 
 - Export rated movies and TV shows
-- Export watch history
-- Export watchlist
+- Export watch history with dates and ratings
+- Export watchlist items
+- Automatic detection of rewatched movies
+- Supports various export modes (normal, initial, complete)
+- Modular code structure for better maintainability
 - Automated exports with cron
 - Docker support
+
+## Project Structure
+
+The codebase has been modularized for better maintenance and readability:
+
+```
+Export_Trakt_4_Letterboxd/
+├── lib/                     # Library modules
+│   ├── config.sh            # Configuration management
+│   ├── utils.sh             # Utility functions and debugging
+│   ├── trakt_api.sh         # API interaction functions
+│   ├── data_processing.sh   # Data transformation functions
+│   └── main.sh              # Main orchestration module
+├── config/                  # Configuration files
+├── logs/                    # Log output
+├── backup/                  # Backup of API responses
+├── TEMP/                    # Temporary processing files
+├── copy/                    # Output CSV files
+├── Export_Trakt_4_Letterboxd.sh # Main script (simplified)
+├── setup_trakt.sh           # Authentication setup
+└── install.sh               # Installation script
+```
 
 ## Documentation
 
@@ -91,6 +123,7 @@ If you encounter issues:
 1. Check that your Trakt.tv profile is public
 2. Verify your authentication configuration
 3. Run `./setup_trakt.sh` again to refresh your tokens
+4. Check logs in the `logs` directory for detailed error information
 
 ## Acknowledgements
 
