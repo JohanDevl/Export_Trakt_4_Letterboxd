@@ -228,102 +228,70 @@ fi
 install_cron_job() {
     log_message "INFO" "Installing cron job with schedule: $CRON_SCHEDULE"
     
-    # Create cron wrapper script
+    # Create wrapper script for cron with improved logging
     cat > /app/cron_wrapper.sh << 'EOF'
 #!/bin/bash
-#
-# Cron wrapper for Export_Trakt_4_Letterboxd.sh
-#
+START_TIME=$(date +"%Y-%m-%d %H:%M:%S")
+EXPORT_OPTION=${1:-normal}
 
-# Set script variables
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-EXPORT_SCRIPT="${SCRIPT_DIR}/Export_Trakt_4_Letterboxd.sh"
-LOGFILE="${SCRIPT_DIR}/logs/cron_export.log"
-CONFIG_FILE="${SCRIPT_DIR}/config/.config.cfg"
+# Log to container stdout with friendly messages
+echo ""
+echo "======================================================================"
+echo "🎬 [CRON] Starting Trakt to Letterboxd Export at ${START_TIME} 🎬"
+echo "📊 Exporting your Trakt data with option '${EXPORT_OPTION}'..."
+echo "======================================================================"
 
-# Load config if it exists
-if [ -f "$CONFIG_FILE" ]; then
-  source "$CONFIG_FILE"
-fi
+# Run the export script and redirect output to log file
+/app/Export_Trakt_4_Letterboxd.sh ${EXPORT_OPTION} > /app/logs/cron_export.log 2>&1
+EXIT_CODE=$?
 
-# Make sure log directory exists
-mkdir -p "$(dirname "$LOGFILE")"
+END_TIME=$(date +"%Y-%m-%d %H:%M:%S")
 
-# Define colors for better log readability
-GREEN='\033[0;32m'
-RED='\033[0;31m'
-YELLOW='\033[0;33m'
-BLUE='\033[0;34m'
-BOLD='\033[1m'
-NC='\033[0m'
-
-# Log start time with export option
-export_option="${1:-complete}"
-start_time=$(date +"%Y-%m-%d %H:%M:%S")
-echo -e "\n${BOLD}================================================================================${NC}" >> "$LOGFILE"
-echo -e "${BLUE}[CRON] Starting Trakt to Letterboxd Export at ${start_time}${NC} 🚀" >> "$LOGFILE"
-echo -e "${YELLOW}Exporting your Trakt data with option '${export_option}'...${NC}" >> "$LOGFILE"
-echo -e "${BOLD}================================================================================${NC}\n" >> "$LOGFILE"
-
-# Run the export script
-"$EXPORT_SCRIPT" "$export_option" >> "$LOGFILE" 2>&1
-exit_code=$?
-
-# Get end time
-end_time=$(date +"%Y-%m-%d %H:%M:%S")
-
-# If export was successful
-if [ $exit_code -eq 0 ]; then
-  # Try to count the number of films exported by checking the CSV file
-  csv_file="${SCRIPT_DIR}/copy/letterboxd_import.csv"
-  if [ -f "$csv_file" ]; then
-    # Count movies (subtract 1 for header)
-    movie_count=$(($(wc -l < "$csv_file") - 1))
-    file_size=$(du -h "$csv_file" | cut -f1)
+# Check result and show friendly message
+if [ $EXIT_CODE -eq 0 ]; then
+    echo "======================================================================"
+    echo "✅ [CRON] Export completed successfully at ${END_TIME}"
+    echo "🎉 Your Letterboxd import file is ready in the copy directory!"
     
-    echo -e "\n${BOLD}================================================================================${NC}" >> "$LOGFILE"
-    echo -e "${GREEN}[CRON] Export completed successfully at ${end_time}${NC} ✅" >> "$LOGFILE"
-    echo -e "${BLUE}Your Letterboxd import file is ready in the copy directory!${NC}" >> "$LOGFILE"
-    echo -e "${GREEN}Exported ${BOLD}${movie_count}${NC}${GREEN} movies to CSV file${NC}" >> "$LOGFILE"
-    echo -e "${YELLOW}File: ${SCRIPT_DIR}/copy/letterboxd_import.csv (${file_size} size)${NC}" >> "$LOGFILE"
-    echo -e "${BOLD}================================================================================${NC}\n" >> "$LOGFILE"
-  else
-    echo -e "\n${BOLD}================================================================================${NC}" >> "$LOGFILE"
-    echo -e "${GREEN}[CRON] Export completed successfully at ${end_time}${NC} ✅" >> "$LOGFILE"
-    echo -e "${YELLOW}Warning: CSV file not found at expected location.${NC}" >> "$LOGFILE"
-    echo -e "${BOLD}================================================================================${NC}\n" >> "$LOGFILE"
-  fi
+    # Show CSV file info if it exists
+    if [ -f /app/copy/letterboxd_import.csv ]; then
+        MOVIES_COUNT=$(wc -l < /app/copy/letterboxd_import.csv)
+        MOVIES_COUNT=$((MOVIES_COUNT - 1))  # Subtract header row
+        echo "📋 Exported ${MOVIES_COUNT} movies to CSV file"
+        echo "📂 File: /app/copy/letterboxd_import.csv ($(du -h /app/copy/letterboxd_import.csv | cut -f1) size)"
+    else
+        echo "⚠️ No CSV file was created. Check the logs for errors."
+    fi
+    echo "======================================================================"
+    echo ""
 else
-  # If export failed
-  echo -e "\n${BOLD}================================================================================${NC}" >> "$LOGFILE"
-  echo -e "${RED}[CRON] Export failed at ${end_time} with exit code ${exit_code}${NC} ❌" >> "$LOGFILE"
-  echo -e "${YELLOW}Check the logs for details: ${LOGFILE}${NC}" >> "$LOGFILE"
-  echo -e "${BOLD}================================================================================${NC}\n" >> "$LOGFILE"
+    echo "======================================================================"
+    echo "❌ [CRON] Export failed with exit code ${EXIT_CODE} at ${END_TIME}"
+    echo "⚠️ Please check the logs for errors: /app/logs/cron_export.log"
+    echo "======================================================================"
+    echo ""
 fi
-
-# Exit with the same exit code as the export script
-exit $exit_code
 EOF
 
-    # Make the wrapper script executable
+    # Make wrapper script executable
     chmod +x /app/cron_wrapper.sh
     
     # Ensure cron.d directory exists
     mkdir -p /etc/cron.d
     
-    # Create the crontab file for Alpine Linux
+    # Create cron job file using the wrapper script
     cat > /etc/crontab << EOF
 # Trakt Export Cron Job
-$CRON_SCHEDULE /bin/sh -c '/app/cron_wrapper.sh $EXPORT_OPTION 2>&1 | tee -a /proc/1/fd/1'
+$CRON_SCHEDULE /app/cron_wrapper.sh ${EXPORT_OPTION:-normal}
 # Empty line required at the end
 
 EOF
     
-    # Apply cron job
+    # Install the cron job
     chmod 0644 /etc/crontab
     crontab /etc/crontab
     
-    log_message "SUCCESS" "Cron job installed successfully"
+    log_message "SUCCESS" "Cron job installed with friendly logging"
 }
 
 # Check for CRON_SCHEDULE environment variable
