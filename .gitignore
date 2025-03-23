@@ -42,6 +42,11 @@ creds.js
 /TEMP/
 TEMP/
 
+# Backup directory
+/backup
+/backup/
+backup/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
