@@ -136,9 +136,10 @@ fetch_trakt_data() {
     
     # Set up initial pagination parameters
     local page=1
-    local limit=100 # Maximum allowed by Trakt API
-    local max_pages=30 # Safety limit to prevent infinite loops
+    local limit=50000 # Maximum allowed by Trakt API
+    # No safety limit (will use total_pages from API response)
     local total_items=0
+    local total_pages=0
     local temp_file="${output_file}.temp"
     local success=false
     local max_retries=3
@@ -147,25 +148,91 @@ fetch_trakt_data() {
     # Initialize an empty array in our temp file
     echo "[]" > "$temp_file"
     
+    # Make initial request to get total page count from headers
+    local initial_response_headers=$(curl -s -I -X GET "${api_url}/users/me/${endpoint}?page=1&limit=${limit}" \
+        -H "Content-Type: application/json" \
+        -H "trakt-api-key: ${api_key}" \
+        -H "trakt-api-version: 2" \
+        -H "Authorization: Bearer ${access_token}")
+    
+    # Try to extract total page count from X-Pagination-Page-Count header
+    if [[ "$initial_response_headers" == *"X-Pagination-Page-Count:"* ]]; then
+        total_pages=$(echo "$initial_response_headers" | grep -i "X-Pagination-Page-Count:" | awk '{print $2}' | tr -d '\r')
+        local total_count=$(echo "$initial_response_headers" | grep -i "X-Pagination-Item-Count:" | awk '{print $2}' | tr -d '\r' || echo "?")
+        
+        echo "📚 PAGES ESTIMATION FOR $endpoint:" | tee -a "${log_file}"
+        echo "   ┌─────────────────────────────────────────────┐" | tee -a "${log_file}"
+        echo "   │ Total pages: $total_pages (limit: $limit items/page) │" | tee -a "${log_file}"
+        echo "   │ Total items: $total_count                              │" | tee -a "${log_file}"
+        
+        # Calculate estimated time (2s per page + 1s retry buffer)
+        if [[ "$total_pages" =~ ^[0-9]+$ ]]; then
+            local estimated_seconds=$((total_pages * 3))
+            local estimated_minutes=$((estimated_seconds / 60))
+            local remaining_seconds=$((estimated_seconds % 60))
+            echo "   │ Est. time: ~${estimated_minutes}m ${remaining_seconds}s                           │" | tee -a "${log_file}"
+        fi
+        
+        echo "   └─────────────────────────────────────────────┘" | tee -a "${log_file}"
+    else
+        echo "⚠️ Could not determine total page count from API response" | tee -a "${log_file}"
+        echo "⚠️ Will fetch pages until no more data is returned" | tee -a "${log_file}"
+        # Set a large default value to effectively remove the limit
+        total_pages=1000000
+    fi
+    
     # Make paginated API requests until we get all data
-    while [ $page -le $max_pages ]; do
+    while [ $page -le $total_pages ]; do
         retry_count=0
         local page_success=false
         
+        # Calculate and display progress percentage
+        if [[ "$total_pages" =~ ^[0-9]+$ ]] && [ $total_pages -gt 0 ]; then
+            local progress_pct=$((page * 100 / total_pages))
+            local progress_bar=""
+            local bar_width=20
+            local filled_width=$((progress_pct * bar_width / 100))
+            local empty_width=$((bar_width - filled_width))
+            
+            # Create the progress bar
+            progress_bar="["
+            for ((i=0; i<filled_width; i++)); do progress_bar+="▓"; done
+            for ((i=0; i<empty_width; i++)); do progress_bar+="░"; done
+            progress_bar+="] ${progress_pct}%"
+            
+            echo "⏳ Progress: $progress_bar (Page $page of $total_pages)" | tee -a "${log_file}"
+        fi
+        
         while [ $retry_count -lt $max_retries ] && [ "$page_success" != "true" ]; do
-            echo "📄 Fetching page $page of endpoint $endpoint..." | tee -a "${log_file}"
+            echo "📄 Fetching page $page of $total_pages for endpoint $endpoint..." | tee -a "${log_file}"
             
             # Make the paginated API request
-            local page_data=$(curl -s -X GET "${api_url}/users/me/${endpoint}?page=${page}&limit=${limit}" \
+            local response=$(curl -s -X GET "${api_url}/users/me/${endpoint}?page=${page}&limit=${limit}" \
                 -H "Content-Type: application/json" \
                 -H "trakt-api-key: ${api_key}" \
                 -H "trakt-api-version: 2" \
-                -H "Authorization: Bearer ${access_token}")
+                -H "Authorization: Bearer ${access_token}" \
+                -D "${temp_file}.headers.${page}")
+            
+            # Extract pagination info from headers for this request
+            if [ -f "${temp_file}.headers.${page}" ]; then
+                local current_page=$(grep -i "X-Pagination-Page:" "${temp_file}.headers.${page}" | awk '{print $2}' | tr -d '\r' || echo "?")
+                local page_count=$(grep -i "X-Pagination-Page-Count:" "${temp_file}.headers.${page}" | awk '{print $2}' | tr -d '\r' || echo "?")
+                local total_count=$(grep -i "X-Pagination-Item-Count:" "${temp_file}.headers.${page}" | awk '{print $2}' | tr -d '\r' || echo "?")
+                
+                # Update total_pages if we have more accurate info
+                if [[ "$page_count" != "?" ]]; then
+                    total_pages=$page_count
+                fi
+                
+                echo "📊 Pagination: Page $current_page of $page_count (Total items: $total_count)" | tee -a "${log_file}"
+                rm -f "${temp_file}.headers.${page}"
+            fi
             
             # Check if the response is valid JSON and not empty
-            if echo "$page_data" | jq empty 2>/dev/null && [ "$(echo "$page_data" | jq 'length')" -gt 0 ]; then
+            if echo "$response" | jq empty 2>/dev/null && [ "$(echo "$response" | jq 'length')" -gt 0 ]; then
                 # Save the current items and merge with previous pages
-                echo "$page_data" > "${temp_file}.page${page}"
+                echo "$response" > "${temp_file}.page${page}"
                 
                 # Merge with existing data
                 jq -s 'add' "$temp_file" "${temp_file}.page${page}" > "${temp_file}.new"
@@ -173,13 +240,13 @@ fetch_trakt_data() {
                 rm "${temp_file}.page${page}"
                 
                 # Get item count for this page
-                local items_count=$(echo "$page_data" | jq 'length')
+                local items_count=$(echo "$response" | jq 'length')
                 total_items=$((total_items + items_count))
-                echo "✅ Page $page: Retrieved $items_count items (total: $total_items)" | tee -a "${log_file}"
+                echo "✅ Page $page: Retrieved $items_count items (running total: $total_items)" | tee -a "${log_file}"
                 
                 # If fewer items than the limit, we've reached the end
                 if [ $items_count -lt $limit ]; then
-                    echo "🏁 Reached end of data for endpoint $endpoint" | tee -a "${log_file}"
+                    echo "🏁 Reached end of data for endpoint $endpoint (fewer items than limit)" | tee -a "${log_file}"
                     success=true
                     break
                 fi
@@ -214,7 +281,7 @@ fetch_trakt_data() {
     if [ "$success" = "true" ] || [ $total_items -gt 0 ]; then
         mv "$temp_file" "$output_file"
         echo "📊 Successfully saved $total_items items for endpoint $endpoint" | tee -a "${log_file}"
-        echo -e "\e[32m${username}/${endpoint}\e[0m Retrieved successfully" | tee -a "${log_file}"
+        echo -e "\e[32m${username}/${endpoint}\e[0m Retrieved successfully ($total_items items in ${page} pages)" | tee -a "${log_file}"
         return 0
     else
         echo -e "\e[31mERROR: Failed to retrieve data for endpoint ${endpoint}.\e[0m" | tee -a "${log_file}"
