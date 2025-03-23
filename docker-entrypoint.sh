@@ -226,7 +226,7 @@ fi
 
 # Install cron job
 install_cron_job() {
-    log_msg "Installing cron job with schedule: $CRON_SCHEDULE"
+    log_message "INFO" "Installing cron job with schedule: $CRON_SCHEDULE"
     
     # Create cron wrapper script
     cat > /app/cron_wrapper.sh << 'EOF'
@@ -308,6 +308,9 @@ EOF
     # Make the wrapper script executable
     chmod +x /app/cron_wrapper.sh
     
+    # Ensure cron.d directory exists
+    mkdir -p /etc/cron.d
+    
     # Create the crontab file
     cat > /etc/cron.d/trakt-export << EOF
 # Trakt Export Cron Job
@@ -319,7 +322,7 @@ EOF
     chmod 0644 /etc/cron.d/trakt-export
     crontab /etc/cron.d/trakt-export
     
-    log_success "Cron job installed successfully"
+    log_message "SUCCESS" "Cron job installed successfully"
 }
 
 # Check for CRON_SCHEDULE environment variable
