@@ -42,6 +42,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       # Install the cosign tool except on PR
       # https://github.com/sigstore/cosign-installer
@@ -50,6 +52,20 @@ jobs:
         uses: sigstore/cosign-installer@59acb6260d9c0ba8f4a2f9d9b48431a222b68e20 #v3.5.0
         with:
           cosign-release: "v2.2.4"
+
+      # Get version information for main branch
+      - name: Get version info
+        id: version
+        if: github.ref == 'refs/heads/main'
+        run: |
+          # Get latest version tag
+          LATEST_TAG=$(git tag -l "v*" | grep -v "-" | sort -V | tail -n 1)
+          if [ -z "$LATEST_TAG" ]; then
+            LATEST_TAG="v1.0.0"
+          fi
+          # Store the version without the 'v' prefix
+          VERSION=${LATEST_TAG#v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       # Set up BuildKit Docker container builder to be able to build
       # multi-platform images and export cache
@@ -100,6 +116,8 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           outputs: type=docker,dest=/tmp/docker-image.tar
+          build-args: |
+            APP_VERSION=${{ steps.version.outputs.version || 'develop' }}
 
       # Export Docker image for release
       - name: Export Docker image

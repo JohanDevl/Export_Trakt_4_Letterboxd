@@ -16,6 +16,11 @@ log_message() {
     esac
 }
 
+# Show version information
+show_version() {
+    log_message "INFO" "Starting Export Trakt 4 Letterboxd container - Version: ${APP_VERSION:-unknown}"
+}
+
 # Debug function for file and directory information
 debug_file_info() {
     local path="$1"
@@ -61,6 +66,7 @@ debug_file_info() {
 
 # Initial system information
 log_message "INFO" "Starting Docker container for Export_Trakt_4_Letterboxd"
+show_version
 log_message "DEBUG" "Container environment:"
 log_message "DEBUG" "User: $(id)"
 log_message "DEBUG" "Working directory: $(pwd)"
