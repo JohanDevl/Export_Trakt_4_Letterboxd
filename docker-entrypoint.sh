@@ -444,22 +444,60 @@ else
     
     # Run the export script based on cron schedule or directly
     if [ -n "$CRON_SCHEDULE" ]; then
-        log_message "INFO" "Setting up scheduled task with interval: $CRON_SCHEDULE"
+        log_message "INFO" "Setting up scheduled task with cron schedule: $CRON_SCHEDULE"
         
-        # Extract minutes from cron schedule (we only support */X minutes format)
-        MINUTES=$(echo "$CRON_SCHEDULE" | grep -oE '^\*/[0-9]+' | cut -d'/' -f2)
+        # Function to calculate seconds until next cron execution
+        calculate_next_run() {
+            local cron_schedule="$1"
+            local cron_min cron_hour cron_day cron_month cron_dow
+            
+            # Parse the cron schedule
+            read -r cron_min cron_hour cron_day cron_month cron_dow <<< "$cron_schedule"
+            
+            # Redirect debug logs to a file instead of stdout to avoid interference with return value
+            log_message "DEBUG" "Parsed cron: minute=$cron_min, hour=$cron_hour, day=$cron_day, month=$cron_month, dow=$cron_dow" > /app/logs/cron_parser.log 2>&1
+            
+            # Special case for */X format (every X minutes)
+            if [[ "$cron_min" =~ ^\*/([0-9]+)$ ]]; then
+                local minutes="${BASH_REMATCH[1]}"
+                log_message "INFO" "Schedule format detected: every $minutes minutes" >> /app/logs/cron_parser.log 2>&1
+                echo "$((minutes * 60))"
+                return
+            fi
+            
+            # Handle daily schedule at specific time (e.g., "0 3 * * *" = every day at 3am)
+            if [[ "$cron_min" =~ ^[0-9]+$ ]] && [[ "$cron_hour" =~ ^[0-9]+$ ]] && [ "$cron_day" = "*" ] && [ "$cron_month" = "*" ]; then
+                log_message "INFO" "Schedule format detected: daily at $cron_hour:$cron_min" >> /app/logs/cron_parser.log 2>&1
+                
+                # Get current hour and minute
+                local current_hour=$(date +%H)
+                local current_min=$(date +%M)
+                
+                # Convert everything to minutes since midnight
+                local schedule_minutes=$((cron_hour * 60 + cron_min))
+                local current_minutes=$((current_hour * 60 + current_min))
+                
+                local wait_minutes=0
+                
+                # If scheduled time is in the future today
+                if [ $schedule_minutes -gt $current_minutes ]; then
+                    wait_minutes=$((schedule_minutes - current_minutes))
+                else
+                    # Schedule is for tomorrow
+                    wait_minutes=$((schedule_minutes + 1440 - current_minutes))
+                fi
+                
+                log_message "INFO" "Next run in $wait_minutes minutes" >> /app/logs/cron_parser.log 2>&1
+                echo "$((wait_minutes * 60))"
+                return
+            fi
+            
+            # For unsupported formats, default to hourly
+            log_message "WARN" "Complex cron format not fully supported, using hourly schedule" >> /app/logs/cron_parser.log 2>&1
+            echo "3600"
+        }
         
-        if [ -z "$MINUTES" ]; then
-            log_message "WARN" "Could not parse cron schedule, using default of 60 minutes"
-            MINUTES=60
-        fi
-        
-        log_message "INFO" "Will run export every $MINUTES minutes"
-        
-        # Start health check server is already started in main script
-        # No need to call it again here
-        
-        # Run in a loop with the specified interval
+        # Run in a loop with the cron schedule
         while true; do
             # Get current timestamp for log filename
             TIMESTAMP=$(date '+%Y-%m-%d_%H-%M-%S')
@@ -470,10 +508,21 @@ else
             # Run the export script and log output
             /app/Export_Trakt_4_Letterboxd.sh $EXPORT_OPTION > "$LOG_FILE" 2>&1
             
-            log_message "INFO" "Scheduled export completed, next run in $MINUTES minutes"
+            # Calculate time until next run - capture the output in a variable
+            SLEEP_SECONDS=$(calculate_next_run "$CRON_SCHEDULE")
+            
+            # Log details about timing to a separate file
+            if [ "$SLEEP_SECONDS" -ge 3600 ]; then
+                HOURS=$((SLEEP_SECONDS / 3600))
+                MINUTES=$(((SLEEP_SECONDS % 3600) / 60))
+                log_message "INFO" "Scheduled export completed, next run in ${HOURS}h ${MINUTES}m"
+            else
+                MINUTES=$((SLEEP_SECONDS / 60))
+                log_message "INFO" "Scheduled export completed, next run in ${MINUTES} minutes"
+            fi
             
             # Wait for the next interval
-            sleep $(( MINUTES * 60 ))
+            sleep $SLEEP_SECONDS
         done
     else
         # Run script once
