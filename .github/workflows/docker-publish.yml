@@ -137,6 +137,8 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
+            # Also add the vX.Y.Z format
+            type=semver,pattern=v{{version}}
             # For branch-based tagging
             type=ref,event=branch
             # Add 'latest' tag for main branch
