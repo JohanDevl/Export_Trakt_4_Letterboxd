@@ -1,5 +1,13 @@
 FROM alpine:3.18
 
+# Define build arguments for version
+ARG APP_VERSION=dev
+
+# Add version labels
+LABEL org.opencontainers.image.version=$APP_VERSION \
+      org.opencontainers.image.title="Export Trakt 4 Letterboxd" \
+      org.opencontainers.image.description="Tool for exporting Trakt.tv history to Letterboxd compatible format"
+
 # Install required packages
 RUN apk add --no-cache \
     bash \
@@ -32,7 +40,8 @@ ENV DOSLOG=/app/logs \
     BACKUP_DIR=/app/backup \
     CONFIG_DIR=/app/config \
     CRON_SCHEDULE="" \
-    EXPORT_OPTION="normal"
+    EXPORT_OPTION="normal" \
+    APP_VERSION=$APP_VERSION
 
 # Set volume for persistent data
 VOLUME ["/app/logs", "/app/copy", "/app/backup", "/app/config"]
