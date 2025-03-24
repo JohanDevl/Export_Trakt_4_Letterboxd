@@ -36,12 +36,12 @@ init_temp_dir() {
         find "$temp_dir" -mindepth 1 -delete 2>/dev/null || {
             # If find fails, try a more aggressive approach
             chmod -R 777 "$temp_dir" 2>/dev/null
-            find "$temp_dir" -mindepth 1 -delete 2>/dev/null || echo "Warning: Could not clean temporary directory completely" | tee -a "${log_file}"
+            find "$temp_dir" -mindepth 1 -delete 2>/dev/null || echo "$(_ "warning"): Could not clean temporary directory completely" | tee -a "${log_file}"
         }
     fi
     
     # Ensure directory has proper permissions
-    chmod -R 777 "$temp_dir" 2>/dev/null || echo "Warning: Could not set permissions on temporary directory" | tee -a "${log_file}"
+    chmod -R 777 "$temp_dir" 2>/dev/null || echo "$(_ "warning"): Could not set permissions on temporary directory" | tee -a "${log_file}"
     echo "Temporary directory ready: $temp_dir" | tee -a "${log_file}"
 }
 
@@ -59,10 +59,10 @@ ensure_directories() {
     
     # Check and create copy directory if needed
     if [ -d "$copy_dir" ]; then
-        echo "Copy directory exists: ✅" | tee -a "${log_file}"
-        echo "Copy directory permissions: $(ls -la "$copy_dir" | head -n 1 | awk '{print $1}')" | tee -a "${log_file}"
+        echo "$(_ "directory_exists"): ✅" | tee -a "${log_file}"
+        echo "$(_ "directory_permissions"): $(ls -la "$copy_dir" | head -n 1 | awk '{print $1}')" | tee -a "${log_file}"
     else
-        echo "Copy directory exists: ❌ (will attempt to create)" | tee -a "${log_file}"
+        echo "$(_ "directory_exists"): ❌ (will attempt to create)" | tee -a "${log_file}"
         mkdir -p "$copy_dir"
     fi
 }
@@ -75,14 +75,14 @@ log_environment() {
     local log_dir="$4"
     local backup_dir="$5"
     
-    echo "🌍 Environment information:" | tee -a "${log_file}"
-    echo "  - User: $(whoami)" | tee -a "${log_file}"
-    echo "  - Working directory: $(pwd)" | tee -a "${log_file}"
-    echo "  - Script directory: $script_dir" | tee -a "${log_file}"
-    echo "  - Copy directory: $copy_dir" | tee -a "${log_file}"
-    echo "  - Log directory: $log_dir" | tee -a "${log_file}"
-    echo "  - Backup directory: $backup_dir" | tee -a "${log_file}"
-    echo "  - OS Type: $OSTYPE" | tee -a "${log_file}"
+    echo "🌍 $(_ "environment_info"):" | tee -a "${log_file}"
+    echo "  - $(_ "user"): $(whoami)" | tee -a "${log_file}"
+    echo "  - $(_ "working_directory"): $(pwd)" | tee -a "${log_file}"
+    echo "  - $(_ "script_directory"): $script_dir" | tee -a "${log_file}"
+    echo "  - $(_ "copy_directory"): $copy_dir" | tee -a "${log_file}"
+    echo "  - $(_ "log_directory"): $log_dir" | tee -a "${log_file}"
+    echo "  - $(_ "backup_directory"): $backup_dir" | tee -a "${log_file}"
+    echo "  - $(_ "os_type"): $OSTYPE" | tee -a "${log_file}"
     echo "-----------------------------------" | tee -a "${log_file}"
 }
 
@@ -109,16 +109,16 @@ init_backup_dir() {
     # Create backup folder if it doesn't exist
     if [ ! -d "${backup_dir}" ]; then
         mkdir -p "${backup_dir}"
-        echo "Created backup directory: ${backup_dir}" | tee -a "${log_file}"
+        echo "$(_ "created_backup_directory"): ${backup_dir}" | tee -a "${log_file}"
     else
-        echo "Backup directory exists: ${backup_dir}" | tee -a "${log_file}"
+        echo "$(_ "backup_directory_exists"): ${backup_dir}" | tee -a "${log_file}"
     fi
     
     # Check permissions
     if [ -w "${backup_dir}" ]; then
-        echo "Backup directory is writable: ✅" | tee -a "${log_file}"
+        echo "$(_ "backup_directory_writable"): ✅" | tee -a "${log_file}"
     else
-        echo "WARNING: Backup directory is not writable. Check permissions." | tee -a "${log_file}"
+        echo "$(_ "backup_directory_not_writable")" | tee -a "${log_file}"
     fi
     
     # Return the backup directory for use

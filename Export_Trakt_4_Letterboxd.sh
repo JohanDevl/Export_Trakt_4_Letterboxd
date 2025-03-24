@@ -27,12 +27,6 @@ LOG="${SCRIPT_DIR}/logs/Export_Trakt_4_Letterboxd_${LOG_TIMESTAMP}.log"
 # Create logs directory if it doesn't exist
 mkdir -p "${SCRIPT_DIR}/logs"
 
-# Log header
-echo "===============================================================" | tee -a "${LOG}"
-echo -e "${GREEN}Export Trakt 4 Letterboxd - Starting script${NC}" | tee -a "${LOG}"
-echo "===============================================================" | tee -a "${LOG}"
-echo -e "${BLUE}$(date) - Script execution started${NC}" | tee -a "${LOG}"
-
 # Source the main module
 if [ -f "${SCRIPT_DIR}/lib/main.sh" ]; then
     source "${SCRIPT_DIR}/lib/main.sh"
@@ -41,21 +35,40 @@ else
     exit 1
 fi
 
+# Import modules
+import_modules "$SCRIPT_DIR"
+
 # Default global variables
 TEMP_DIR="${SCRIPT_DIR}/TEMP"
 DOSLOG="${SCRIPT_DIR}/logs"
 DOSCOPY="${SCRIPT_DIR}/copy"
 BACKUP_DIR="${SCRIPT_DIR}/backup"
 
+# Load configuration (needed for language settings)
+[ -f "${CONFIG_DIR}/.config.cfg" ] && source "${CONFIG_DIR}/.config.cfg"
+
+# Initialize internationalization - use language from config or auto-detect
+init_i18n "$SCRIPT_DIR" "$LOG"
+
+# Log header
+echo "===============================================================" | tee -a "${LOG}"
+echo -e "${GREEN}$(_ "welcome") - $(_ "starting")${NC}" | tee -a "${LOG}"
+echo "===============================================================" | tee -a "${LOG}"
+echo -e "${BLUE}$(date) - $(_ "script_execution_start")${NC}" | tee -a "${LOG}"
+
+# Example of using internationalization
+echo -e "${CYAN}$(_ "WELCOME") - $(_ "running_in") $(hostname)${NC}" | tee -a "${LOG}"
+echo -e "${YELLOW}$(_ "language_set"): ${LANGUAGE:-$(_ "auto_detected")}${NC}" | tee -a "${LOG}"
+
 # Check if we are running in Docker
 if [ -f "/.dockerenv" ]; then
-    echo -e "${CYAN}Running in Docker container${NC}" | tee -a "${LOG}"
+    echo -e "${CYAN}$(_ "running_docker")${NC}" | tee -a "${LOG}"
     # Docker-specific settings can be added here
 fi
 
 # Parse command line argument (if any)
 OPTION="$1"
-echo -e "${YELLOW}Script option: ${OPTION:-none}${NC}" | tee -a "${LOG}"
+echo -e "${YELLOW}$(_ "script_option"): ${OPTION:-$(_ "none")}${NC}" | tee -a "${LOG}"
 
 # Run the export process
 run_export "$SCRIPT_DIR" "$OPTION"
