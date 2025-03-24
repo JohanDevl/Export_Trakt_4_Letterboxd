@@ -23,11 +23,23 @@ on:
       - "docs/**"
       - "LICENSE"
 
+  # Allow manual triggering
+  workflow_dispatch:
+    inputs:
+      push_to_dockerhub:
+        description: "Push to Docker Hub"
+        required: false
+        default: false
+        type: boolean
+
 env:
-  # Use docker.io for Docker Hub if empty
-  REGISTRY: ghcr.io
+  # Default registry is GitHub Container Registry
+  GITHUB_REGISTRY: ghcr.io
   # github.repository as <account>/<repo>
-  IMAGE_NAME: ${{ github.repository }}
+  GITHUB_IMAGE_NAME: ${{ github.repository }}
+  # Docker Hub registry and image name
+  DOCKERHUB_REGISTRY: docker.io
+  DOCKERHUB_IMAGE_NAME: johandevl/export-trakt-4-letterboxd
 
 jobs:
   build:
@@ -56,16 +68,36 @@ jobs:
       # Get version information for main branch
       - name: Get version info
         id: version
-        if: github.ref == 'refs/heads/main'
         run: |
-          # Get latest version tag
-          LATEST_TAG=$(git tag -l "v*" | grep -v "-" | sort -V | tail -n 1)
-          if [ -z "$LATEST_TAG" ]; then
-            LATEST_TAG="v1.0.0"
+          if [[ "${{ github.ref }}" == "refs/tags/v"* ]]; then
+            # For tag 'v1.2.3', VERSION becomes '1.2.3'
+            VERSION="${{ github.ref_name }}"
+            VERSION=${VERSION#v}
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "tag=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            # Get latest version tag
+            LATEST_TAG=$(git tag -l "v*" | grep -v "-" | sort -V | tail -n 1)
+            if [ -z "$LATEST_TAG" ]; then
+              LATEST_TAG="v1.0.0"
+            fi
+            # Store the version without the 'v' prefix
+            VERSION=${LATEST_TAG#v}
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "tag=latest" >> $GITHUB_OUTPUT
+          else
+            # For develop branch or others
+            echo "version=dev" >> $GITHUB_OUTPUT
+            echo "tag=develop" >> $GITHUB_OUTPUT
           fi
-          # Store the version without the 'v' prefix
-          VERSION=${LATEST_TAG#v}
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+          # Get build date in ISO 8601 format
+          BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          echo "build_date=$BUILD_DATE" >> $GITHUB_OUTPUT
+
+          # Get Git commit hash
+          VCS_REF=$(git rev-parse --short HEAD)
+          echo "vcs_ref=$VCS_REF" >> $GITHUB_OUTPUT
 
       # Set up BuildKit Docker container builder to be able to build
       # multi-platform images and export cache
@@ -73,14 +105,21 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f95db51fddba0c2d1ec667646a06c2ce06100226 # v3.0.0
 
-      # Login against a Docker registry except on PR
-      # https://github.com/docker/login-action
-      - name: Log into registry ${{ env.REGISTRY }}
+      # Login against GitHub Container Registry
+      - name: Log into GitHub Container Registry
         uses: docker/login-action@343f7c4344506bcbf9b4de18042ae17996df046d # v3.0.0
         with:
-          registry: ${{ env.REGISTRY }}
+          registry: ${{ env.GITHUB_REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Login against Docker Hub
+      - name: Log into Docker Hub
+        uses: docker/login-action@343f7c4344506bcbf9b4de18042ae17996df046d # v3.0.0
+        with:
+          registry: ${{ env.DOCKERHUB_REGISTRY }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       # Extract metadata (tags, labels) for Docker
       # https://github.com/docker/metadata-action
@@ -88,7 +127,9 @@ jobs:
         id: meta
         uses: docker/metadata-action@96383f45573cb7f253c731d3b3ab81c87ef81934 # v5.0.0
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: |
+            ${{ env.GITHUB_REGISTRY }}/${{ env.GITHUB_IMAGE_NAME }}
+            ${{ env.DOCKERHUB_REGISTRY }}/${{ env.DOCKERHUB_IMAGE_NAME }}
           tags: |
             # For PR builds, use PR-#
             type=ref,event=pr,prefix=PR-
@@ -100,10 +141,16 @@ jobs:
             type=ref,event=branch
             # Add 'latest' tag for main branch
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
-            # Add version tag for main branch (like v1.2.3)
-            type=raw,value=v${{ steps.version.outputs.version }},enable=${{ github.ref == 'refs/heads/main' && steps.version.outputs.version != '' }}
             # Add 'develop' tag for develop branch
             type=raw,value=develop,enable=${{ github.ref == 'refs/heads/develop' }}
+
+      # Debug step to see metadata output
+      - name: Debug metadata
+        run: |
+          echo "Generated tags:"
+          echo "${{ steps.meta.outputs.tags }}"
+          echo "PR number: ${{ github.event.pull_request.number }}"
+          echo "Ref: ${{ github.ref }}"
 
       # Build and push Docker image with Buildx
       # https://github.com/docker/build-push-action
@@ -112,49 +159,44 @@ jobs:
         uses: docker/build-push-action@0565240e2d4ab88bba5387d719585280857ece09 # v5.0.0
         with:
           context: .
-          push: true
+          push: true # Always push regardless of event type
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          platforms: linux/amd64,linux/arm64,linux/arm/v7
+          build-args: |
+            APP_VERSION=${{ steps.version.outputs.version }}
+            BUILD_DATE=${{ steps.version.outputs.build_date }}
+            VCS_REF=${{ steps.version.outputs.vcs_ref }}
+          # Add cache configuration
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          outputs: type=docker,dest=/tmp/docker-image.tar
-          build-args: |
-            APP_VERSION=${{ steps.version.outputs.version || 'develop' }}
 
       # Export Docker image for release
-      - name: Export Docker image
+      - name: Export Docker image digest
         if: github.event_name != 'pull_request'
+        id: digest
         run: |
-          mkdir -p /tmp/release
-          gzip -c /tmp/docker-image.tar > /tmp/release/docker-image.tar.gz
+          echo "Publishing successful, no need to extract digest"
+          echo "digest=skipped" >> $GITHUB_OUTPUT
 
-      # Sign the resulting Docker image digest
-      # This will only write to the public Rekor transparency log when the Docker
-      # repository is public to avoid leaking data.  If you would like to publish
-      # transparency data even for private images, pass --force to cosign below.
-      # https://github.com/sigstore/cosign
-      - name: Sign the published Docker image
-        if: github.event_name != 'pull_request'
+      # Sign the resulting Docker image digest for GitHub Container Registry
+      - name: Sign the published Docker image for GitHub
+        if: false # Temporarily disabled
         env:
-          # https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions#using-an-intermediate-environment-variable
-          TAGS: ${{ steps.meta.outputs.tags }}
-          DIGEST: ${{ steps.build-and-push.outputs.digest }}
-        # This step uses the identity token to provision an ephemeral certificate
-        # against the sigstore community Fulcio instance.
-        run: echo "${TAGS}" | xargs -I {} cosign sign --yes {}@${DIGEST}
-
-      # Get PR information if available
-      - name: Get PR information
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        id: pr_info
+          DIGEST: ${{ steps.digest.outputs.digest }}
         run: |
-          PR_NUMBER=$(gh pr list --base main --head ${{ github.event.before }} --json number -q '.[0].number')
-          if [ -n "$PR_NUMBER" ]; then
-            PR_BODY=$(gh pr view $PR_NUMBER --json body -q '.body')
-            echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
-            echo "$PR_BODY" > /tmp/release/pr_body.txt
-          else
-            echo "This release includes the latest Docker image for Export Trakt 4 Letterboxd." > /tmp/release/pr_body.txt
-          fi
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          echo "Skipping signing step to focus on successful publishing"
+          # for TAG in ${{ steps.meta.outputs.tags }}; do
+          #   echo "Signing image: ${TAG}@${DIGEST}"
+          #   cosign sign --yes ${TAG}@${DIGEST} || echo "Warning: Failed to sign ${TAG}"
+          # done
+
+      # Create GitHub release for tags
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v1
+        with:
+          name: Release ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true

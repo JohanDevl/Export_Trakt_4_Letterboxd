@@ -6,8 +6,11 @@
 [![GitHub license](https://img.shields.io/github/license/JohanDevl/Export_Trakt_4_Letterboxd)](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/blob/main/LICENSE)
 [![Docker Image Test](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/actions/workflows/docker-test.yml/badge.svg)](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/actions/workflows/docker-test.yml)
 [![Docker Build](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/actions/workflows/docker-publish.yml)
-[![Docker Package](https://img.shields.io/badge/Docker-ghcr.io-blue?logo=docker)](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkgs/container/export_trakt_4_letterboxd)
-[![GitHub package size](https://img.shields.io/github/repo-size/JohanDevl/Export_Trakt_4_Letterboxd?logo=docker&label=Image%20Size)](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkgs/container/export_trakt_4_letterboxd)
+[![Docker Package](https://img.shields.io/badge/GitHub%20Packages-ghcr.io-blue?logo=docker)](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkgs/container/export_trakt_4_letterboxd)
+[![Docker Hub](https://img.shields.io/docker/v/johandevl/export-trakt-4-letterboxd?logo=docker&label=Docker%20Hub)](https://hub.docker.com/r/johandevl/export-trakt-4-letterboxd)
+[![Docker Image Size](https://img.shields.io/docker/image-size/johandevl/export-trakt-4-letterboxd/latest?logo=docker&label=Image%20Size)](https://hub.docker.com/r/johandevl/export-trakt-4-letterboxd)
+[![Docker Pulls](https://img.shields.io/docker/pulls/johandevl/export-trakt-4-letterboxd?logo=docker&label=Pulls)](https://hub.docker.com/r/johandevl/export-trakt-4-letterboxd)
+[![Platforms](https://img.shields.io/badge/platforms-amd64%20|%20arm64%20|%20armv7-lightgrey?logo=docker)](https://hub.docker.com/r/johandevl/export-trakt-4-letterboxd/tags)
 [![Trakt.tv](https://img.shields.io/badge/Trakt.tv-ED1C24?logo=trakt&logoColor=white)](https://trakt.tv)
 [![Letterboxd](https://img.shields.io/badge/Letterboxd-00D735?logo=letterboxd&logoColor=white)](https://letterboxd.com)
 
@@ -20,6 +23,42 @@ This project allows you to export your Trakt.tv data to a format compatible with
 - A Trakt.tv account
 - A Trakt.tv application (Client ID and Client Secret)
 - jq and curl (for local installation)
+- Docker (for containerized installation)
+
+### Using Docker (Recommended)
+
+1. Quick run with Docker Compose:
+
+   ```bash
+   # Clone the repository
+   git clone https://github.com/JohanDevl/Export_Trakt_4_Letterboxd.git
+   cd Export_Trakt_4_Letterboxd
+
+   # First-time setup (interactive)
+   docker compose --profile setup up
+
+   # Run the export
+   docker compose up
+   ```
+
+2. Or pull and run from Docker Hub:
+
+   ```bash
+   docker run -it --name trakt-export \
+     -v $(pwd)/config:/app/config \
+     -v $(pwd)/logs:/app/logs \
+     -v $(pwd)/copy:/app/copy \
+     -v $(pwd)/backup:/app/backup \
+     johandevl/export-trakt-4-letterboxd:latest
+   ```
+
+3. For scheduled exports:
+
+   ```bash
+   docker compose --profile scheduled up -d
+   ```
+
+See [Docker Usage Guide](docs/DOCKER_USAGE.md) for more details.
 
 ### Local Installation
 
@@ -47,31 +86,6 @@ This project allows you to export your Trakt.tv data to a format compatible with
    ./Export_Trakt_4_Letterboxd.sh [option]
    ```
    Options: `normal` (default), `initial`, or `complete`
-
-### Docker Installation
-
-Using Docker Compose:
-
-```bash
-# Clone the repository
-git clone https://github.com/JohanDevl/Export_Trakt_4_Letterboxd.git
-cd Export_Trakt_4_Letterboxd
-
-# Start the container
-docker compose up -d
-
-# Configure Trakt authentication
-docker compose exec trakt-export ./setup_trakt.sh
-
-# Run the export script
-docker compose exec trakt-export ./Export_Trakt_4_Letterboxd.sh
-```
-
-Or pull the pre-built image:
-
-```bash
-docker pull ghcr.io/johandevl/export_trakt_4_letterboxd:latest
-```
 
 ## Features
 
