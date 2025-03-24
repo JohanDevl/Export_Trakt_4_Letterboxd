@@ -147,6 +147,9 @@ jobs:
             type=raw,value=develop,enable=${{ github.ref == 'refs/heads/develop' }}
             # Add explicit vX.Y.Z tag for version tags
             type=raw,value=v${{ steps.version.outputs.version }},enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+            # Add explicit v-prefixed tags for all builds
+            type=raw,value=v${{ steps.version.outputs.version }},enable=${{ github.ref == 'refs/heads/main' }}
+            type=raw,value=vdev,enable=${{ github.ref == 'refs/heads/develop' }}
 
       # Debug step to see metadata output
       - name: Debug metadata
