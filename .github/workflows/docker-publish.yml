@@ -11,7 +11,7 @@ on:
     workflows: ["Docker Image Test"]
     types:
       - completed
-    branches: ["develop"]
+    branches: ["develop", "main"]
 
   # Keep tag-based triggers for releases
   push:
