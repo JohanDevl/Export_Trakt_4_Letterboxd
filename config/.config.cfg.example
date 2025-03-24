@@ -15,6 +15,13 @@ REDIRECT_URI="urn:ietf:wg:oauth:2.0:oob"
 USERNAME="YOUR_TRAKT_USERNAME"
 
 ############################################################################
+# LANGUAGE SETTINGS
+############################################################################
+# Language for user interface (en, fr, es, de)
+# Leave empty to auto-detect from system
+LANGUAGE=""
+
+############################################################################
 # DIRECTORY PATHS
 ############################################################################
 # Backup and output directories
