@@ -8,7 +8,7 @@ import_modules() {
     local script_dir="$1"
     
     # List of modules to import
-    modules=("config" "utils" "trakt_api" "data_processing")
+    modules=("config" "utils" "i18n" "trakt_api" "data_processing")
     
     for module in "${modules[@]}"; do
         if [ -f "${script_dir}/lib/${module}.sh" ]; then
@@ -43,6 +43,9 @@ initialize_environment() {
     # Load configuration
     load_config "$script_dir" "$log"
     
+    # Initialize internationalization
+    init_i18n "$script_dir" "$log"
+    
     # Initialize temporary directory
     init_temp_dir "$TEMP_DIR" "$log"
     
@@ -57,13 +60,13 @@ initialize_environment() {
     
     # Check for existing CSV file
     if [ -f "${DOSCOPY}/letterboxd_import.csv" ]; then
-        debug_file_info "${DOSCOPY}/letterboxd_import.csv" "Existing CSV file check" "$log"
+        debug_file_info "${DOSCOPY}/letterboxd_import.csv" "$(_  "existing_csv_check")" "$log"
     fi
     
     # Check for required dependencies
     check_dependencies "$log" || exit 1
     
-    echo -e "Retrieving information..." | tee -a "${log}"
+    echo -e "$(_ "retrieving_info")" | tee -a "${log}"
 }
 
 # Process command line arguments
@@ -73,7 +76,7 @@ process_arguments() {
     
     if [ ! -z "$arg" ]; then
         local option=$(echo "$arg" | tr '[:upper:]' '[:lower:]')
-        echo -e "${SAISPAS}${BOLD}[$(date)] - Processing option: $option${NC}" | tee -a "${log}"
+        echo -e "${SAISPAS}${BOLD}[$(date)] - $(_ "processing_option"): $option${NC}" | tee -a "${log}"
         
         # Normalize mode to one of our supported values
         local mode
@@ -92,7 +95,7 @@ process_arguments() {
         echo -e "Option '$option' translated to mode: $mode" | tee -a "${log}"
         echo "$mode"
     else
-        echo -e "${SAISPAS}${BOLD}[$(date)] - No option provided, using default${NC}" | tee -a "${log}"
+        echo -e "${SAISPAS}${BOLD}[$(date)] - $(_ "no_option")${NC}" | tee -a "${log}"
         echo "normal"
     fi
 }

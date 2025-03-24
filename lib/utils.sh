@@ -19,37 +19,37 @@ debug_file_info() {
     
     echo "📄 $message:" | tee -a "${log_file}"
     if [ -f "$file" ]; then
-        echo "  - File exists: ✅" | tee -a "${log_file}"
+        echo "  - $(_ "file_exists"): ✅" | tee -a "${log_file}"
         echo "  - File size: $(stat -f%z "$file" 2>/dev/null || stat -c%s "$file" 2>/dev/null || echo "unknown") bytes" | tee -a "${log_file}"
         echo "  - File permissions: $(ls -la "$file" | awk '{print $1}')" | tee -a "${log_file}"
         echo "  - Owner: $(ls -la "$file" | awk '{print $3":"$4}')" | tee -a "${log_file}"
         
         # Check if file is readable
         if [ -r "$file" ]; then
-            echo "  - File is readable: ✅" | tee -a "${log_file}"
+            echo "  - $(_ "file_is_readable"): ✅" | tee -a "${log_file}"
         else
-            echo "  - File is readable: ❌" | tee -a "${log_file}"
+            echo "  - $(_ "file_is_readable"): ❌" | tee -a "${log_file}"
         fi
         
         # Check if file is writable
         if [ -w "$file" ]; then
-            echo "  - File is writable: ✅" | tee -a "${log_file}"
+            echo "  - $(_ "file_is_writable"): ✅" | tee -a "${log_file}"
         else
-            echo "  - File is writable: ❌" | tee -a "${log_file}"
+            echo "  - $(_ "file_is_writable"): ❌" | tee -a "${log_file}"
         fi
         
         # Check if file has content
         if [ -s "$file" ]; then
-            echo "  - File has content: ✅" | tee -a "${log_file}"
+            echo "  - $(_ "file_has_content"): ✅" | tee -a "${log_file}"
             echo "  - First line: $(head -n 1 "$file" 2>/dev/null || echo "Cannot read file")" | tee -a "${log_file}"
             echo "  - Line count: $(wc -l < "$file" 2>/dev/null || echo "Cannot count lines")" | tee -a "${log_file}"
         else
-            echo "  - File has content: ❌ (empty file)" | tee -a "${log_file}"
+            echo "  - $(_ "file_has_content"): ❌ (empty file)" | tee -a "${log_file}"
         fi
     else
-        echo "  - File exists: ❌ (not found)" | tee -a "${log_file}"
-        echo "  - Directory exists: $(if [ -d "$(dirname "$file")" ]; then echo "✅"; else echo "❌"; fi)" | tee -a "${log_file}"
-        echo "  - Directory permissions: $(ls -la "$(dirname "$file")" 2>/dev/null | head -n 1 | awk '{print $1}' || echo "Cannot access directory")" | tee -a "${log_file}"
+        echo "  - $(_ "file_exists"): ❌ ($(_ "file_exists_not"))" | tee -a "${log_file}"
+        echo "  - $(_ "directory_exists"): $(if [ -d "$(dirname "$file")" ]; then echo "✅"; else echo "❌"; fi)" | tee -a "${log_file}"
+        echo "  - $(_ "directory_permissions"): $(ls -la "$(dirname "$file")" 2>/dev/null | head -n 1 | awk '{print $1}' || echo "Cannot access directory")" | tee -a "${log_file}"
     fi
     echo "-----------------------------------" | tee -a "${log_file}"
 }
@@ -64,7 +64,7 @@ check_dependencies() {
     local log_file="$1"
     local missing=0
     
-    echo "🔍 Checking required dependencies:" | tee -a "${log_file}"
+    echo "🔍 $(_ "checking_dependencies"):" | tee -a "${log_file}"
     
     for cmd in curl jq sed awk; do
         if command_exists "$cmd"; then
@@ -76,10 +76,10 @@ check_dependencies() {
     done
     
     if [ $missing -eq 1 ]; then
-        echo "❌ Some required dependencies are missing. Please install them before continuing." | tee -a "${log_file}"
+        echo "❌ $(_ "missing_dependencies")" | tee -a "${log_file}"
         return 1
     else
-        echo "✅ All required dependencies are installed." | tee -a "${log_file}"
+        echo "✅ $(_ "all_dependencies_installed")" | tee -a "${log_file}"
         return 0
     fi
 }
@@ -109,7 +109,7 @@ handle_error() {
     local error_code="$2"
     local log_file="$3"
     
-    echo "❌ ERROR: $error_message" | tee -a "${log_file}"
+    echo "❌ $(_ "error"): $error_message" | tee -a "${log_file}"
     
     if [ -n "$error_code" ]; then
         exit "$error_code"
