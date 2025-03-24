@@ -457,6 +457,13 @@ else
             # Redirect debug logs to a file instead of stdout to avoid interference with return value
             log_message "DEBUG" "Parsed cron: minute=$cron_min, hour=$cron_hour, day=$cron_day, month=$cron_month, dow=$cron_dow" > /app/logs/cron_parser.log 2>&1
             
+            # Special case for * * * * * (every minute)
+            if [ "$cron_min" = "*" ] && [ "$cron_hour" = "*" ] && [ "$cron_day" = "*" ] && [ "$cron_month" = "*" ]; then
+                log_message "INFO" "Schedule format detected: every minute" >> /app/logs/cron_parser.log 2>&1
+                echo "60"
+                return
+            fi
+            
             # Special case for */X format (every X minutes)
             if [[ "$cron_min" =~ ^\*/([0-9]+)$ ]]; then
                 local minutes="${BASH_REMATCH[1]}"
