@@ -7,6 +7,12 @@ on:
       - "**/*.md"
       - "docs/**"
       - "LICENSE"
+  push:
+    branches: ["main", "develop"]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "LICENSE"
 
 jobs:
   unit-tests:
