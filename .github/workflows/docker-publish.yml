@@ -6,16 +6,18 @@ name: Docker
 # documentation.
 
 on:
+  # Watch for pushes to branches and tags
   push:
     branches: ["main", "develop"]
-    # Publish semver tags as releases.
     tags: ["v*.*.*"]
     paths-ignore:
       - "**/*.md"
       - "docs/**"
       - "LICENSE"
+
+  # Watch for pull requests to main and develop branches
   pull_request:
-    branches: ["main"]
+    branches: ["main", "develop"]
     paths-ignore:
       - "**/*.md"
       - "docs/**"
@@ -58,7 +60,6 @@ jobs:
       # Login against a Docker registry except on PR
       # https://github.com/docker/login-action
       - name: Log into registry ${{ env.REGISTRY }}
-        if: github.event_name != 'pull_request'
         uses: docker/login-action@343f7c4344506bcbf9b4de18042ae17996df046d # v3.0.0
         with:
           registry: ${{ env.REGISTRY }}
@@ -73,26 +74,27 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=schedule
-            type=ref,event=branch
-            type=ref,event=pr
+            # For PR builds, use PR-#
+            type=ref,event=pr,prefix=PR-
+            # For semver tags
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
-            type=sha
-            # Always add latest tag for main branch and version tags
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v') }}
-            # Add develop tag for develop branch
+            # For branch-based tagging
+            type=ref,event=branch
+            # Add 'latest' tag for main branch
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            # Add 'develop' tag for develop branch
             type=raw,value=develop,enable=${{ github.ref == 'refs/heads/develop' }}
 
-      # Build and push Docker image with Buildx (don't push on PR)
+      # Build and push Docker image with Buildx
       # https://github.com/docker/build-push-action
       - name: Build and push Docker image
         id: build-and-push
         uses: docker/build-push-action@0565240e2d4ab88bba5387d719585280857ece09 # v5.0.0
         with:
           context: .
-          push: ${{ github.event_name != 'pull_request' }}
+          push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
@@ -106,13 +108,13 @@ jobs:
           mkdir -p /tmp/release
           gzip -c /tmp/docker-image.tar > /tmp/release/docker-image.tar.gz
 
-      # Sign the resulting Docker image digest except on PRs.
+      # Sign the resulting Docker image digest
       # This will only write to the public Rekor transparency log when the Docker
       # repository is public to avoid leaking data.  If you would like to publish
       # transparency data even for private images, pass --force to cosign below.
       # https://github.com/sigstore/cosign
       - name: Sign the published Docker image
-        if: ${{ github.event_name != 'pull_request' }}
+        if: github.event_name != 'pull_request'
         env:
           # https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions#using-an-intermediate-environment-variable
           TAGS: ${{ steps.meta.outputs.tags }}

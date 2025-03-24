@@ -7,11 +7,58 @@ on:
       - "**/*.md"
       - "docs/**"
       - "LICENSE"
+  push:
+    branches: ["develop"]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "LICENSE"
 
 jobs:
-  test:
+  unit-tests:
+    name: Run Unit Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+          # Install dependencies for building kcov
+          sudo apt-get install -y cmake g++ pkg-config libdw-dev binutils-dev libiberty-dev libcurl4-openssl-dev
+          # Clone, build and install kcov from source
+          git clone https://github.com/SimonKagstrom/kcov.git
+          cd kcov
+          mkdir build
+          cd build
+          cmake ..
+          make -j$(nproc)
+          sudo make install
+          cd ../..
+
+      - name: Run tests
+        run: |
+          ./tests/run_tests.sh
+
+      - name: Generate coverage report
+        run: |
+          ./tests/run_tests.sh coverage
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-coverage
+          path: test-results/coverage
+
+  docker-test:
     name: Test Docker Image
     runs-on: ubuntu-latest
+    needs: unit-tests
 
     steps:
       - name: Checkout repository

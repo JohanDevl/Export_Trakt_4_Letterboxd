@@ -23,6 +23,7 @@ creds.js
 
 # Private Files
 *.json
+!tests/mocks/*.json
 *.cfg
 *.csv
 *.csv.gz
