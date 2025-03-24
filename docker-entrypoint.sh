@@ -98,6 +98,130 @@ debug_file_info() {
     fi
 }
 
+# Function to clean temporary directories safely
+clean_temp_directories() {
+    log_message "INFO" "Cleaning temporary directories..."
+    
+    # Define temp directories to clean
+    TEMP_DIRS=("/app/TEMP")
+    
+    for dir in "${TEMP_DIRS[@]}"; do
+        if [ -d "$dir" ]; then
+            log_message "DEBUG" "Cleaning directory: $dir"
+            
+            # First try with current permissions
+            if find "$dir" -mindepth 1 -delete 2>/dev/null; then
+                log_message "SUCCESS" "Cleaned $dir successfully"
+            else
+                log_message "WARN" "Permission issues cleaning $dir, attempting with elevated permissions"
+                
+                # Try to make the directory writable if needed
+                chmod -R 777 "$dir" 2>/dev/null || true
+                find "$dir" -mindepth 1 -delete 2>/dev/null || log_message "ERROR" "Failed to clean $dir completely"
+                
+                # Make sure the directory exists and has correct permissions 
+                mkdir -p "$dir" 2>/dev/null || true
+                chmod -R 777 "$dir" 2>/dev/null || true
+            fi
+        else
+            log_message "WARN" "Directory $dir does not exist, creating it"
+            mkdir -p "$dir" 2>/dev/null || log_message "ERROR" "Failed to create $dir"
+            chmod -R 777 "$dir" 2>/dev/null || log_message "ERROR" "Failed to set permissions on $dir"
+        fi
+    done
+}
+
+# Function to sync environment variables with config file
+sync_env_to_config() {
+    local config_file="/app/config/.config.cfg"
+    
+    log_message "INFO" "Checking for environment variables to sync to config..."
+    
+    # List of environment variables to check and sync
+    declare -A env_vars
+    env_vars[TRAKT_API_KEY]="API_KEY"
+    env_vars[TRAKT_API_SECRET]="API_SECRET"
+    env_vars[TRAKT_USERNAME]="USERNAME"
+    
+    # Special handling for tokens - only update if they are empty in the config
+    # Get current values from config
+    current_access_token=$(grep -oP '^ACCESS_TOKEN="\K[^"]*' "$config_file" || echo "")
+    current_refresh_token=$(grep -oP '^REFRESH_TOKEN="\K[^"]*' "$config_file" || echo "")
+    
+    # Only update tokens if they are empty in the config
+    if [ -z "$current_access_token" ] && [ -n "$TRAKT_ACCESS_TOKEN" ]; then
+        log_message "INFO" "Setting ACCESS_TOKEN from environment variable"
+        sed -i 's|^ACCESS_TOKEN=.*|ACCESS_TOKEN="'"$TRAKT_ACCESS_TOKEN"'"|' "$config_file"
+    fi
+    
+    if [ -z "$current_refresh_token" ] && [ -n "$TRAKT_REFRESH_TOKEN" ]; then
+        log_message "INFO" "Setting REFRESH_TOKEN from environment variable"
+        sed -i 's|^REFRESH_TOKEN=.*|REFRESH_TOKEN="'"$TRAKT_REFRESH_TOKEN"'"|' "$config_file"
+    fi
+    
+    # Check each environment variable (except tokens which are handled above)
+    for env_var in "${!env_vars[@]}"; do
+        config_var="${env_vars[$env_var]}"
+        
+        # If environment variable is set, update config
+        if [ -n "${!env_var}" ]; then
+            log_message "INFO" "Setting $config_var from environment variable $env_var"
+            
+            if grep -q "^$config_var=" "$config_file"; then
+                # Update existing variable - preserve format, just update value
+                sed -i "s|^$config_var=.*|$config_var=\"${!env_var}\"|" "$config_file"
+            else
+                # Add new variable (should rarely happen)
+                echo "$config_var=\"${!env_var}\"" >> "$config_file"
+            fi
+        fi
+    done
+    
+    # Also check for environment variables with _FILE suffix for Docker secrets
+    # Special handling for token secrets
+    if [ -n "$TRAKT_ACCESS_TOKEN_FILE" ] && [ -f "$TRAKT_ACCESS_TOKEN_FILE" ] && [ -z "$current_access_token" ]; then
+        secret_value=$(cat "$TRAKT_ACCESS_TOKEN_FILE" 2>/dev/null | tr -d '\n')
+        if [ -n "$secret_value" ]; then
+            log_message "INFO" "Setting ACCESS_TOKEN from secret file"
+            sed -i 's|^ACCESS_TOKEN=.*|ACCESS_TOKEN="'"$secret_value"'"|' "$config_file"
+        fi
+    fi
+    
+    if [ -n "$TRAKT_REFRESH_TOKEN_FILE" ] && [ -f "$TRAKT_REFRESH_TOKEN_FILE" ] && [ -z "$current_refresh_token" ]; then
+        secret_value=$(cat "$TRAKT_REFRESH_TOKEN_FILE" 2>/dev/null | tr -d '\n')
+        if [ -n "$secret_value" ]; then
+            log_message "INFO" "Setting REFRESH_TOKEN from secret file"
+            sed -i 's|^REFRESH_TOKEN=.*|REFRESH_TOKEN="'"$secret_value"'"|' "$config_file"
+        fi
+    fi
+    
+    # For other secrets
+    for env_var in "${!env_vars[@]}"; do
+        secret_env_var="${env_var}_FILE"
+        config_var="${env_vars[$env_var]}"
+        
+        # If secret file environment variable is set
+        if [ -n "${!secret_env_var}" ] && [ -f "${!secret_env_var}" ]; then
+            # Read the secret from file
+            secret_value=$(cat "${!secret_env_var}" 2>/dev/null | tr -d '\n')
+            
+            if [ -n "$secret_value" ]; then
+                log_message "INFO" "Setting $config_var from secret file $secret_env_var"
+                
+                if grep -q "^$config_var=" "$config_file"; then
+                    # Update existing variable
+                    sed -i "s|^$config_var=.*|$config_var=\"$secret_value\"|" "$config_file"
+                else
+                    # Add new variable
+                    echo "$config_var=\"$secret_value\"" >> "$config_file"
+                fi
+            else
+                log_message "WARN" "Secret file for $env_var is empty, skipping"
+            fi
+        fi
+    done
+}
+
 # Initial system information
 log_message "INFO" "Starting Docker container for Export_Trakt_4_Letterboxd"
 show_version
@@ -274,6 +398,12 @@ elif [ "$1" = "setup" ]; then
     # Run the setup script
     exec /app/setup_trakt.sh
 else
+    # Clean temporary directories before starting
+    clean_temp_directories
+    
+    # Sync environment variables to config file
+    sync_env_to_config
+    
     # Start health check server in background
     start_health_server
     

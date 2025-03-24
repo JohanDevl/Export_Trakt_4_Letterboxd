@@ -48,7 +48,8 @@ COPY docker-entrypoint.sh /app/
 RUN mkdir -p /app/backup /app/logs /app/copy /app/TEMP /app/config \
     && chmod +x /app/*.sh \
     && chmod -R 755 /app/lib \
-    && chown -R appuser:appgroup /app/backup /app/logs /app/copy /app/TEMP /app/config
+    && chown -R appuser:appgroup /app/backup /app/logs /app/copy /app/TEMP /app/config \
+    && chmod -R 777 /app/TEMP
 
 # Set environment variables
 ENV DOSLOG=/app/logs \
