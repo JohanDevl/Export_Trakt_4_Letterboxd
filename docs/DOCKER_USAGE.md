@@ -6,8 +6,11 @@ This document provides detailed information about using the Export Trakt 4 Lette
 
 - Docker installed on your system
 - Docker Compose (optional, but recommended)
+- For multi-architecture builds: Docker Buildx
 
 ## Using Docker Compose (Recommended)
+
+### Quick Start
 
 1. Clone the repository:
 
@@ -19,97 +22,83 @@ This document provides detailed information about using the Export Trakt 4 Lette
 2. Build and start the container:
 
    ```bash
-   docker compose up -d
+   docker compose up
    ```
 
-3. Enter the container:
+   This will build and run the container once, which will execute the script and exit.
 
-   ```bash
-   docker compose exec trakt-export bash
-   ```
+### Initial Setup
 
-4. Configure Trakt authentication:
-
-   ```bash
-   ./setup_trakt.sh
-   ```
-
-5. Run the export script:
-   ```bash
-   ./Export_Trakt_4_Letterboxd.sh [option]
-   ```
-
-## Using Docker Directly
-
-1. Build the Docker image:
-
-   ```bash
-   docker build -t trakt-export .
-   ```
-
-2. Run the container:
-
-   ```bash
-   docker run -it --name trakt-export \
-     -v $(pwd)/config:/app/config \
-     -v $(pwd)/logs:/app/logs \
-     -v $(pwd)/copy:/app/copy \
-     -v $(pwd)/brain_ops:/app/brain_ops \
-     -v $(pwd)/backup:/app/backup \
-     trakt-export
-   ```
-
-3. Configure Trakt authentication:
-
-   ```bash
-   ./setup_trakt.sh
-   ```
-
-4. Run the export script:
-   ```bash
-   ./Export_Trakt_4_Letterboxd.sh [option]
-   ```
-
-## Using Pre-built Images
-
-You can pull the pre-built image from GitHub Container Registry:
+For first-time setup, use the setup profile:
 
 ```bash
-# Pull the latest stable version (from main branch)
-docker pull ghcr.io/johandevl/export_trakt_4_letterboxd:latest
-
-# Pull the latest development version (from develop branch)
-docker pull ghcr.io/johandevl/export_trakt_4_letterboxd:develop
-
-# Or pull a specific version
-docker pull ghcr.io/johandevl/export_trakt_4_letterboxd:v1.0.0
+docker compose --profile setup up
 ```
 
-Example docker-compose.yml using the pre-built image:
+This will launch an interactive container to set up your Trakt authentication.
 
-```yaml
-version: "3"
+### Running on a Schedule
 
-services:
-  trakt-export:
-    # For stable production use:
-    image: ghcr.io/johandevl/export_trakt_4_letterboxd:latest
+To run the exporter on a schedule:
 
-    # For testing the latest development version:
-    # image: ghcr.io/johandevl/export_trakt_4_letterboxd:develop
-
-    container_name: trakt-export
-    volumes:
-      - ./config:/app/config
-      - ./logs:/app/logs
-      - ./copy:/app/copy
-      - ./brain_ops:/app/brain_ops
-      - ./backup:/app/backup
-    environment:
-      - TZ=Europe/Paris
-      - CRON_SCHEDULE=0 3 * * * # Run daily at 3:00 AM
-      - EXPORT_OPTION=normal # Use the normal export option
+```bash
+docker compose --profile scheduled up -d
 ```
+
+This will start the container in the background and execute the export script according to the cron schedule defined in the docker-compose.yml file.
+
+## Docker Compose Profiles
+
+The docker-compose.yml file includes several profiles for different use cases:
+
+- Default (no profile): Run once and exit
+- `setup`: Run the initial setup script
+- `scheduled`: Run with a cron schedule
+- `env-config`: Run with all configuration via environment variables
+
+Example usage:
+
+```bash
+# Run the initial setup
+docker compose --profile setup up
+
+# Run with a cron schedule
+docker compose --profile scheduled up -d
+
+# Run with configuration via environment variables
+docker compose --profile env-config up -d
+```
+
+## Building Multi-Architecture Images
+
+You can build multi-architecture Docker images using the provided build script:
+
+```bash
+# Build and push multi-arch images (amd64, arm64, armv7)
+./build-docker.sh --tag v1.0.0
+
+# Build for local platform only
+./build-docker.sh --local
+
+# Build but don't push
+./build-docker.sh --no-push
+
+# See all options
+./build-docker.sh --help
+```
+
+## Environment Variables
+
+| Variable        | Description                                             | Default  |
+| --------------- | ------------------------------------------------------- | -------- |
+| `TZ`            | Timezone                                                | `UTC`    |
+| `CRON_SCHEDULE` | Cron schedule expression (empty to run once)            | Empty    |
+| `EXPORT_OPTION` | Export option (`normal`, `initial`, `complete`)         | `normal` |
+| `API_KEY`       | Trakt API key (from config file unless specified)       | Empty    |
+| `API_SECRET`    | Trakt API secret (from config file unless specified)    | Empty    |
+| `ACCESS_TOKEN`  | Trakt access token (from config file unless specified)  | Empty    |
+| `REFRESH_TOKEN` | Trakt refresh token (from config file unless specified) | Empty    |
+| `USERNAME`      | Trakt username (from config file unless specified)      | Empty    |
 
 ## Docker Volumes
 
@@ -118,93 +107,166 @@ The Docker container uses the following volumes to persist data:
 - `/app/config`: Contains the configuration file
 - `/app/logs`: Contains log files
 - `/app/copy`: Contains the exported Letterboxd CSV file
-- `/app/brain_ops`: Contains additional export data
 - `/app/backup`: Contains Trakt API backup data
 
-## Automated Exports with Cron
+## Docker Healthchecks
 
-You can configure the Docker container to automatically run the export script on a schedule using cron. To enable this feature, set the following environment variables:
+The Docker container includes built-in health checks that verify:
 
-- `CRON_SCHEDULE`: The cron schedule expression (e.g., `0 3 * * *` for daily at 3:00 AM)
-- `EXPORT_OPTION`: The export option to use (`normal`, `initial`, or `complete`)
+- Required directories are present and writable
+- Required files are present and readable
+- Required commands are available
+- Trakt API connectivity (if credentials are configured)
 
-### Example with Docker Compose:
+You can check the container health status using:
+
+```bash
+docker inspect --format "{{.State.Health.Status}}" trakt-export
+```
+
+## Using Docker Secrets
+
+For production deployments, you can use Docker secrets to manage sensitive configuration:
 
 ```yaml
-version: "3"
+version: "3.8"
 
 services:
   trakt-export:
-    build: .
+    image: johandevl/export-trakt-4-letterboxd:latest
+    volumes:
+      - ./config:/app/config
+      - ./logs:/app/logs
+      - ./copy:/app/copy
+      - ./backup:/app/backup
+    environment:
+      - TZ=Europe/Paris
+      - CRON_SCHEDULE=0 3 * * *
+      - EXPORT_OPTION=normal
+    secrets:
+      - trakt_api_key
+      - trakt_api_secret
+      - trakt_access_token
+      - trakt_refresh_token
+
+secrets:
+  trakt_api_key:
+    file: ./secrets/api_key.txt
+  trakt_api_secret:
+    file: ./secrets/api_secret.txt
+  trakt_access_token:
+    file: ./secrets/access_token.txt
+  trakt_refresh_token:
+    file: ./secrets/refresh_token.txt
+```
+
+## Advanced Docker Compose Examples
+
+### Production Deployment with Resource Limits
+
+```yaml
+version: "3.8"
+
+services:
+  trakt-export:
+    image: johandevl/export-trakt-4-letterboxd:latest
     container_name: trakt-export
     volumes:
       - ./config:/app/config
       - ./logs:/app/logs
       - ./copy:/app/copy
-      - ./brain_ops:/app/brain_ops
       - ./backup:/app/backup
     environment:
       - TZ=Europe/Paris
-      - CRON_SCHEDULE=0 3 * * * # Run daily at 3:00 AM
-      - EXPORT_OPTION=normal # Use the normal export option
-    stdin_open: true
-    tty: true
+      - CRON_SCHEDULE=0 3 * * *
+      - EXPORT_OPTION=normal
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "/app/docker-entrypoint.sh", "healthcheck"]
+      interval: 1m
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          cpus: "0.1"
+          memory: 128M
 ```
 
-### Example with Docker Run:
+### Integration with Traefik Reverse Proxy
+
+```yaml
+version: "3.8"
+
+services:
+  trakt-export:
+    image: johandevl/export-trakt-4-letterboxd:latest
+    container_name: trakt-export
+    volumes:
+      - ./config:/app/config
+      - ./logs:/app/logs
+      - ./copy:/app/copy
+      - ./backup:/app/backup
+    environment:
+      - TZ=Europe/Paris
+      - CRON_SCHEDULE=0 3 * * *
+      - EXPORT_OPTION=normal
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.trakt.rule=Host(`trakt.example.com`)"
+      - "traefik.http.routers.trakt.entrypoints=websecure"
+      - "traefik.http.routers.trakt.tls.certresolver=myresolver"
+      - "traefik.http.services.trakt.loadbalancer.server.port=8000"
+    networks:
+      - traefik
+
+networks:
+  traefik:
+    external: true
+```
+
+## Using Without Docker Compose
+
+If you prefer to use Docker directly without Docker Compose:
 
 ```bash
 docker run -it --name trakt-export \
   -v $(pwd)/config:/app/config \
   -v $(pwd)/logs:/app/logs \
   -v $(pwd)/copy:/app/copy \
-  -v $(pwd)/brain_ops:/app/brain_ops \
   -v $(pwd)/backup:/app/backup \
-  -e CRON_SCHEDULE="0 3 * * *" \
-  -e EXPORT_OPTION="normal" \
-  trakt-export
+  -e TZ=Europe/Paris \
+  -e EXPORT_OPTION=complete \
+  johandevl/export-trakt-4-letterboxd:latest
 ```
 
-## Cron Job Logging and Monitoring
+## Troubleshooting
 
-The cron job provides comprehensive logging to help you monitor the export process:
+If you encounter issues with the Docker container:
 
-1. **Container Logs**:
-
-   - User-friendly messages with emojis appear in the container logs
-   - Start and completion notifications with timestamps
-   - Progress indicators and success confirmations
-
-   View these logs with:
+1. Check the container logs:
 
    ```bash
    docker logs trakt-export
    ```
 
-2. **Detailed Export Logs**:
-
-   - Complete export details are saved to `/app/logs/cron_export.log`
-   - Includes API responses, processing steps, and any warnings or errors
-   - Timestamped entries for easier troubleshooting
-
-   View these logs with:
+2. Check the container health:
 
    ```bash
-   docker exec trakt-export cat /app/logs/cron_export.log
+   docker inspect --format "{{.State.Health.Status}}" trakt-export
    ```
 
-The cron job is configured to provide clear visual feedback about the export process, making it easy to confirm that your exports are running successfully.
+3. Enter the container to investigate:
 
-## Docker Implementation Notes
+   ```bash
+   docker exec -it trakt-export bash
+   ```
 
-The Docker implementation includes several optimizations:
-
-1. **Modified `sed` commands**: The `sed` commands in the scripts have been adapted to work in Alpine Linux by removing the empty string argument (`''`) which is specific to macOS/BSD versions of `sed`.
-
-2. **Configuration file handling**: The Docker setup uses a dedicated configuration directory (`/app/config`) with proper symlinks to ensure scripts can find and modify the configuration file.
-
-3. **Permissions management**: The Docker entrypoint script ensures all files and directories have the correct permissions for read/write operations.
-
-4. **Path handling**: All scripts have been updated to use absolute paths with the `SCRIPT_DIR` variable to ensure consistent file access regardless of the current working directory.
-
-If you encounter any issues with the Docker implementation, please check the logs and ensure your configuration file is properly set up.
+4. If the container is not starting, check the Docker daemon logs:
+   ```bash
+   docker system events
+   ```

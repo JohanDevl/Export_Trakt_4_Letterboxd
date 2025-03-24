@@ -44,8 +44,14 @@ setup() {
 
 # Clean up after each test
 teardown() {
-    # Remove the temporary directory
-    rm -rf "${TEST_TEMP_DIR}"
+    # Remove the temporary directory contents first
+    if [ -d "${TEST_TEMP_DIR}" ]; then
+        # First try to remove all contents
+        find "${TEST_TEMP_DIR}" -mindepth 1 -delete 2>/dev/null
+        
+        # Then try to remove the directory itself
+        rmdir "${TEST_TEMP_DIR}" 2>/dev/null || true
+    fi
 }
 
 # Helper function to create a mock config file

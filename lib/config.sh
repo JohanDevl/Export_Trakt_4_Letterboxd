@@ -26,10 +26,23 @@ init_temp_dir() {
     local temp_dir="$1"
     local log_file="$2"
     
-    # Use the user's temporary directory
-    rm -rf "$temp_dir"
-    mkdir -p "$temp_dir"
-    echo "Created temporary directory: $temp_dir" | tee -a "${log_file}"
+    # Create directory if it doesn't exist
+    if [ ! -d "$temp_dir" ]; then
+        mkdir -p "$temp_dir"
+        echo "Created temporary directory: $temp_dir" | tee -a "${log_file}"
+    else
+        # Only remove the contents, not the directory itself
+        echo "Cleaning temporary directory: $temp_dir" | tee -a "${log_file}"
+        find "$temp_dir" -mindepth 1 -delete 2>/dev/null || {
+            # If find fails, try a more aggressive approach
+            chmod -R 777 "$temp_dir" 2>/dev/null
+            find "$temp_dir" -mindepth 1 -delete 2>/dev/null || echo "Warning: Could not clean temporary directory completely" | tee -a "${log_file}"
+        }
+    fi
+    
+    # Ensure directory has proper permissions
+    chmod -R 777 "$temp_dir" 2>/dev/null || echo "Warning: Could not set permissions on temporary directory" | tee -a "${log_file}"
+    echo "Temporary directory ready: $temp_dir" | tee -a "${log_file}"
 }
 
 # Ensure required directories exist
