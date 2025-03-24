@@ -510,23 +510,44 @@ else
             TIMESTAMP=$(date '+%Y-%m-%d_%H-%M-%S')
             LOG_FILE="/app/logs/cron_export_${TIMESTAMP}.log"
             
-            log_message "INFO" "Running scheduled export at $TIMESTAMP"
+            # Create a more visual log header
+            log_message "INFO" "🔄 ==================== SCHEDULED EXPORT START ===================="
+            log_message "INFO" "📅 Date: $(date '+%Y-%m-%d') ⏰ Time: $(date '+%H:%M:%S')"
+            log_message "INFO" "📋 Export option: ${EXPORT_OPTION}"
+            log_message "INFO" "📝 Log file: ${LOG_FILE}"
+            log_message "INFO" "🔄 =========================================================="
             
             # Run the export script and log output
+            log_message "INFO" "🚀 Launching export script..."
+            START_TIME=$(date +%s)
             /app/Export_Trakt_4_Letterboxd.sh $EXPORT_OPTION > "$LOG_FILE" 2>&1
+            EXIT_CODE=$?
+            END_TIME=$(date +%s)
+            DURATION=$((END_TIME - START_TIME))
+            
+            # Log completion with duration and status
+            if [ $EXIT_CODE -eq 0 ]; then
+                log_message "SUCCESS" "✅ Export completed successfully in ${DURATION}s"
+            else
+                log_message "ERROR" "❌ Export failed with exit code ${EXIT_CODE} after ${DURATION}s"
+            fi
             
             # Calculate time until next run - capture the output in a variable
             SLEEP_SECONDS=$(calculate_next_run "$CRON_SCHEDULE")
             
-            # Log details about timing to a separate file
+            # Calculer la date/heure de la prochaine exécution de manière compatible avec Alpine Linux (BusyBox)
+            NEXT_RUN_TIME=$(date -d "@$(($(date +%s) + SLEEP_SECONDS))" '+%Y-%m-%d %H:%M:%S' 2>/dev/null || date "+%Y-%m-%d %H:%M:%S" -d "@$(($(date +%s) + SLEEP_SECONDS))" 2>/dev/null || echo "dans ${SLEEP_SECONDS}s")
+            
+            # Log details about timing with visual elements
             if [ "$SLEEP_SECONDS" -ge 3600 ]; then
                 HOURS=$((SLEEP_SECONDS / 3600))
                 MINUTES=$(((SLEEP_SECONDS % 3600) / 60))
-                log_message "INFO" "Scheduled export completed, next run in ${HOURS}h ${MINUTES}m"
+                log_message "INFO" "⏱️ Next run in ${HOURS}h ${MINUTES}m (at ${NEXT_RUN_TIME})"
             else
                 MINUTES=$((SLEEP_SECONDS / 60))
-                log_message "INFO" "Scheduled export completed, next run in ${MINUTES} minutes"
+                log_message "INFO" "⏱️ Next run in ${MINUTES} minutes (at ${NEXT_RUN_TIME})"
             fi
+            log_message "INFO" "🔄 ==================== SCHEDULED EXPORT END ====================="
             
             # Wait for the next interval
             sleep $SLEEP_SECONDS
