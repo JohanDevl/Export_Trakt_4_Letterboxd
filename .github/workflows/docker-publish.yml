@@ -6,17 +6,18 @@ name: Docker
 # documentation.
 
 on:
-  # Trigger this workflow after the Docker Test workflow completes
-  workflow_run:
-    workflows: ["Docker Image Test"]
-    types:
-      - completed
-    branches: ["develop", "main"]
-
-  # Keep tag-based triggers for releases
+  # Watch for pushes to branches and tags
   push:
-    # Publish semver tags as releases.
+    branches: ["main", "develop"]
     tags: ["v*.*.*"]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "LICENSE"
+
+  # Watch for pull requests to main and develop branches
+  pull_request:
+    branches: ["main", "develop"]
     paths-ignore:
       - "**/*.md"
       - "docs/**"
@@ -30,10 +31,6 @@ env:
 
 jobs:
   build:
-    # Only run if:
-    # - The event is a workflow_run on develop branch and the test workflow succeeded
-    # - This was triggered by a tag
-    if: ${{ (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') || startsWith(github.ref, 'refs/tags/') }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -45,13 +42,11 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          # For workflow_run, checkout the merged PR code
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       # Install the cosign tool except on PR
       # https://github.com/sigstore/cosign-installer
       - name: Install cosign
+        if: github.event_name != 'pull_request'
         uses: sigstore/cosign-installer@59acb6260d9c0ba8f4a2f9d9b48431a222b68e20 #v3.5.0
         with:
           cosign-release: "v2.2.4"
@@ -79,16 +74,17 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=schedule
-            type=ref,event=branch
-            type=ref,event=pr
+            # For PR builds, use PR-#
+            type=ref,event=pr,prefix=PR-
+            # For semver tags
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
-            type=sha
-            # Always add latest tag for main branch and version tags
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v') }}
-            # Add develop tag for develop branch
+            # For branch-based tagging
+            type=ref,event=branch
+            # Add 'latest' tag for main branch
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            # Add 'develop' tag for develop branch
             type=raw,value=develop,enable=${{ github.ref == 'refs/heads/develop' }}
 
       # Build and push Docker image with Buildx
@@ -107,6 +103,7 @@ jobs:
 
       # Export Docker image for release
       - name: Export Docker image
+        if: github.event_name != 'pull_request'
         run: |
           mkdir -p /tmp/release
           gzip -c /tmp/docker-image.tar > /tmp/release/docker-image.tar.gz
@@ -117,6 +114,7 @@ jobs:
       # transparency data even for private images, pass --force to cosign below.
       # https://github.com/sigstore/cosign
       - name: Sign the published Docker image
+        if: github.event_name != 'pull_request'
         env:
           # https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions#using-an-intermediate-environment-variable
           TAGS: ${{ steps.meta.outputs.tags }}
