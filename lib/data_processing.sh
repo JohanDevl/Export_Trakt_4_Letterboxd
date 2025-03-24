@@ -9,13 +9,38 @@ create_ratings_lookup() {
     local output_file="$2"
     local log_file="$3"
     
-    if [ -f "$ratings_file" ]; then
+    if [ -f "$ratings_file" ] && [ -s "$ratings_file" ]; then
         echo "DEBUG: Creating ratings lookup file..." | tee -a "${log_file}"
-        jq -c 'reduce .[] as $item ({}; .[$item.movie.ids.trakt | tostring] = $item.rating)' "$ratings_file" > "$output_file"
+        
+        # Verify JSON is valid before processing
+        if ! jq empty "$ratings_file" 2>/dev/null; then
+            echo "⚠️ WARNING: Invalid JSON in ratings file, creating empty lookup" | tee -a "${log_file}"
+            echo "{}" > "$output_file"
+            return 1
+        fi
+        
+        # Ensure output directory exists
+        local output_dir=$(dirname "$output_file")
+        mkdir -p "$output_dir" 2>/dev/null
+        
+        # Create the lookup with proper error handling
+        if ! jq -c 'reduce .[] as $item ({}; .[$item.movie.ids.trakt | tostring] = $item.rating)' "$ratings_file" > "$output_file" 2>/dev/null; then
+            echo "⚠️ WARNING: Failed to process ratings file, creating empty lookup" | tee -a "${log_file}"
+            echo "{}" > "$output_file"
+            return 1
+        fi
+        
+        # Verify the lookup file was created successfully
+        if [ ! -s "$output_file" ]; then
+            echo "⚠️ WARNING: Ratings lookup file is empty, creating basic JSON" | tee -a "${log_file}"
+            echo "{}" > "$output_file"
+            return 1
+        fi
+        
         return 0
     else
+        echo "WARNING: Ratings file not found or empty, creating empty lookup" | tee -a "${log_file}"
         echo "{}" > "$output_file"
-        echo "WARNING: Ratings file not found, creating empty lookup" | tee -a "${log_file}"
         return 1
     fi
 }
@@ -26,13 +51,38 @@ create_plays_count_lookup() {
     local output_file="$2"
     local log_file="$3"
     
-    if [ -f "$watched_file" ]; then
+    if [ -f "$watched_file" ] && [ -s "$watched_file" ]; then
         echo "DEBUG: Creating plays count lookup from watched_movies..." | tee -a "${log_file}"
-        jq -c 'reduce .[] as $item ({}; if $item.movie.ids.imdb != null then .[$item.movie.ids.imdb] = $item.plays else . end)' "$watched_file" > "$output_file"
+        
+        # Verify JSON is valid before processing
+        if ! jq empty "$watched_file" 2>/dev/null; then
+            echo "⚠️ WARNING: Invalid JSON in watched file, creating empty lookup" | tee -a "${log_file}"
+            echo "{}" > "$output_file"
+            return 1
+        fi
+        
+        # Ensure output directory exists
+        local output_dir=$(dirname "$output_file")
+        mkdir -p "$output_dir" 2>/dev/null
+        
+        # Create the lookup with proper error handling
+        if ! jq -c 'reduce .[] as $item ({}; if $item.movie.ids.trakt != null then .[$item.movie.ids.trakt | tostring] = $item.plays else . end)' "$watched_file" > "$output_file" 2>/dev/null; then
+            echo "⚠️ WARNING: Failed to process watched file, creating empty lookup" | tee -a "${log_file}"
+            echo "{}" > "$output_file"
+            return 1
+        fi
+        
+        # Verify the lookup file was created successfully
+        if [ ! -s "$output_file" ]; then
+            echo "⚠️ WARNING: Plays count lookup file is empty, creating basic JSON" | tee -a "${log_file}"
+            echo "{}" > "$output_file"
+            return 1
+        fi
+        
         return 0
     else
+        echo "WARNING: Watched movies file not found or empty, creating empty lookup" | tee -a "${log_file}"
         echo "{}" > "$output_file"
-        echo "WARNING: Watched movies file not found, creating empty lookup" | tee -a "${log_file}"
         return 1
     fi
 }
@@ -237,16 +287,34 @@ process_watched_movies() {
         return 1
     fi
     
+    # Check if ratings_lookup exists to avoid jq errors
+    local ratings_param=""
+    if [ -f "$ratings_lookup" ]; then
+        ratings_param="--slurpfile ratings $ratings_lookup"
+    else
+        echo "⚠️ WARNING: Ratings lookup file not found, proceeding without ratings" | tee -a "${log_file}"
+    fi
+    
     if [ "$is_fallback" = "true" ]; then
         echo "DEBUG: No history found. Processing watched_movies file with ratings..." | tee -a "${log_file}"
         
-        # Extract watched movies with their date and rating
-        jq -r --slurpfile ratings "$ratings_lookup" '.[] | 
-            [.movie.title, .movie.year, .movie.ids.imdb, .movie.ids.tmdb, 
-             (if .last_watched_at then .last_watched_at | split("T")[0] else "" end),
-             ($ratings[0][.movie.ids.trakt | tostring] // ""),
-             (if .plays > 1 then "true" else "false" end)] | 
-            @csv' "$watched_file" > "$raw_output_file"
+        # Extract watched movies with their date and rating - safely handle missing ratings file
+        if [ -n "$ratings_param" ]; then
+            jq -r "$ratings_param" '.[] | 
+                [.movie.title, .movie.year, .movie.ids.imdb, .movie.ids.tmdb, 
+                 (if .last_watched_at then .last_watched_at | split("T")[0] else "" end),
+                 ($ratings[0][.movie.ids.trakt | tostring] // ""),
+                 (if .plays > 1 then "true" else "false" end)] | 
+                @csv' "$watched_file" > "$raw_output_file"
+        else
+            # Process without ratings if ratings file is missing
+            jq -r '.[] | 
+                [.movie.title, .movie.year, .movie.ids.imdb, .movie.ids.tmdb, 
+                 (if .last_watched_at then .last_watched_at | split("T")[0] else "" end),
+                 "",
+                 (if .plays > 1 then "true" else "false" end)] | 
+                @csv' "$watched_file" > "$raw_output_file"
+        fi
         
         # Process the CSV line by line to properly format
         cat "$raw_output_file" | while IFS=, read -r title year imdb tmdb date rating rewatch; do
@@ -263,13 +331,23 @@ process_watched_movies() {
         # Extract all movie IDs from existing CSV to avoid duplicates
         awk -F, '{print $3}' "$output_csv" | sed 's/"//g' > "$existing_ids_file"
         
-        # Use watched count from the API for rewatch status
-        jq -r --slurpfile ratings "$ratings_lookup" '.[] | 
-            [.movie.title, .movie.year, .movie.ids.imdb, .movie.ids.tmdb, 
-             (if .last_watched_at then .last_watched_at | split("T")[0] else "" end),
-             ($ratings[0][.movie.ids.trakt | tostring] // ""),
-             (if .plays > 1 then "true" else "false" end)] | 
-            @csv' "$watched_file" > "$raw_output_file"
+        # Use watched count from the API for rewatch status - safely handle missing ratings file
+        if [ -n "$ratings_param" ]; then
+            jq -r "$ratings_param" '.[] | 
+                [.movie.title, .movie.year, .movie.ids.imdb, .movie.ids.tmdb, 
+                 (if .last_watched_at then .last_watched_at | split("T")[0] else "" end),
+                 ($ratings[0][.movie.ids.trakt | tostring] // ""),
+                 (if .plays > 1 then "true" else "false" end)] | 
+                @csv' "$watched_file" > "$raw_output_file"
+        else
+            # Process without ratings if ratings file is missing
+            jq -r '.[] | 
+                [.movie.title, .movie.year, .movie.ids.imdb, .movie.ids.tmdb, 
+                 (if .last_watched_at then .last_watched_at | split("T")[0] else "" end),
+                 "",
+                 (if .plays > 1 then "true" else "false" end)] | 
+                @csv' "$watched_file" > "$raw_output_file"
+        fi
         
         # Process the CSV line by line, only adding movies not already in the history
         cat "$raw_output_file" | while IFS=, read -r title year imdb tmdb date rating rewatch; do
