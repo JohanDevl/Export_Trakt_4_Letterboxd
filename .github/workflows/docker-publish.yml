@@ -24,7 +24,7 @@ on:
 
   # Allow builds on PRs but without publishing
   pull_request:
-    branches: ["main", "develop"]
+    branches: ["main"]
     paths-ignore:
       - "**/*.md"
       - "docs/**"
@@ -39,9 +39,9 @@ env:
 jobs:
   build:
     # Only run if:
-    # - The test workflow succeeded after a push to main/develop
+    # - The test workflow succeeded after a push to develop or PR to main
     # - This was triggered by a tag
-    # - This is a pull request (to verify build without publishing)
+    # - This is a pull request to main (to verify build without publishing)
     if: ${{ (github.event.workflow_run.conclusion == 'success' && github.event_name == 'workflow_run') || startsWith(github.ref, 'refs/tags/') || github.event_name == 'pull_request' }}
     runs-on: ubuntu-latest
     permissions:
