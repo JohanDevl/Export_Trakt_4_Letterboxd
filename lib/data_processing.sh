@@ -223,53 +223,104 @@ limit_movies_in_csv() {
     # Default to no limit if LIMIT_FILMS is not set
     local limit=${LIMIT_FILMS:-0}
     
+    # Check if input file exists and is not empty
+    if [ ! -f "$input_csv" ]; then
+        echo "❌ ERROR: Input CSV file does not exist: $input_csv" | tee -a "${log_file}"
+        return 1
+    fi
+    
+    # Ensure input file has a header
+    local header="Title,Year,imdbID,tmdbID,WatchedDate,Rating10,Rewatch"
+    local first_line=$(head -n 1 "$input_csv")
+    
+    # Create a temporary file for processing
+    local temp_input_csv="${input_csv}.with_header"
+    
+    # If the first line is not the expected header, add it
+    if [ "$first_line" != "$header" ]; then
+        echo "⚠️ CSV file is missing header, adding it..." | tee -a "${log_file}"
+        echo "$header" > "$temp_input_csv"
+        cat "$input_csv" >> "$temp_input_csv"
+    else
+        cp "$input_csv" "$temp_input_csv"
+    fi
+    
     # Check if limit is a positive number
     if [[ "$limit" =~ ^[0-9]+$ ]] && [ "$limit" -gt 0 ]; then
         echo "🎯 Limiting CSV to the most recent $limit movies..." | tee -a "${log_file}"
         
-        # Create a temporary file for the limited content
+        # Create temporary files for processing
         local temp_csv="${input_csv}.limited"
-        local sorted_csv="${input_csv}.sorted"
+        local prep_csv="${input_csv}.prep"
         
-        # Keep header line
-        head -n 1 "$input_csv" > "$temp_csv"
+        # Keep header line in output
+        echo "$header" > "$temp_csv"
         
-        # Debug: Show some sample dates from the file
+        # Show sample of dates in the file for debugging
         echo "🔍 Sample of watch dates in CSV:" | tee -a "${log_file}"
-        tail -n +2 "$input_csv" | cut -d, -f5 | sort | uniq | head -n 5 | tee -a "${log_file}"
+        tail -n +2 "$temp_input_csv" | cut -d, -f5 | tr -d '"' | sort | uniq | head -n 5 | tee -a "${log_file}"
         
-        # Process and sort the CSV properly with awareness of the date format
-        # 1. Skip header line
-        # 2. For empty dates, set to 1970-01-01 to ensure they sort last
-        # 3. Sort by date field (column 5) in reverse order to get newest first
-        # 4. Limit to the specified number of entries
-        awk -F, 'NR>1 {
-            # If the date field is empty or invalid, set it to oldest date
-            if ($5 == "" || $5 ~ /^""$/) {
-                $5 = "\"1970-01-01\""
-            }
-            print $0
-        }' "$input_csv" | sort -t, -k5,5r | head -n "$limit" >> "$temp_csv"
+        # Count lines from input (minus header if present)
+        local input_count=$(tail -n +2 "$temp_input_csv" | wc -l)
+        echo "📊 Total movies before limiting: $input_count" | tee -a "${log_file}"
+        
+        echo "# Preprocessing dates for sorting..." | tee -a "${log_file}"
+        
+        # Create a preprocessed CSV with validated dates
+        # Skip the header as we'll add it back later
+        tail -n +2 "$temp_input_csv" | while IFS=, read -r title year imdb tmdb date rating rewatch; do
+            # Clean the date (remove quotes)
+            clean_date=$(echo "$date" | tr -d '"')
+            
+            # Check if the date is in YYYY-MM-DD format
+            if [[ "$clean_date" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+                # Valid ISO date - use it as is
+                echo "${title},${year},${imdb},${tmdb},\"${clean_date}\",${rating},${rewatch}" >> "$prep_csv"
+            else
+                # Invalid or empty date - use old date to sort at the end
+                echo "${title},${year},${imdb},${tmdb},\"1970-01-01\",${rating},${rewatch}" >> "$prep_csv"
+                echo "⚠️ Invalid date format found: '$date' for movie: $title. Using default." | tee -a "${log_file}"
+            fi
+        done
+        
+        # Sort by date in reverse order and take only the top N entries
+        echo "# Sorting movies by date (newest first)..." | tee -a "${log_file}"
+        if [ -f "$prep_csv" ]; then
+            cat "$prep_csv" | sort -t, -k5,5r | head -n "$limit" >> "$temp_csv"
+        else
+            echo "⚠️ No valid data to process after preprocessing" | tee -a "${log_file}"
+        fi
         
         # Move the limited file to the output
-        mv "$temp_csv" "$output_csv"
+        cp "$temp_csv" "$output_csv"
         
         # Count final movies
-        local final_lines=$(wc -l < "$output_csv")
-        local final_movies=$((final_lines - 1))
-        echo "📊 Keeping only the $final_movies most recent movies" | tee -a "${log_file}"
+        local final_count=$(tail -n +2 "$output_csv" | wc -l)
+        echo "📊 Keeping only the $final_count most recent movies" | tee -a "${log_file}"
         
         # Debug: Show the dates that were kept
         echo "📅 Watch dates of kept movies (newest first):" | tee -a "${log_file}"
-        tail -n +2 "$output_csv" | cut -d, -f1,5 | head -n 10 | tee -a "${log_file}"
+        echo "---------------------------------------------" | tee -a "${log_file}"
+        # Print the first 10 entries with title and date
+        tail -n +2 "$output_csv" | head -n 10 | while IFS=, read -r title year imdb tmdb date rating rewatch; do
+            echo "Film: $title - Date: $date" | tee -a "${log_file}"
+        done
+        echo "---------------------------------------------" | tee -a "${log_file}"
+        
+        # Clean up
+        rm -f "$temp_input_csv" "$temp_csv" "$prep_csv"
         
         return 0
     else
         # No limit needed
         echo "📊 No movie limit applied (LIMIT_FILMS=$limit)" | tee -a "${log_file}"
-        if [ "$input_csv" != "$output_csv" ]; then
-            cp "$input_csv" "$output_csv"
-        fi
+        
+        # Just ensure header and copy
+        cp "$temp_input_csv" "$output_csv"
+        
+        # Clean up
+        rm -f "$temp_input_csv"
+        
         return 0
     fi
 }
