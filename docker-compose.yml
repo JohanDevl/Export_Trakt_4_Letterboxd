@@ -44,8 +44,33 @@ services:
       - ./backup:/app/backup
     environment:
       - TZ=Europe/Paris
+      - CRON_SCHEDULE=* * * * *
+      - EXPORT_OPTION=normal
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "/app/docker-entrypoint.sh", "healthcheck"]
+      interval: 1m
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # Service that runs on a schedule using cron
+  trakt-export-scheduled-repo:
+    #image: ghcr.io/johandevl/export_trakt_4_letterboxd:pr-29
+    build:
+      context: .
+      args:
+        - APP_VERSION=dev
+    container_name: trakt-export-scheduled-repo
+    volumes:
+      - ./config:/app/config
+      - ./logs:/app/logs
+      - ./copy:/app/copy
+      - ./backup:/app/backup
+    environment:
+      - TZ=Europe/Paris
       # Run every day at 3 AM
-      - CRON_SCHEDULE=0 3 * * *
+      - CRON_SCHEDULE=* * * * *
       - EXPORT_OPTION=normal
     restart: unless-stopped
     healthcheck:

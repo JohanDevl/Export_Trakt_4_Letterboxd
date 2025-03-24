@@ -267,6 +267,7 @@ log_message "DEBUG" "Environment variables:"
 log_message "DEBUG" "- TZ: ${TZ:-Not set}"
 log_message "DEBUG" "- CRON_SCHEDULE: ${CRON_SCHEDULE:-Not set}"
 log_message "DEBUG" "- EXPORT_OPTION: ${EXPORT_OPTION:-Not set}"
+log_message "DEBUG" "- LIMIT_FILMS: ${LIMIT_FILMS:-Not set}"
 
 # Create config directory if it doesn't exist
 mkdir -p /app/config
@@ -520,6 +521,13 @@ else
             # Run the export script and log output
             log_message "INFO" "🚀 Launching export script..."
             START_TIME=$(date +%s)
+            
+            # Pass the LIMIT_FILMS parameter if set
+            if [ -n "$LIMIT_FILMS" ]; then
+                log_message "INFO" "🎯 Limiting to ${LIMIT_FILMS} films"
+                export LIMIT_FILMS
+            fi
+            
             /app/Export_Trakt_4_Letterboxd.sh $EXPORT_OPTION > "$LOG_FILE" 2>&1
             EXIT_CODE=$?
             END_TIME=$(date +%s)
@@ -531,6 +539,7 @@ else
                 local total_films=0
                 local csv_found=false
                 local report=""
+                local raw_count=0
                 
                 # Define all possible CSV files to check
                 local csv_files=(
@@ -541,16 +550,48 @@ else
                     "/app/copy/trakt_ratings.csv"
                 )
                 
+                # Check for raw output file
+                if [ -f "/app/TEMP/watched_raw_output.csv" ]; then
+                    raw_count=$(($(wc -l < "/app/TEMP/watched_raw_output.csv") - 1))
+                    log_message "INFO" "📊 Raw Trakt data: ${raw_count} films"
+                fi
+                
+                # Check other temp files to diagnose potential issues
+                local temp_files=(
+                    "/app/TEMP/watched_filtered_output.csv"
+                    "/app/TEMP/ratings_output.csv"
+                    "/app/TEMP/watchlist_output.csv"
+                    "/app/TEMP/shows_watched.csv"
+                )
+                
+                for temp_file in "${temp_files[@]}"; do
+                    if [ -f "$temp_file" ]; then
+                        local temp_count=$(($(wc -l < "$temp_file") - 1))
+                        local temp_name=$(basename "$temp_file")
+                        log_message "INFO" "📁 Temp file ${temp_name}: ${temp_count} entries"
+                    fi
+                done
+                
                 # Check each file and count lines (minus header)
                 for csv_file in "${csv_files[@]}"; do
                     if [ -f "$csv_file" ]; then
                         csv_found=true
                         # Get line count minus header line
                         local count=$(($(wc -l < "$csv_file") - 1))
-                        if [ $count -ge 0 ]; then
-                            local filename=$(basename "$csv_file")
-                            # Add to total and report
-                            total_films=$((total_films + count))
+                        local filename=$(basename "$csv_file")
+                        
+                        # Add to total and report
+                        total_films=$((total_films + count))
+                        
+                        # Check if this is letterboxd_import and raw_count exists
+                        if [[ "$filename" == "letterboxd_import.csv" ]] && [[ $raw_count -gt 0 ]]; then
+                            local diff=$((raw_count - count))
+                            if [ $diff -gt 0 ]; then
+                                report="${report}📊 ${filename}: ${count} films (${diff} films missing from raw data)\n"
+                            else
+                                report="${report}📊 ${filename}: ${count} films\n"
+                            fi
+                        else
                             report="${report}📊 ${filename}: ${count} films\n"
                         fi
                     fi
@@ -562,7 +603,7 @@ else
                     echo -e "$report" | sed '/^$/d' | while IFS= read -r line; do
                         log_message "INFO" "$line"
                     done
-                    log_message "INFO" "📊 Total: $total_films films"
+                    log_message "INFO" "📊 Total: $total_films films in export files"
                 else
                     log_message "WARN" "⚠️ No CSV files found to count films"
                 fi

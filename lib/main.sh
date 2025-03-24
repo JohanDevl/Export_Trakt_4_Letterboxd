@@ -339,6 +339,18 @@ process_data() {
     local final_csv="${temp_dir}/final_export.csv"
     deduplicate_movies "$csv_output" "$final_csv" "$log"
     
+    # Apply limit if LIMIT_FILMS is set or if mode is "normal"
+    local limited_csv="${temp_dir}/limited_export.csv"
+    
+    # Set default limit for normal mode if LIMIT_FILMS is not explicitly set
+    if [ "$option" = "normal" ] && [ -z "$LIMIT_FILMS" ]; then
+        export LIMIT_FILMS=10
+        echo "🎯 Normal mode: Automatically limiting to 10 most recent films" | tee -a "${log}"
+    fi
+    
+    limit_movies_in_csv "$final_csv" "$limited_csv" "$log"
+    final_csv="$limited_csv"
+    
     # Make sure the final CSV file was created
     if [ ! -f "$final_csv" ]; then
         echo "❌ ERROR: Final CSV file was not created in temp directory" | tee -a "${log}"
