@@ -37,6 +37,9 @@ env:
   GITHUB_REGISTRY: ghcr.io
   # github.repository as <account>/<repo>
   GITHUB_IMAGE_NAME: ${{ github.repository }}
+  # Docker Hub registry and image name
+  DOCKERHUB_REGISTRY: docker.io
+  DOCKERHUB_IMAGE_NAME: johandevl/export-trakt-4-letterboxd
 
 jobs:
   build:
@@ -111,13 +114,24 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Login against Docker Hub except on PR
+      - name: Log into Docker Hub
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@343f7c4344506bcbf9b4de18042ae17996df046d # v3.0.0
+        with:
+          registry: ${{ env.DOCKERHUB_REGISTRY }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
       # Extract metadata (tags, labels) for Docker
       # https://github.com/docker/metadata-action
-      - name: Extract Docker metadata for GitHub Container Registry
-        id: meta_github
+      - name: Extract Docker metadata
+        id: meta
         uses: docker/metadata-action@96383f45573cb7f253c731d3b3ab81c87ef81934 # v5.0.0
         with:
-          images: ${{ env.GITHUB_REGISTRY }}/${{ env.GITHUB_IMAGE_NAME }}
+          images: |
+            ${{ env.GITHUB_REGISTRY }}/${{ env.GITHUB_IMAGE_NAME }}
+            ${{ env.DOCKERHUB_REGISTRY }}/${{ env.DOCKERHUB_IMAGE_NAME }}
           tags: |
             # For PR builds, use PR-#
             type=ref,event=pr,prefix=PR-
@@ -140,8 +154,8 @@ jobs:
         with:
           context: .
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta_github.outputs.tags }}
-          labels: ${{ steps.meta_github.outputs.labels }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64,linux/arm64,linux/arm/v7
@@ -165,7 +179,7 @@ jobs:
           DIGEST: ${{ steps.digest.outputs.digest }}
         run: |
           echo "Skipping signing step to focus on successful publishing"
-          # for TAG in ${{ steps.meta_github.outputs.tags }}; do
+          # for TAG in ${{ steps.meta.outputs.tags }}; do
           #   echo "Signing image: ${TAG}@${DIGEST}"
           #   cosign sign --yes ${TAG}@${DIGEST} || echo "Warning: Failed to sign ${TAG}"
           # done
