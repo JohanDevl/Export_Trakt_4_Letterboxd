@@ -6,14 +6,14 @@ name: Docker
 # documentation.
 
 on:
-  # Trigger this workflow only after the Docker Test workflow completes successfully
+  # Trigger this workflow after the Docker Test workflow completes
   workflow_run:
     workflows: ["Docker Image Test"]
     types:
       - completed
-    branches: ["main", "develop"]
+    branches: ["develop"]
 
-  # Keep tag-based triggers
+  # Keep tag-based triggers for releases
   push:
     # Publish semver tags as releases.
     tags: ["v*.*.*"]
@@ -31,7 +31,7 @@ env:
 jobs:
   build:
     # Only run if:
-    # - The test workflow succeeded
+    # - The event is a workflow_run on develop branch and the test workflow succeeded
     # - This was triggered by a tag
     if: ${{ (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') || startsWith(github.ref, 'refs/tags/') }}
     runs-on: ubuntu-latest
@@ -46,7 +46,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          # For PRs through workflow_run, checkout the merged PR code
+          # For workflow_run, checkout the merged PR code
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       # Install the cosign tool except on PR
