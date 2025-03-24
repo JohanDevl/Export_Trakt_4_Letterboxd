@@ -21,6 +21,40 @@ show_version() {
     log_message "INFO" "Starting Export Trakt 4 Letterboxd container - Version: ${APP_VERSION:-unknown}"
 }
 
+# Health check HTTP server
+start_health_server() {
+    # Check if netcat-openbsd is installed
+    if ! command -v nc &> /dev/null; then
+        log_message "WARN" "Netcat not installed. Health server not available. Installing..."
+        if command -v apk &> /dev/null; then
+            apk add --no-cache netcat-openbsd
+        else
+            log_message "ERROR" "Package manager not found. Cannot install netcat."
+            return 1
+        fi
+    fi
+    
+    # Source the health check script
+    source /app/lib/health_check.sh
+
+    # Start health check server
+    log_message "INFO" "Starting health check server on port 8000"
+    
+    # Run in background
+    (
+        while true; do
+            echo -e "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n$(run_health_checks)" | nc -l -p 8000 -q 1
+        done
+    ) &
+    
+    # Store PID to kill server when container stops
+    HEALTH_SERVER_PID=$!
+    log_message "INFO" "Health check server started with PID: $HEALTH_SERVER_PID"
+    
+    # Register trap to kill server on exit
+    trap "log_message 'INFO' 'Stopping health check server'; kill $HEALTH_SERVER_PID 2>/dev/null || true" EXIT INT TERM
+}
+
 # Debug function for file and directory information
 debug_file_info() {
     local path="$1"
@@ -230,126 +264,35 @@ if grep -q '^API_KEY="YOUR_API_KEY_HERE"' /app/config/.config.cfg || \
     log_message "INFO" "You can get API credentials at https://trakt.tv/oauth/applications"
 fi
 
-# Check for CRON_SCHEDULE environment variable
-if [ -n "$CRON_SCHEDULE" ]; then
-    log_message "INFO" "Setting up cron job with schedule: $CRON_SCHEDULE"
+# Main entry point - Add this at the end of the file
+if [ "$1" = "healthcheck" ]; then
+    # Just run the health check and exit
+    source /app/lib/health_check.sh
+    run_health_checks
+    exit $?
+elif [ "$1" = "setup" ]; then
+    # Run the setup script
+    exec /app/setup_trakt.sh
+else
+    # Start health check server in background
+    start_health_server
     
-    # Create a simple wrapper script with visual logs
-    cat > /app/cron_wrapper.sh << 'EOF'
-#!/bin/bash
-# Simple wrapper for cron to provide visual logs
-
-START_TIME=$(date +"%Y-%m-%d %H:%M:%S")
-EXPORT_OPTION=${1:-normal}
-
-# Log to container stdout with friendly messages
-echo ""
-echo "======================================================================"
-echo "🎬 [CRON] Starting Trakt to Letterboxd Export at ${START_TIME} 🎬"
-echo "📊 Exporting your Trakt data with option '${EXPORT_OPTION}'..."
-echo "======================================================================"
-
-# Make sure any existing CSV file is removed
-CSV_LOCATIONS=(
-    "/app/copy/letterboxd_import.csv"
-    "/app/copy/copy/letterboxd_import.csv"
-    "/app/letterboxd_import.csv"
-    "./copy/letterboxd_import.csv"
-)
-
-for csv_path in "${CSV_LOCATIONS[@]}"; do
-    if [ -f "$csv_path" ]; then
-        echo "🗑️ Removing existing CSV file at: $csv_path"
-        rm -f "$csv_path"
-    fi
-done
-
-# Run the export script and capture exit code
-/app/Export_Trakt_4_Letterboxd.sh ${EXPORT_OPTION} > /app/logs/cron_export_$(date '+%Y-%m-%d_%H-%M-%S').log 2>&1
-EXIT_CODE=$?
-
-END_TIME=$(date +"%Y-%m-%d %H:%M:%S")
-
-# Check result and show friendly message
-if [ $EXIT_CODE -eq 0 ]; then
-    echo "======================================================================"
-    echo "✅ [CRON] Export completed successfully at ${END_TIME}"
-    
-    # Wait longer for file operations to complete
-    sleep 3
-    
-    # Search for the CSV file in multiple possible locations
-    CSV_FOUND=false
-    CSV_LOCATIONS=(
-        "/app/copy/letterboxd_import.csv"
-        "/app/copy/copy/letterboxd_import.csv"
-        "/app/letterboxd_import.csv"
-        "./copy/letterboxd_import.csv"
-    )
-    
-    for csv_path in "${CSV_LOCATIONS[@]}"; do
-        if [ -f "$csv_path" ]; then
-            CSV_FOUND=true
-            CSV_FILE="$csv_path"
-            
-            # Copy it to the standard location if not already there
-            if [ "$csv_path" != "/app/copy/letterboxd_import.csv" ]; then
-                cp -v "$csv_path" "/app/copy/letterboxd_import.csv"
-                CSV_FILE="/app/copy/letterboxd_import.csv"
-            fi
-            break
-        fi
-    done
-    
-    # Show CSV file info if it exists
-    if [ "$CSV_FOUND" = true ]; then
-        echo "🎉 Your Letterboxd import file is ready in the copy directory!"
-        MOVIES_COUNT=$(wc -l < "$CSV_FILE")
-        MOVIES_COUNT=$((MOVIES_COUNT - 1))  # Subtract header row
-        echo "📋 Exported ${MOVIES_COUNT} movies to CSV file"
-        echo "📂 File: /app/copy/letterboxd_import.csv ($(du -h "$CSV_FILE" | cut -f1) size)"
+    # Run the export script based on cron schedule or directly
+    if [ -n "$CRON_SCHEDULE" ]; then
+        log_message "INFO" "Setting up cron job with schedule: $CRON_SCHEDULE"
+        
+        # Create cron file
+        echo "$CRON_SCHEDULE /app/Export_Trakt_4_Letterboxd.sh $EXPORT_OPTION >> $LOG 2>&1" > /tmp/crontab
+        
+        # Install cron file
+        crontab /tmp/crontab
+        
+        # Start cron in foreground
+        log_message "INFO" "Starting cron daemon in foreground"
+        exec crond -f -l 8
     else
-        echo "⚠️ No CSV file was created. Check the logs for errors."
+        # Run script once
+        log_message "INFO" "Running export script once with option: $EXPORT_OPTION"
+        exec /app/Export_Trakt_4_Letterboxd.sh "$EXPORT_OPTION"
     fi
-    echo "======================================================================"
-    echo ""
-else
-    echo "======================================================================"
-    echo "❌ [CRON] Export failed with exit code ${EXIT_CODE} at ${END_TIME}"
-    echo "⚠️ Please check the logs for errors: /app/logs/cron_export_*.log"
-    echo "======================================================================"
-    echo ""
-fi
-
-exit $EXIT_CODE
-EOF
-    
-    # Make the wrapper script executable
-    chmod +x /app/cron_wrapper.sh
-    log_message "SUCCESS" "Created visual log wrapper script"
-    
-    # Ensure cron.d directory exists
-    mkdir -p /etc/cron.d
-    
-    # Create the crontab file to execute the wrapper script
-    cat > /etc/crontab << EOF
-# Trakt Export Cron Job
-$CRON_SCHEDULE /app/cron_wrapper.sh ${EXPORT_OPTION:-normal}
-# Empty line required at the end
-
-EOF
-    
-    # Install the cron job
-    chmod 0644 /etc/crontab
-    crontab /etc/crontab
-    log_message "SUCCESS" "Cron job installed with schedule: $CRON_SCHEDULE"
-    
-    # Start crond in the foreground
-    log_message "INFO" "Starting crond in the foreground"
-    exec crond -f
-else
-    log_message "INFO" "No cron schedule specified. Running export script once with option: ${EXPORT_OPTION:-normal}"
-    
-    # Run the export script once
-    exec /app/Export_Trakt_4_Letterboxd.sh "${EXPORT_OPTION:-normal}"
 fi 

@@ -1,8 +1,14 @@
-version: "3"
+version: "3.8"
 
 services:
+  # Default service - runs once and exits
   trakt-export:
-    build: .
+    build:
+      context: .
+      args:
+        - APP_VERSION=dev
+        - BUILD_DATE=${BUILD_DATE:-unknown}
+        - VCS_REF=${VCS_REF:-unknown}
     container_name: trakt-export
     volumes:
       - ./config:/app/config
@@ -11,7 +17,83 @@ services:
       - ./backup:/app/backup
     environment:
       - TZ=Europe/Paris
-      - CRON_SCHEDULE=* * * * *
+      # Leave CRON_SCHEDULE empty to run once and exit
       - EXPORT_OPTION=complete
+    restart: "no"
     stdin_open: true
     tty: true
+    healthcheck:
+      test: ["CMD", "/app/docker-entrypoint.sh", "healthcheck"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+
+  # Service that runs on a schedule using cron
+  trakt-export-scheduled:
+    profiles: ["scheduled"]
+    build:
+      context: .
+      args:
+        - APP_VERSION=dev
+    container_name: trakt-export-scheduled
+    volumes:
+      - ./config:/app/config
+      - ./logs:/app/logs
+      - ./copy:/app/copy
+      - ./backup:/app/backup
+    environment:
+      - TZ=Europe/Paris
+      # Run every day at 3 AM
+      - CRON_SCHEDULE=0 3 * * *
+      - EXPORT_OPTION=normal
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "/app/docker-entrypoint.sh", "healthcheck"]
+      interval: 1m
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # Example with all configuration passed via environment variables
+  trakt-export-env:
+    profiles: ["env-config"]
+    image: johandevl/export-trakt-4-letterboxd:latest
+    container_name: trakt-export-env
+    volumes:
+      - trakt_logs:/app/logs
+      - trakt_copy:/app/copy
+      - trakt_backup:/app/backup
+    environment:
+      - TZ=Europe/Paris
+      - API_KEY=${TRAKT_API_KEY}
+      - API_SECRET=${TRAKT_API_SECRET}
+      - ACCESS_TOKEN=${TRAKT_ACCESS_TOKEN}
+      - REFRESH_TOKEN=${TRAKT_REFRESH_TOKEN}
+      - USERNAME=${TRAKT_USERNAME}
+      - CRON_SCHEDULE=0 3 * * *
+      - EXPORT_OPTION=normal
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "/app/docker-entrypoint.sh", "healthcheck"]
+      interval: 1m
+      timeout: 10s
+      retries: 3
+
+  # Setup command - use this to run the initial setup
+  trakt-setup:
+    profiles: ["setup"]
+    build: .
+    container_name: trakt-setup
+    volumes:
+      - ./config:/app/config
+    environment:
+      - TZ=Europe/Paris
+    entrypoint: ["/app/docker-entrypoint.sh", "setup"]
+    stdin_open: true # Needed for interactive prompts
+    tty: true # Needed for interactive prompts
+
+volumes:
+  trakt_logs:
+  trakt_copy:
+  trakt_backup:
