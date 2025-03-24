@@ -124,8 +124,8 @@ create_plays_count_lookup() {
         local output_dir=$(dirname "$output_file")
         mkdir -p "$output_dir" 2>/dev/null
         
-        # Create the lookup with proper error handling
-        if ! jq -c 'reduce .[] as $item ({}; if $item.movie.ids.trakt != null then .[$item.movie.ids.trakt | tostring] = $item.plays else . end)' "$watched_file" > "$output_file" 2>/dev/null; then
+        # Create the lookup with proper error handling - using IMDB ID as key
+        if ! jq -c 'reduce .[] as $item ({}; if $item.movie.ids.imdb != null then .[$item.movie.ids.imdb] = $item.plays else . end)' "$watched_file" > "$output_file" 2>/dev/null; then
             echo "⚠️ WARNING: Failed to process watched file, creating empty lookup" | tee -a "${log_file}"
             echo "{}" > "$output_file"
             return 1
