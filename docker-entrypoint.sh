@@ -444,17 +444,37 @@ else
     
     # Run the export script based on cron schedule or directly
     if [ -n "$CRON_SCHEDULE" ]; then
-        log_message "INFO" "Setting up cron job with schedule: $CRON_SCHEDULE"
+        log_message "INFO" "Setting up scheduled task with interval: $CRON_SCHEDULE"
         
-        # Create cron file
-        echo "$CRON_SCHEDULE /app/Export_Trakt_4_Letterboxd.sh $EXPORT_OPTION >> $LOG 2>&1" > /tmp/crontab
+        # Extract minutes from cron schedule (we only support */X minutes format)
+        MINUTES=$(echo "$CRON_SCHEDULE" | grep -oE '^\*/[0-9]+' | cut -d'/' -f2)
         
-        # Install cron file
-        crontab /tmp/crontab
+        if [ -z "$MINUTES" ]; then
+            log_message "WARN" "Could not parse cron schedule, using default of 60 minutes"
+            MINUTES=60
+        fi
         
-        # Start cron in foreground
-        log_message "INFO" "Starting cron daemon in foreground"
-        exec crond -f -l 8
+        log_message "INFO" "Will run export every $MINUTES minutes"
+        
+        # Start health check server is already started in main script
+        # No need to call it again here
+        
+        # Run in a loop with the specified interval
+        while true; do
+            # Get current timestamp for log filename
+            TIMESTAMP=$(date '+%Y-%m-%d_%H-%M-%S')
+            LOG_FILE="/app/logs/cron_export_${TIMESTAMP}.log"
+            
+            log_message "INFO" "Running scheduled export at $TIMESTAMP"
+            
+            # Run the export script and log output
+            /app/Export_Trakt_4_Letterboxd.sh $EXPORT_OPTION > "$LOG_FILE" 2>&1
+            
+            log_message "INFO" "Scheduled export completed, next run in $MINUTES minutes"
+            
+            # Wait for the next interval
+            sleep $(( MINUTES * 60 ))
+        done
     else
         # Run script once
         log_message "INFO" "Running export script once with option: $EXPORT_OPTION"

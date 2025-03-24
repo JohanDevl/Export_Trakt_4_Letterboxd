@@ -13,7 +13,7 @@ COPY Export_Trakt_4_Letterboxd.sh setup_trakt.sh install.sh /build/
 
 # Make scripts executable
 RUN chmod +x /build/*.sh
-RUN find /build/lib -name "*.sh" -exec chmod +x {} \;
+RUN find /build/lib -name "*" -exec chmod +x {} \;
 
 # Final stage
 FROM alpine:3.19
@@ -34,7 +34,7 @@ LABEL org.opencontainers.image.version=$APP_VERSION \
       maintainer="JohanDevl"
 
 # Install required runtime packages (minimal set)
-RUN apk add --no-cache bash curl jq sed ca-certificates tzdata \
+RUN apk add --no-cache bash curl jq sed ca-certificates tzdata dcron \
     && addgroup -S appgroup && adduser -S appuser -G appgroup
 
 # Set working directory
@@ -49,7 +49,10 @@ RUN mkdir -p /app/backup /app/logs /app/copy /app/TEMP /app/config \
     && chmod +x /app/*.sh \
     && chmod -R 755 /app/lib \
     && chown -R appuser:appgroup /app/backup /app/logs /app/copy /app/TEMP /app/config \
-    && chmod -R 777 /app/TEMP
+    && chmod -R 777 /app/TEMP \
+    && mkdir -p /var/spool/cron/crontabs \
+    && touch /var/spool/cron/crontabs/root \
+    && chmod 600 /var/spool/cron/crontabs/root
 
 # Set environment variables
 ENV DOSLOG=/app/logs \
@@ -64,8 +67,8 @@ ENV DOSLOG=/app/logs \
 # Set volume for persistent data
 VOLUME ["/app/logs", "/app/copy", "/app/backup", "/app/config"]
 
-# Switch to non-root user
-USER appuser
+# Switch to non-root user for normal operation, but keep root for cron
+# USER appuser
 
 # Health check
 HEALTHCHECK --interval=1m --timeout=10s --start-period=30s --retries=3 \
