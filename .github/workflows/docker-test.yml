@@ -2,7 +2,7 @@ name: Docker Image Test
 
 on:
   pull_request:
-    branches: ["main"]
+    branches: ["main", "develop"]
     paths-ignore:
       - "**/*.md"
       - "docs/**"
