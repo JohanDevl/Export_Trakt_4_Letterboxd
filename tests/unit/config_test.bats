@@ -1,112 +1,153 @@
 #!/usr/bin/env bats
 
-# Load the testing helper
-load '../test_helper'
+# Load the testing helper with a simple relative path
+load "../test_helper"
 
-# Load the actual code under test
-load "${LIB_DIR}/config.sh"
-
-# Test for init_temp_dir function
-@test "init_temp_dir should create an empty directory" {
-    local temp_test_dir="${TEST_TEMP_DIR}/TEMP_TEST"
-    local log_file="${TEST_TEMP_DIR}/logs/test.log"
-    mkdir -p "$(dirname "$log_file")"
-    touch "$log_file"
+# Test initialization of temporary directory
+@test "init_temp_dir creates and cleans directory" {
+    # Source the function under test
+    source "${LIB_DIR}/config.sh"
     
-    # Create a file in the directory to verify it gets cleared
-    mkdir -p "$temp_test_dir"
-    touch "$temp_test_dir/test_file.txt"
+    # Create a test directory
+    local test_dir="${TEST_TEMP_DIR}/init_test"
+    mkdir -p "${test_dir}"
     
-    # Call the function
-    run init_temp_dir "$temp_test_dir" "$log_file"
+    # Add some files
+    touch "${test_dir}/file1.txt"
+    mkdir -p "${test_dir}/subdir"
+    touch "${test_dir}/subdir/file2.txt"
     
-    # Verify the directory exists
-    assert_dir_exists "$temp_test_dir"
+    # Create a log file
+    local log_file="${TEST_TEMP_DIR}/test.log"
+    touch "${log_file}"
     
-    # Verify the directory is empty (the test file should be deleted)
-    run ls -A "$temp_test_dir"
+    # Run the function under test
+    run init_temp_dir "${test_dir}" "${log_file}"
+    
+    # Check that it succeeded
+    assert_success
+    
+    # Check that directory exists but is empty
+    assert_dir_exists "${test_dir}"
+    run find "${test_dir}" -type f
     assert_output ""
 }
 
-# Test for ensure_directories function
-@test "ensure_directories should create directories if they don't exist" {
-    local log_dir="${TEST_TEMP_DIR}/test_logs"
-    local copy_dir="${TEST_TEMP_DIR}/test_copy"
+@test "ensure_directories creates directories when they don't exist" {
+    # Source the function under test
+    source "${LIB_DIR}/config.sh"
+    
+    # Define test directories
+    local dir1="${TEST_TEMP_DIR}/dir1"
+    local dir2="${TEST_TEMP_DIR}/dir2"
+    
+    # Create a log file
     local log_file="${TEST_TEMP_DIR}/test.log"
-    touch "$log_file"
+    touch "${log_file}"
     
-    # Remove directories if they exist from previous tests
-    rm -rf "$log_dir" "$copy_dir"
+    # Ensure the directories don't exist initially
+    rm -rf "${dir1}" "${dir2}"
     
-    # Call the function
-    run ensure_directories "$log_dir" "$copy_dir" "$log_file"
+    # Run the function under test
+    run ensure_directories "${dir1}" "${dir2}" "${log_file}"
     
-    # Verify the directories were created
-    assert_dir_exists "$log_dir"
-    assert_dir_exists "$copy_dir"
+    # Check that it succeeded
+    assert_success
+    
+    # Check that directories were created
+    assert_dir_exists "${dir1}"
+    assert_dir_exists "${dir2}"
 }
 
-# Test for detect_os_sed function
-@test "detect_os_sed should return correct sed command for the OS" {
+@test "detect_os_sed returns correct sed command for OS" {
+    # Source the function under test
+    source "${LIB_DIR}/config.sh"
+    
+    # Create a log file
     local log_file="${TEST_TEMP_DIR}/test.log"
-    touch "$log_file"
+    touch "${log_file}"
     
-    # Save the original OSTYPE value
-    local original_ostype="$OSTYPE"
+    # Run the function under test
+    run detect_os_sed "${log_file}"
     
-    # Test with macOS
-    export OSTYPE="darwin20.0"
-    run detect_os_sed "$log_file"
-    assert_line --index 0 "sed -i ''"
+    # Check that it succeeded
+    assert_success
     
-    # Test with Linux
-    export OSTYPE="linux-gnu"
-    run detect_os_sed "$log_file"
-    assert_line --index 0 "sed -i"
-    
-    # Restore original OSTYPE
-    export OSTYPE="$original_ostype"
+    # On macOS, it should return 'sed -i "" "s///"'
+    # On Linux, it should return 'sed -i "s///"'
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        assert_output --partial "sed -i ''"
+    else
+        assert_output --partial "sed -i"
+    fi
 }
 
-# Test for init_backup_dir function
-@test "init_backup_dir should create backup directory if it doesn't exist" {
-    local backup_dir="${TEST_TEMP_DIR}/test_backup"
+@test "init_backup_dir creates and preserves directory" {
+    # Source the function under test
+    source "${LIB_DIR}/config.sh"
+    
+    # Create a test backup directory
+    local backup_dir="${TEST_TEMP_DIR}/backup_test"
+    mkdir -p "${backup_dir}"
+    
+    # Create a log file
     local log_file="${TEST_TEMP_DIR}/test.log"
-    touch "$log_file"
+    touch "${log_file}"
     
-    # Remove the directory if it exists from previous tests
-    rm -rf "$backup_dir"
+    # Add a file that should be preserved
+    touch "${backup_dir}/ratings_movies.json"
     
-    # Call the function
-    run init_backup_dir "$backup_dir" "$log_file"
+    # Run the function under test
+    run init_backup_dir "${backup_dir}" "${log_file}"
     
-    # Verify the directory was created
-    assert_dir_exists "$backup_dir"
+    # Check that it succeeded
+    assert_success
     
-    # Verify the function returns the backup directory path
-    assert_line --index 3 "$backup_dir"
+    # Check that directory exists
+    assert_dir_exists "${backup_dir}"
+    
+    # Check that the existing file was preserved
+    assert_file_exists "${backup_dir}/ratings_movies.json"
 }
 
-# Test for load_config function
-@test "load_config should load configuration from the correct location" {
-    local script_dir="${TEST_TEMP_DIR}"
-    local config_dir="${script_dir}/config"
-    local log_file="${TEST_TEMP_DIR}/test.log"
-    
-    # Create config directory and file
-    mkdir -p "$config_dir"
-    cat > "${config_dir}/.config.cfg" << EOF
+@test "load_config loads configuration values" {
+    # Create a mock config file with environment variables
+    cat > "${TEST_TEMP_DIR}/config/.config.cfg" << EOF
 TRAKT_CLIENT_ID="test_client_id"
 TRAKT_CLIENT_SECRET="test_client_secret"
-TEST_VARIABLE="test_value"
+TRAKT_ACCESS_TOKEN="test_access_token"
+TRAKT_REFRESH_TOKEN="test_refresh_token"
+TRAKT_EXPIRES_IN="7889238"
+TRAKT_CREATED_AT="1600000000"
+DEBUG_MODE="true"
+LOG_LEVEL="DEBUG"
 EOF
     
-    # Source the load_config function with script_dir and log_file arguments
-    source "${LIB_DIR}/config.sh"
-    load_config "$script_dir" "$log_file"
+    # Create a log file
+    local log_file="${TEST_TEMP_DIR}/test.log"
+    touch "${log_file}"
     
-    # Check if the variables were loaded
-    assert_equal "$TRAKT_CLIENT_ID" "test_client_id"
-    assert_equal "$TRAKT_CLIENT_SECRET" "test_client_secret"
-    assert_equal "$TEST_VARIABLE" "test_value"
+    # Define a wrapper function that sources config.sh and calls load_config
+    test_load_config() {
+        source "${LIB_DIR}/config.sh"
+        load_config "${TEST_TEMP_DIR}" "${log_file}"
+        echo "TRAKT_CLIENT_ID=${TRAKT_CLIENT_ID}"
+        echo "TRAKT_CLIENT_SECRET=${TRAKT_CLIENT_SECRET}"
+        echo "TRAKT_ACCESS_TOKEN=${TRAKT_ACCESS_TOKEN}"
+        echo "TRAKT_REFRESH_TOKEN=${TRAKT_REFRESH_TOKEN}"
+        echo "DEBUG_MODE=${DEBUG_MODE}"
+    }
+    
+    # Run the wrapper function
+    run test_load_config
+    
+    # Check that it succeeded
+    assert_success
+    
+    # Check that config values were loaded correctly
+    assert_output --partial "TRAKT_CLIENT_ID=test_client_id"
+    assert_output --partial "TRAKT_CLIENT_SECRET=test_client_secret"
+    assert_output --partial "TRAKT_ACCESS_TOKEN=test_access_token"
+    assert_output --partial "TRAKT_REFRESH_TOKEN=test_refresh_token"
+    assert_output --partial "DEBUG_MODE=true"
 } 

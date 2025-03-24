@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 
-# Load the testing helper
-load '../test_helper'
+# Load the testing helper with a simple relative path
+load "../test_helper"
 
 # Load the mock API functions
 source "${TESTS_DIR}/mocks/trakt_api_mock.sh"

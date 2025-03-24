@@ -1,16 +1,26 @@
 #!/usr/bin/env bash
 
+# Determine directory containing this script
+TEST_HELPER_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+
 # Set up the test environment
-REPO_ROOT="$(cd "$(dirname "${BATS_TEST_DIRNAME}")" && pwd)"
+REPO_ROOT="$( cd "${TEST_HELPER_DIR}/.." >/dev/null 2>&1 && pwd )"
 LIB_DIR="${REPO_ROOT}/lib"
 TESTS_DIR="${REPO_ROOT}/tests"
 MOCKS_DIR="${TESTS_DIR}/mocks"
 TEST_DATA_DIR="${TESTS_DIR}/data"
 
-# Load testing libraries
-load "${TESTS_DIR}/helpers/bats-support/load"
-load "${TESTS_DIR}/helpers/bats-assert/load"
-load "${TESTS_DIR}/helpers/bats-file/load"
+# Export directories for use in test files
+export REPO_ROOT
+export LIB_DIR
+export TESTS_DIR
+export MOCKS_DIR
+export TEST_DATA_DIR
+
+# Load testing libraries - using relative paths from this file
+load "${TEST_HELPER_DIR}/helpers/bats-support/load"
+load "${TEST_HELPER_DIR}/helpers/bats-assert/load"
+load "${TEST_HELPER_DIR}/helpers/bats-file/load"
 
 # Setup the test environment before each test
 setup() {
