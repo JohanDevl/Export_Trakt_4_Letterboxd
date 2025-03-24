@@ -188,3 +188,4 @@ cython_debug/
 *.tar.gz
 /logs
 
+test_run/
