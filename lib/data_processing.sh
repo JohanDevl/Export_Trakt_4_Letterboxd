@@ -37,40 +37,189 @@ create_plays_count_lookup() {
     fi
 }
 
-# Process history movies with ratings
+# Process history movies from history_movies JSON file
 process_history_movies() {
     local history_file="$1"
     local ratings_lookup="$2"
     local plays_lookup="$3"
-    local output_csv="$4"
-    local raw_output_file="$5"
-    local log_file="$6"
+    local csv_output="$4"
+    local raw_output="$5"
+    local log="$6"
     
-    if [ -f "$history_file" ]; then
-        echo "DEBUG: Processing history_movies file with ratings..." | tee -a "${log_file}"
-        
-        # Extract watched movies with their date, rating, and rewatch status
-        jq -r --slurpfile ratings "$ratings_lookup" --slurpfile plays "$plays_lookup" '.[] | 
-            [.movie.title, .movie.year, .movie.ids.imdb, .movie.ids.tmdb, 
-             (if .watched_at then .watched_at | split("T")[0] else "" end),
-             ($ratings[0][.movie.ids.trakt | tostring] // ""),
-             (if ($plays[0][.movie.ids.imdb] // 1) > 1 then "true" else "false" end)] | 
-            @csv' "$history_file" > "$raw_output_file"
-        
-        # Process the CSV line by line to properly format
-        cat "$raw_output_file" | while IFS=, read -r title year imdb tmdb date rating rewatch; do
-            # Remove any existing "tt" prefix from IMDb ID to avoid duplication
-            imdb=$(echo "$imdb" | sed 's/^"*tt//g' | sed 's/"*$//g')
-            # Properly quote title and format IMDb ID with tt prefix
-            echo "${title},${year},\"tt${imdb}\",${tmdb},${date},${rating},${rewatch}" >> "$output_csv"
-        done
-        
-        echo "Movies history: $(wc -l < "$output_csv") movies processed" | tee -a "${log_file}"
-        return 0
-    else
-        echo "WARNING: History movies file not found, skipping" | tee -a "${log_file}"
+    # Check if history file exists
+    if [ ! -f "$history_file" ]; then
+        echo -e "⚠️ Movies history: No history_movies.json file found" | tee -a "${log}"
         return 1
     fi
+    
+    if [ ! -s "$history_file" ]; then
+        echo -e "⚠️ Movies history: history_movies.json file is empty" | tee -a "${log}"
+        return 1
+    fi
+    
+    # Verify if the JSON is valid
+    if ! jq empty "$history_file" 2>/dev/null; then
+        echo -e "⚠️ Movies history: Invalid JSON in history_movies.json" | tee -a "${log}"
+        return 1
+    fi
+    
+    # Get number of movies in history
+    local movie_count=$(jq length "$history_file")
+    if [ "$movie_count" -eq 0 ]; then
+        echo -e "⚠️ Movies history: No movies found in history" | tee -a "${log}"
+        return 1
+    fi
+    
+    echo "DEBUG: Processing history_movies file with ratings..." >> "${log}"
+    
+    # Create temporary file for processed data
+    local tmp_file=$(mktemp)
+    
+    # More robust JQ processing to handle null values
+    jq -r '.[] | 
+        # Handle null values safely with defaults
+        . as $item | 
+        {
+            title: (try ($item.movie.title) catch null // "Unknown Title"),
+            year: (try ($item.movie.year | tostring) catch null // ""),
+            imdb_id: (try ($item.movie.ids.imdb) catch null // ""),
+            tmdb_id: (try ($item.movie.ids.tmdb | tostring) catch null // ""),
+            watched_at: (try ($item.watched_at) catch null // ""),
+            trakt_id: (try ($item.movie.ids.trakt | tostring) catch null // "")
+        } | 
+        # Build CSV line with safe values
+        [.title, .year, .imdb_id, .tmdb_id, .watched_at, .trakt_id] | 
+        @csv' "$history_file" > "$tmp_file"
+    
+    # Handle errors in jq processing
+    if [ $? -ne 0 ]; then
+        echo -e "⚠️ Error processing history_movies.json with jq" | tee -a "${log}"
+        echo -e "Attempting alternative processing method..." | tee -a "${log}"
+        
+        # Alternative processing using a simpler jq command
+        jq -r '.[] | 
+            [
+                (.movie.title // "Unknown Title"),
+                (.movie.year // ""),
+                (.movie.ids.imdb // ""),
+                (.movie.ids.tmdb // ""),
+                (.watched_at // ""),
+                (.movie.ids.trakt // "")
+            ] | 
+            @csv' "$history_file" > "$tmp_file" 2>>"${log}"
+        
+        if [ $? -ne 0 ]; then
+            echo -e "⚠️ Alternative processing also failed" | tee -a "${log}"
+            return 1
+        fi
+    fi
+    
+    # Check if tmp_file was created and has content
+    if [ ! -s "$tmp_file" ]; then
+        echo -e "⚠️ Error: No data extracted from history_movies.json" | tee -a "${log}"
+        return 1
+    fi
+    
+    # Create raw output with headers
+    echo "Title,Year,imdbID,tmdbID,WatchedDate,TraktID" > "$raw_output"
+    cat "$tmp_file" >> "$raw_output"
+    
+    # Process the extracted data to add ratings and deduplicate
+    local processed_count=0
+    local existing_ids=()
+    local movie_title=""
+    local movie_year=""
+    local movie_imdb=""
+    local movie_tmdb=""
+    local movie_watched=""
+    local movie_trakt=""
+    
+    while IFS=, read -r title year imdb_id tmdb_id watched_at trakt_id; do
+        # Clean quotes from CSV fields if present
+        title=$(echo "$title" | sed -e 's/^"//' -e 's/"$//')
+        year=$(echo "$year" | sed -e 's/^"//' -e 's/"$//')
+        imdb_id=$(echo "$imdb_id" | sed -e 's/^"//' -e 's/"$//')
+        tmdb_id=$(echo "$tmdb_id" | sed -e 's/^"//' -e 's/"$//')
+        watched_at=$(echo "$watched_at" | sed -e 's/^"//' -e 's/"$//')
+        trakt_id=$(echo "$trakt_id" | sed -e 's/^"//' -e 's/"$//')
+        
+        # Skip entries with missing key data
+        if [ -z "$title" ] || [ "$title" = "null" ] || [ -z "$watched_at" ] || [ "$watched_at" = "null" ]; then
+            continue
+        fi
+        
+        # Format watched date (keep only YYYY-MM-DD)
+        watched_at=$(echo "$watched_at" | awk -F'T' '{print $1}')
+        
+        # Get rating from ratings lookup
+        rating=""
+        if [ -n "$trakt_id" ] && [ "$trakt_id" != "null" ]; then
+            rating=$(jq -r --arg id "$trakt_id" '.[$id] // empty' "$ratings_lookup" 2>/dev/null)
+        fi
+        
+        # Scale rating to 1-10 if it exists (Trakt uses 1-10, but we need to ensure it's in that range)
+        if [ -n "$rating" ] && [ "$rating" != "null" ]; then
+            # Ensure rating is an integer between 1 and 10
+            if ! [[ "$rating" =~ ^[0-9]+$ ]] || [ "$rating" -lt 1 ] || [ "$rating" -gt 10 ]; then
+                # Try to convert if it's a decimal
+                rating=$(echo "$rating" | awk '{printf "%.0f", $1}')
+                # Check if now valid
+                if ! [[ "$rating" =~ ^[0-9]+$ ]] || [ "$rating" -lt 1 ] || [ "$rating" -gt 10 ]; then
+                    rating=""
+                fi
+            fi
+        else
+            rating=""
+        fi
+        
+        # Get plays count for rewatch flag
+        rewatch="no"
+        if [ -n "$trakt_id" ] && [ "$trakt_id" != "null" ]; then
+            play_count=$(jq -r --arg id "$trakt_id" '.[$id] // "0"' "$plays_lookup" 2>/dev/null)
+            if [ -n "$play_count" ] && [ "$play_count" != "null" ] && [ "$play_count" -gt 1 ]; then
+                rewatch="yes"
+            fi
+        fi
+        
+        # Add data to CSV file if not a duplicate
+        # Filter by unique imdb or tmdb ids if available, otherwise by title+year
+        local item_id=""
+        if [ -n "$imdb_id" ] && [ "$imdb_id" != "null" ]; then
+            item_id="imdb:$imdb_id"
+        elif [ -n "$tmdb_id" ] && [ "$tmdb_id" != "null" ]; then
+            item_id="tmdb:$tmdb_id"
+        elif [ -n "$title" ] && [ -n "$year" ]; then
+            item_id="title:$title:$year"
+        else
+            # Skip if no identifier available
+            continue
+        fi
+        
+        # Check if movie is already processed (simple deduplication)
+        if [[ " ${existing_ids[@]} " =~ " ${item_id} " ]]; then
+            continue
+        fi
+        
+        # Add to CSV
+        echo "$title,$year,$imdb_id,$tmdb_id,$watched_at,$rating,$rewatch" >> "$csv_output"
+        
+        # Add to processed IDs
+        existing_ids+=("$item_id")
+        ((processed_count++))
+    done < "$tmp_file"
+    
+    # Clean up temporary file
+    rm -f "$tmp_file"
+    
+    # Report results
+    echo "Movies history: $processed_count movies processed" | tee -a "${log}"
+    
+    if [ "$processed_count" -eq 0 ]; then
+        echo -e "⚠️ Movies history: No valid movies extracted from history" | tee -a "${log}"
+        return 1
+    fi
+    
+    return 0
 }
 
 # Process watched movies (used in complete mode or when history is missing)
