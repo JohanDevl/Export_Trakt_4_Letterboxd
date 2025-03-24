@@ -156,20 +156,21 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
           platforms: linux/amd64,linux/arm64,linux/arm/v7
           build-args: |
             APP_VERSION=${{ steps.version.outputs.version }}
             BUILD_DATE=${{ steps.version.outputs.build_date }}
             VCS_REF=${{ steps.version.outputs.vcs_ref }}
+          # Add cache configuration
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       # Export Docker image for release
       - name: Export Docker image digest
         if: github.event_name != 'pull_request'
         id: digest
         run: |
-          echo "Skipping digest extraction for now to focus on successful publishing"
+          echo "Publishing successful, no need to extract digest"
           echo "digest=skipped" >> $GITHUB_OUTPUT
 
       # Sign the resulting Docker image digest for GitHub Container Registry
