@@ -100,8 +100,8 @@ jobs:
             type=ref,event=branch
             # Add 'latest' tag for main branch
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
-            # Add version tag for main branch (like main-1.2.3)
-            type=raw,value=main-${{ steps.version.outputs.version }},enable=${{ github.ref == 'refs/heads/main' && steps.version.outputs.version != '' }}
+            # Add version tag for main branch (like v1.2.3)
+            type=raw,value=v${{ steps.version.outputs.version }},enable=${{ github.ref == 'refs/heads/main' && steps.version.outputs.version != '' }}
             # Add 'develop' tag for develop branch
             type=raw,value=develop,enable=${{ github.ref == 'refs/heads/develop' }}
 
