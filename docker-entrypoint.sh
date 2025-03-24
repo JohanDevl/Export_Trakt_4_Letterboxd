@@ -40,10 +40,16 @@ start_health_server() {
     # Start health check server
     log_message "INFO" "Starting health check server on port 8000"
     
-    # Run in background
+    # Run in background with BusyBox compatible options
     (
         while true; do
-            echo -e "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n$(run_health_checks)" | nc -l -p 8000 -q 1
+            # For BusyBox nc, we need to use different syntax
+            # Write the HTTP response to a temporary file first
+            echo -e "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n$(run_health_checks)" > /tmp/health_response
+            # Start netcat in listen mode
+            nc -l -p 8000 < /tmp/health_response
+            # Small delay to avoid CPU spinning
+            sleep 0.1
         done
     ) &
     
@@ -137,6 +143,24 @@ sync_env_to_config() {
     
     log_message "INFO" "Checking for environment variables to sync to config..."
     
+    # Check if config file is writable
+    if [ ! -w "$config_file" ]; then
+        log_message "WARN" "Config file is not writable: $config_file"
+        log_message "INFO" "Attempting to make config file writable"
+        chmod 666 "$config_file" 2>/dev/null || log_message "ERROR" "Failed to make config file writable"
+    fi
+    
+    # Re-check if it's writable
+    if [ ! -w "$config_file" ]; then
+        log_message "ERROR" "Cannot write to config file: $config_file"
+        log_message "INFO" "Will use environment variables directly without updating config file"
+        return 1
+    fi
+    
+    # Create a temp file for safer editing
+    local temp_config="/tmp/config.tmp"
+    cp "$config_file" "$temp_config"
+    
     # List of environment variables to check and sync
     declare -A env_vars
     env_vars[TRAKT_API_KEY]="API_KEY"
@@ -144,19 +168,19 @@ sync_env_to_config() {
     env_vars[TRAKT_USERNAME]="USERNAME"
     
     # Special handling for tokens - only update if they are empty in the config
-    # Get current values from config
-    current_access_token=$(grep -oP '^ACCESS_TOKEN="\K[^"]*' "$config_file" || echo "")
-    current_refresh_token=$(grep -oP '^REFRESH_TOKEN="\K[^"]*' "$config_file" || echo "")
+    # Get current values from config using grep with awk which is more compatible
+    current_access_token=$(grep "^ACCESS_TOKEN=" "$config_file" | awk -F '"' '{print $2}' || echo "")
+    current_refresh_token=$(grep "^REFRESH_TOKEN=" "$config_file" | awk -F '"' '{print $2}' || echo "")
     
     # Only update tokens if they are empty in the config
     if [ -z "$current_access_token" ] && [ -n "$TRAKT_ACCESS_TOKEN" ]; then
         log_message "INFO" "Setting ACCESS_TOKEN from environment variable"
-        sed -i 's|^ACCESS_TOKEN=.*|ACCESS_TOKEN="'"$TRAKT_ACCESS_TOKEN"'"|' "$config_file"
+        sed -i 's|^ACCESS_TOKEN=.*|ACCESS_TOKEN="'"$TRAKT_ACCESS_TOKEN"'"|' "$temp_config"
     fi
     
     if [ -z "$current_refresh_token" ] && [ -n "$TRAKT_REFRESH_TOKEN" ]; then
         log_message "INFO" "Setting REFRESH_TOKEN from environment variable"
-        sed -i 's|^REFRESH_TOKEN=.*|REFRESH_TOKEN="'"$TRAKT_REFRESH_TOKEN"'"|' "$config_file"
+        sed -i 's|^REFRESH_TOKEN=.*|REFRESH_TOKEN="'"$TRAKT_REFRESH_TOKEN"'"|' "$temp_config"
     fi
     
     # Check each environment variable (except tokens which are handled above)
@@ -167,12 +191,12 @@ sync_env_to_config() {
         if [ -n "${!env_var}" ]; then
             log_message "INFO" "Setting $config_var from environment variable $env_var"
             
-            if grep -q "^$config_var=" "$config_file"; then
+            if grep -q "^$config_var=" "$temp_config"; then
                 # Update existing variable - preserve format, just update value
-                sed -i "s|^$config_var=.*|$config_var=\"${!env_var}\"|" "$config_file"
+                sed -i "s|^$config_var=.*|$config_var=\"${!env_var}\"|" "$temp_config"
             else
                 # Add new variable (should rarely happen)
-                echo "$config_var=\"${!env_var}\"" >> "$config_file"
+                echo "$config_var=\"${!env_var}\"" >> "$temp_config"
             fi
         fi
     done
@@ -183,7 +207,7 @@ sync_env_to_config() {
         secret_value=$(cat "$TRAKT_ACCESS_TOKEN_FILE" 2>/dev/null | tr -d '\n')
         if [ -n "$secret_value" ]; then
             log_message "INFO" "Setting ACCESS_TOKEN from secret file"
-            sed -i 's|^ACCESS_TOKEN=.*|ACCESS_TOKEN="'"$secret_value"'"|' "$config_file"
+            sed -i 's|^ACCESS_TOKEN=.*|ACCESS_TOKEN="'"$secret_value"'"|' "$temp_config"
         fi
     fi
     
@@ -191,7 +215,7 @@ sync_env_to_config() {
         secret_value=$(cat "$TRAKT_REFRESH_TOKEN_FILE" 2>/dev/null | tr -d '\n')
         if [ -n "$secret_value" ]; then
             log_message "INFO" "Setting REFRESH_TOKEN from secret file"
-            sed -i 's|^REFRESH_TOKEN=.*|REFRESH_TOKEN="'"$secret_value"'"|' "$config_file"
+            sed -i 's|^REFRESH_TOKEN=.*|REFRESH_TOKEN="'"$secret_value"'"|' "$temp_config"
         fi
     fi
     
@@ -208,18 +232,29 @@ sync_env_to_config() {
             if [ -n "$secret_value" ]; then
                 log_message "INFO" "Setting $config_var from secret file $secret_env_var"
                 
-                if grep -q "^$config_var=" "$config_file"; then
+                if grep -q "^$config_var=" "$temp_config"; then
                     # Update existing variable
-                    sed -i "s|^$config_var=.*|$config_var=\"$secret_value\"|" "$config_file"
+                    sed -i "s|^$config_var=.*|$config_var=\"$secret_value\"|" "$temp_config"
                 else
                     # Add new variable
-                    echo "$config_var=\"$secret_value\"" >> "$config_file"
+                    echo "$config_var=\"$secret_value\"" >> "$temp_config"
                 fi
             else
                 log_message "WARN" "Secret file for $env_var is empty, skipping"
             fi
         fi
     done
+    
+    # Copy the temp file back to the actual config
+    if ! cp "$temp_config" "$config_file"; then
+        log_message "ERROR" "Failed to update config file from temp file"
+        log_message "DEBUG" "Temp file: $(cat "$temp_config")"
+        return 1
+    fi
+    
+    log_message "SUCCESS" "Config file updated with environment variables"
+    rm -f "$temp_config"
+    return 0
 }
 
 # Initial system information
