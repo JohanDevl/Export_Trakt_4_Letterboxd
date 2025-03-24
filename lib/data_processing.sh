@@ -214,4 +214,64 @@ deduplicate_movies() {
     return 0
 }
 
+# Function to limit the number of movies in the CSV if LIMIT_FILMS is set
+limit_movies_in_csv() {
+    local input_csv="$1"
+    local output_csv="$2"
+    local log_file="$3"
+    
+    # Default to no limit if LIMIT_FILMS is not set
+    local limit=${LIMIT_FILMS:-0}
+    
+    # Check if limit is a positive number
+    if [[ "$limit" =~ ^[0-9]+$ ]] && [ "$limit" -gt 0 ]; then
+        echo "🎯 Limiting CSV to the most recent $limit movies..." | tee -a "${log_file}"
+        
+        # Create a temporary file for the limited content
+        local temp_csv="${input_csv}.limited"
+        local sorted_csv="${input_csv}.sorted"
+        
+        # Keep header line
+        head -n 1 "$input_csv" > "$temp_csv"
+        
+        # Debug: Show some sample dates from the file
+        echo "🔍 Sample of watch dates in CSV:" | tee -a "${log_file}"
+        tail -n +2 "$input_csv" | cut -d, -f5 | sort | uniq | head -n 5 | tee -a "${log_file}"
+        
+        # Process and sort the CSV properly with awareness of the date format
+        # 1. Skip header line
+        # 2. For empty dates, set to 1970-01-01 to ensure they sort last
+        # 3. Sort by date field (column 5) in reverse order to get newest first
+        # 4. Limit to the specified number of entries
+        awk -F, 'NR>1 {
+            # If the date field is empty or invalid, set it to oldest date
+            if ($5 == "" || $5 ~ /^""$/) {
+                $5 = "\"1970-01-01\""
+            }
+            print $0
+        }' "$input_csv" | sort -t, -k5,5r | head -n "$limit" >> "$temp_csv"
+        
+        # Move the limited file to the output
+        mv "$temp_csv" "$output_csv"
+        
+        # Count final movies
+        local final_lines=$(wc -l < "$output_csv")
+        local final_movies=$((final_lines - 1))
+        echo "📊 Keeping only the $final_movies most recent movies" | tee -a "${log_file}"
+        
+        # Debug: Show the dates that were kept
+        echo "📅 Watch dates of kept movies (newest first):" | tee -a "${log_file}"
+        tail -n +2 "$output_csv" | cut -d, -f1,5 | head -n 10 | tee -a "${log_file}"
+        
+        return 0
+    else
+        # No limit needed
+        echo "📊 No movie limit applied (LIMIT_FILMS=$limit)" | tee -a "${log_file}"
+        if [ "$input_csv" != "$output_csv" ]; then
+            cp "$input_csv" "$output_csv"
+        fi
+        return 0
+    fi
+}
+
 # Add this function call at the end of process_data function 
