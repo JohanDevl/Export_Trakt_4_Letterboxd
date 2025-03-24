@@ -9,6 +9,7 @@ WORKDIR /build
 
 # Copy only necessary build files first
 COPY lib/ /build/lib/
+COPY locales/ /build/locales/
 COPY Export_Trakt_4_Letterboxd.sh setup_trakt.sh install.sh /build/
 
 # Make scripts executable
@@ -67,12 +68,9 @@ ENV DOSLOG=/app/logs \
 # Set volume for persistent data
 VOLUME ["/app/logs", "/app/copy", "/app/backup", "/app/config"]
 
-# Switch to non-root user for normal operation, but keep root for cron
-# USER appuser
-
 # Health check
 HEALTHCHECK --interval=1m --timeout=10s --start-period=30s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
 # Set entrypoint
-ENTRYPOINT ["/app/docker-entrypoint.sh"] 
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
