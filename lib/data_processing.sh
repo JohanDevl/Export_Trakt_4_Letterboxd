@@ -173,11 +173,11 @@ process_history_movies() {
         fi
         
         # Get plays count for rewatch flag
-        rewatch="no"
+        rewatch="false"
         if [ -n "$trakt_id" ] && [ "$trakt_id" != "null" ]; then
             play_count=$(jq -r --arg id "$trakt_id" '.[$id] // "0"' "$plays_lookup" 2>/dev/null)
             if [ -n "$play_count" ] && [ "$play_count" != "null" ] && [ "$play_count" -gt 1 ]; then
-                rewatch="yes"
+                rewatch="true"
             fi
         fi
         
