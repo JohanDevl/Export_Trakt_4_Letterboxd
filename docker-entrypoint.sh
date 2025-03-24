@@ -525,9 +525,54 @@ else
             END_TIME=$(date +%s)
             DURATION=$((END_TIME - START_TIME))
             
+            # Count films in generated CSV files
+            count_films_in_csv() {
+                # Check each type of CSV file that might be generated
+                local total_films=0
+                local csv_found=false
+                local report=""
+                
+                # Define all possible CSV files to check
+                local csv_files=(
+                    "/app/copy/letterboxd_import.csv"
+                    "/app/copy/trakt_movies_history.csv"
+                    "/app/copy/trakt_movies_watched.csv"
+                    "/app/copy/trakt_movies_watchlist.csv"
+                    "/app/copy/trakt_ratings.csv"
+                )
+                
+                # Check each file and count lines (minus header)
+                for csv_file in "${csv_files[@]}"; do
+                    if [ -f "$csv_file" ]; then
+                        csv_found=true
+                        # Get line count minus header line
+                        local count=$(($(wc -l < "$csv_file") - 1))
+                        if [ $count -ge 0 ]; then
+                            local filename=$(basename "$csv_file")
+                            # Add to total and report
+                            total_films=$((total_films + count))
+                            report="${report}📊 ${filename}: ${count} films\n"
+                        fi
+                    fi
+                done
+                
+                if [ "$csv_found" = true ]; then
+                    log_message "INFO" "📋 Export summary:"
+                    # Print report without trailing newline
+                    echo -e "$report" | sed '/^$/d' | while IFS= read -r line; do
+                        log_message "INFO" "$line"
+                    done
+                    log_message "INFO" "📊 Total: $total_films films"
+                else
+                    log_message "WARN" "⚠️ No CSV files found to count films"
+                fi
+            }
+            
             # Log completion with duration and status
             if [ $EXIT_CODE -eq 0 ]; then
                 log_message "SUCCESS" "✅ Export completed successfully in ${DURATION}s"
+                # Count and log film numbers
+                count_films_in_csv
             else
                 log_message "ERROR" "❌ Export failed with exit code ${EXIT_CODE} after ${DURATION}s"
             fi
