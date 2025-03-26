@@ -1,0 +1,20 @@
+# Trakt.tv API Configuration
+[trakt]
+client_id = ""
+client_secret = ""
+access_token = ""
+api_base_url = "https://api.trakt.tv"
+
+# Letterboxd Export Configuration
+[letterboxd]
+export_dir = "exports"
+
+# Export Settings
+[export]
+format = "csv"
+date_format = "2006-01-02"
+
+# Logging Configuration
+[logging]
+level = "info"
+file = "logs/export.log" 
