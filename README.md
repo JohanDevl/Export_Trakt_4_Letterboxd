@@ -212,14 +212,18 @@ Tests are automatically run in the CI/CD pipeline for every pull request to ensu
 
 ## Documentation
 
-For more detailed information, please refer to the documentation in the `docs` folder:
+La documentation complète est disponible dans le [Wiki du projet](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/wiki).
 
-- [Configuration and Basic Usage](docs/CONFIGURATION.md)
-- [Docker Usage Guide](docs/DOCKER_USAGE.md)
-- [Docker Testing](docs/DOCKER_TESTING.md)
-- [GitHub Actions](docs/GITHUB_ACTIONS.md)
-- [Automatic Version Tagging](docs/AUTO_TAGGING.md)
-- [Testing Framework](docs/TESTING.md)
+Vous y trouverez :
+
+- [Guide d'installation](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/wiki/en-Installation)
+- [Référence CLI](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/wiki/en-CLI-Reference)
+- [Fonctionnalités d'export](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/wiki/en-Export-Features)
+- [Guide API Trakt](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/wiki/en-Trakt-API-Guide)
+- [Internationalisation](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/wiki/en-Internationalization)
+- [Guide de migration](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/wiki/en-Migration-Guide)
+- [Tests](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/wiki/en-Testing)
+- [CI/CD](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/wiki/en-CI-CD)
 
 ## Troubleshooting
 
