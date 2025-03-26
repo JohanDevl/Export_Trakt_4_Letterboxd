@@ -1,0 +1,31 @@
+# Trakt.tv API Configuration
+[trakt]
+# Obtenir ces identifiants sur https://trakt.tv/oauth/applications
+client_id = "YOUR_CLIENT_ID"
+client_secret = "YOUR_CLIENT_SECRET"
+access_token = "YOUR_ACCESS_TOKEN"
+api_base_url = "https://api.trakt.tv"
+extended_info = "full"
+
+# Letterboxd Export Configuration
+[letterboxd]
+export_dir = "exports"
+watched_filename = "trakt-watched-films.csv"
+collection_filename = "trakt-collection-films.csv"
+shows_filename = "trakt-shows.csv"
+
+# Export Settings
+[export]
+format = "csv"
+date_format = "2006-01-02"
+
+# Logging Configuration
+[logging]
+level = "info"
+file = "logs/export.log"
+
+# Internationalization Settings
+[i18n]
+default_language = "en"
+language = "en"
+locales_dir = "locales" 
