@@ -5,22 +5,18 @@ LABEL org.opencontainers.image.source=https://github.com/JohanDevl/Export_Trakt_
 LABEL org.opencontainers.image.description="Export your Trakt.tv history to Letterboxd format"
 LABEL org.opencontainers.image.licenses=MIT
 
-# Create app directories
-RUN mkdir -p /app/config /app/logs /app/locales /app/exports
+# Create necessary directories
+RUN mkdir -p /app/config /app/logs /app/temp_locales /app/exports
 
 # Set working directory
 WORKDIR /app
 
-# Copy pre-built binary
+# Copy the executable and required files
 COPY build/export_trakt /app/
+COPY temp_locales/ /app/temp_locales/
+COPY config/config.example.toml /app/config/config.toml
 
-# Copy translation files
-COPY locales/ /app/locales/
-
-# Default config file
-COPY config/config.toml /app/config/
-
-# Ensure the binary is executable
+# Make the binary executable
 RUN chmod +x /app/export_trakt
 
 # Set environment variables
@@ -30,5 +26,5 @@ ENV GO_ENV=production
 # Volumes
 VOLUME ["/app/config", "/app/logs", "/app/exports"]
 
-# Run the application
+# Set the entrypoint
 ENTRYPOINT ["/app/export_trakt", "--config", "/app/config/config.toml"] 

@@ -41,10 +41,18 @@ func NewTranslator(cfg *config.I18nConfig, log logger.Logger) (*Translator, erro
 
 // loadTranslations loads all translation files from the locales directory
 func (t *Translator) loadTranslations() error {
+	t.log.Debug("i18n.loading_translations", map[string]interface{}{
+		"dir": t.config.LocalesDir,
+	})
+	
 	entries, err := os.ReadDir(t.config.LocalesDir)
 	if err != nil {
 		return fmt.Errorf("failed to read locales directory: %w", err)
 	}
+
+	t.log.Debug("i18n.found_files", map[string]interface{}{
+		"count": len(entries),
+	})
 
 	for _, entry := range entries {
 		if entry.IsDir() {
@@ -74,20 +82,31 @@ func (t *Translator) loadTranslations() error {
 
 // Translate returns the translated message for the given message ID
 func (t *Translator) Translate(messageID string, templateData map[string]interface{}) string {
+	// Simple protection against recursion
+	if messageID == "" {
+		return ""
+	}
+
+	// Prevent recursion for error messages that might be logged during translation
+	if messageID == "errors.translation_failed" || 
+	   messageID == "errors.translation_file_load_failed" {
+		return messageID
+	}
+
+	// Create a message to translate
 	msg := i18n.Message{
 		ID: messageID,
 	}
 
+	// Attempt translation
 	translation, err := t.localizer.Localize(&i18n.LocalizeConfig{
 		DefaultMessage: &msg,
 		TemplateData:   templateData,
 	})
 
 	if err != nil {
-		t.log.Warn("errors.translation_failed", map[string]interface{}{
-			"messageID": messageID,
-			"error":     err.Error(),
-		})
+		// If error, return the original ID without logging
+		// This prevents recursive logging calls
 		return messageID
 	}
 

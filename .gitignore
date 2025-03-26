@@ -24,6 +24,9 @@ creds.js
 # Private Files
 *.json
 !tests/mocks/*.json
+!locales/*.json
+!temp_locales/*.json
+!locales/*/translation.json
 *.cfg
 *.csv
 *.csv.gz

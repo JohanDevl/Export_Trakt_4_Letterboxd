@@ -1,6 +1,7 @@
 # Trakt.tv API Configuration
 [trakt]
 # Obtenir ces identifiants sur https://trakt.tv/oauth/applications
+# NOTE: Vous devez configurer ces valeurs pour que l'application fonctionne
 client_id = "YOUR_CLIENT_ID"
 client_secret = "YOUR_CLIENT_SECRET"
 access_token = "YOUR_ACCESS_TOKEN"
@@ -28,4 +29,4 @@ file = "logs/export.log"
 [i18n]
 default_language = "en"
 language = "en"
-locales_dir = "locales" 
+locales_dir = "temp_locales" 

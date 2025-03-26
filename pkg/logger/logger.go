@@ -53,10 +53,22 @@ func (l *StandardLogger) SetTranslator(t Translator) {
 
 // translate handles message translation if a translator is available
 func (l *StandardLogger) translate(messageID string, data map[string]interface{}) string {
-	if l.translator != nil {
-		return l.translator.Translate(messageID, data)
+	// No translation if no translator
+	if l.translator == nil {
+		return messageID
 	}
-	return messageID
+	
+	// Prevent recursion from specific error types
+	if messageID == "" || messageID == "errors.translation_failed" {
+		return messageID
+	}
+	
+	// Sanitize the data to avoid nil map issues
+	if data == nil {
+		data = make(map[string]interface{})
+	}
+	
+	return l.translator.Translate(messageID, data)
 }
 
 // Info logs an info level message with translation
