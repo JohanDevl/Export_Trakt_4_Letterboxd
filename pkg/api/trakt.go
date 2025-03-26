@@ -4,72 +4,143 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/config"
 	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/logger"
 )
 
-// TraktClient handles all interactions with the Trakt.tv API
-type TraktClient struct {
-	config *config.TraktConfig
-	client *http.Client
-	log    *logger.Logger
+const (
+	maxRetries    = 3
+	retryInterval = time.Second
+)
+
+// MovieIDs represents the various IDs associated with a movie
+type MovieIDs struct {
+	Trakt int    `json:"trakt"`
+	TMDB  int    `json:"tmdb"`
+	IMDB  string `json:"imdb"`
+	Slug  string `json:"slug"`
 }
 
-// NewTraktClient creates a new Trakt API client
-func NewTraktClient(cfg *config.TraktConfig, log *logger.Logger) *TraktClient {
-	return &TraktClient{
+// MovieInfo represents the basic movie information
+type MovieInfo struct {
+	Title string   `json:"title"`
+	Year  int     `json:"year"`
+	IDs   MovieIDs `json:"ids"`
+}
+
+// Movie represents a watched movie with its metadata
+type Movie struct {
+	Movie         MovieInfo `json:"movie"`
+	LastWatchedAt string    `json:"last_watched_at"`
+}
+
+// Client represents a Trakt API client
+type Client struct {
+	config     *config.Config
+	logger     logger.Logger
+	httpClient *http.Client
+}
+
+// NewClient creates a new Trakt API client
+func NewClient(cfg *config.Config, log logger.Logger) *Client {
+	return &Client{
 		config: cfg,
-		client: &http.Client{
+		logger: log,
+		httpClient: &http.Client{
 			Timeout: time.Second * 30,
 		},
-		log: log,
 	}
 }
 
-// Movie represents a movie from Trakt.tv
-type Movie struct {
-	Title     string    `json:"title"`
-	Year      int       `json:"year"`
-	IDs       MovieIDs  `json:"ids"`
-	WatchedAt time.Time `json:"watched_at,omitempty"`
-	Rating    int       `json:"rating,omitempty"`
+// makeRequest makes an HTTP request with retries
+func (c *Client) makeRequest(req *http.Request) (*http.Response, error) {
+	var lastErr error
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		if attempt > 0 {
+			c.logger.Warn("api.retrying_request", map[string]interface{}{
+				"attempt": attempt + 1,
+				"max":     maxRetries,
+			})
+			time.Sleep(retryInterval * time.Duration(attempt))
+		}
+
+		resp, err := c.httpClient.Do(req)
+		if err != nil {
+			lastErr = fmt.Errorf("request failed: %w", err)
+			continue
+		}
+
+		// Only retry on server errors (5xx)
+		if resp.StatusCode >= 500 {
+			resp.Body.Close()
+			lastErr = fmt.Errorf("server error: %d", resp.StatusCode)
+			continue
+		}
+
+		return resp, nil
+	}
+
+	return nil, fmt.Errorf("max retries exceeded: %w", lastErr)
 }
 
-// MovieIDs contains various IDs for a movie
-type MovieIDs struct {
-	Trakt  int    `json:"trakt"`
-	TMDB   int    `json:"tmdb"`
-	IMDB   string `json:"imdb"`
-	Slug   string `json:"slug"`
-}
-
-// GetWatchedMovies retrieves the user's watched movies
-func (c *TraktClient) GetWatchedMovies() ([]Movie, error) {
-	req, err := http.NewRequest("GET", fmt.Sprintf("%s/sync/history/movies", c.config.APIBaseURL), nil)
+// GetWatchedMovies retrieves the list of watched movies from Trakt
+func (c *Client) GetWatchedMovies() ([]Movie, error) {
+	req, err := http.NewRequest("GET", c.config.Trakt.APIBaseURL+"/sync/watched/movies", nil)
 	if err != nil {
+		c.logger.Error("errors.api_request_failed", map[string]interface{}{
+			"error": err.Error(),
+		})
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
+	// Add required headers
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("trakt-api-version", "2")
-	req.Header.Set("trakt-api-key", c.config.ClientID)
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.config.AccessToken))
+	req.Header.Set("trakt-api-key", c.config.Trakt.ClientID)
+	req.Header.Set("Authorization", "Bearer "+c.config.Trakt.AccessToken)
 
-	resp, err := c.client.Do(req)
+	resp, err := c.makeRequest(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to make request: %w", err)
+		c.logger.Error("errors.api_request_failed", map[string]interface{}{
+			"error": err.Error(),
+		})
+		return nil, fmt.Errorf("failed to execute request: %w", err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API request failed with status: %d", resp.StatusCode)
+	// Handle rate limiting
+	if limit := resp.Header.Get("X-Ratelimit-Remaining"); limit != "" {
+		remaining, _ := strconv.Atoi(limit)
+		if remaining < 100 {
+			c.logger.Warn("api.rate_limit_warning", map[string]interface{}{
+				"remaining": remaining,
+			})
+		}
 	}
 
+	// Check response status
+	if resp.StatusCode != http.StatusOK {
+		var errorResp map[string]string
+		if err := json.NewDecoder(resp.Body).Decode(&errorResp); err != nil {
+			errorResp = map[string]string{"error": "unknown error"}
+		}
+		c.logger.Error("errors.api_request_failed", map[string]interface{}{
+			"status": resp.StatusCode,
+			"error":  errorResp["error"],
+		})
+		return nil, fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, errorResp["error"])
+	}
+
+	// Parse response
 	var movies []Movie
 	if err := json.NewDecoder(resp.Body).Decode(&movies); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+		c.logger.Error("errors.api_response_parse_failed", map[string]interface{}{
+			"error": err.Error(),
+		})
+		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
 
 	return movies, nil
