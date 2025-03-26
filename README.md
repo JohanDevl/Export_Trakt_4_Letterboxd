@@ -253,3 +253,38 @@ The original work by u2pitchjami is also licensed under the MIT License. This fo
 - Twitter: [@0xUta](https://twitter.com/0xUta)
 - Github: [@JohanDevl](https://github.com/JohanDevl)
 - LinkedIn: [@johan-devlaminck](https://linkedin.com/in/johan-devlaminck)
+
+## Letterboxd Import Export Format
+
+A new export format has been added to generate files compatible with Letterboxd's import functionality. To use this feature:
+
+1. Set `extended_info = "letterboxd"` in your `config.toml` file
+2. Run the application normally or with Docker (see below)
+
+The format includes the following fields:
+
+- Title: Movie title (quoted)
+- Year: Release year
+- imdbID: IMDB ID for the movie
+- tmdbID: TMDB ID for the movie
+- WatchedDate: Date the movie was watched
+- Rating10: Rating on a scale of 1-10
+- Rewatch: Whether the movie has been watched multiple times (true/false)
+
+### Using with Docker
+
+To use the Letterboxd export format with Docker:
+
+```bash
+# Create directories for the Docker volumes
+mkdir -p config logs exports
+
+# Copy the example config file and edit it
+cp config.example.toml config/config.toml
+
+# Edit the config file to set extended_info = "letterboxd"
+# Then run:
+docker run --rm -v $(pwd)/config:/app/config -v $(pwd)/logs:/app/logs -v $(pwd)/exports:/app/exports johandevl/export-trakt-4-letterboxd:latest
+```
+
+The output file will be saved as `letterboxd_import.csv` in your exports directory.

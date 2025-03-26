@@ -95,7 +95,28 @@ func exportWatchedMovies(client *api.Client, exporter *export.LetterboxdExporter
 
 	log.Info("export.movies_retrieved", map[string]interface{}{"count": len(movies)})
 
-	// Export movies
+	// If extended_info is set to "letterboxd", export in Letterboxd format
+	if client.GetConfig().Trakt.ExtendedInfo == "letterboxd" {
+		// Get ratings for Letterboxd format
+		log.Info("export.retrieving_ratings", nil)
+		ratings, err := client.GetRatings()
+		if err != nil {
+			log.Error("errors.api_request_failed", map[string]interface{}{"error": err.Error()})
+			os.Exit(1)
+		}
+		
+		log.Info("export.ratings_retrieved", map[string]interface{}{"count": len(ratings)})
+		
+		// Export in Letterboxd format
+		log.Info("export.exporting_letterboxd_format", nil)
+		if err := exporter.ExportLetterboxdFormat(movies, ratings); err != nil {
+			log.Error("export.export_failed", map[string]interface{}{"error": err.Error()})
+			os.Exit(1)
+		}
+		return
+	}
+
+	// Export movies in standard format
 	log.Info("export.exporting_watched_movies", nil)
 	if err := exporter.ExportMovies(movies); err != nil {
 		log.Error("export.export_failed", map[string]interface{}{"error": err.Error()})

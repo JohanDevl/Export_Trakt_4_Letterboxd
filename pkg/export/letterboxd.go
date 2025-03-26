@@ -361,4 +361,101 @@ func (e *LetterboxdExporter) ExportWatchlist(watchlist []api.WatchlistMovie) err
 		"path":  filePath,
 	})
 	return nil
+}
+
+// ExportLetterboxdFormat exports the given movies to a CSV file in Letterboxd import format
+// The format matches the official Letterboxd import format with columns:
+// Title, Year, imdbID, tmdbID, WatchedDate, Rating10, Rewatch
+func (e *LetterboxdExporter) ExportLetterboxdFormat(movies []api.Movie, ratings []api.Rating) error {
+	if err := os.MkdirAll(e.config.Letterboxd.ExportDir, 0755); err != nil {
+		e.log.Error("errors.export_dir_create_failed", map[string]interface{}{
+			"error": err.Error(),
+		})
+		return fmt.Errorf("failed to create export directory: %w", err)
+	}
+
+	// Use configured filename, or generate one with timestamp if not specified
+	filename := "letterboxd_import.csv"
+	filePath := filepath.Join(e.config.Letterboxd.ExportDir, filename)
+
+	file, err := os.Create(filePath)
+	if err != nil {
+		e.log.Error("errors.file_create_failed", map[string]interface{}{
+			"error": err.Error(),
+		})
+		return fmt.Errorf("failed to create export file: %w", err)
+	}
+	defer file.Close()
+
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+
+	// Write header
+	header := []string{"Title", "Year", "imdbID", "tmdbID", "WatchedDate", "Rating10", "Rewatch"}
+	if err := writer.Write(header); err != nil {
+		return fmt.Errorf("failed to write header: %w", err)
+	}
+
+	// Create a map of movie ratings for quick lookup
+	movieRatings := make(map[string]float64)
+	for _, rating := range ratings {
+		// Use IMDB ID as key for the ratings map
+		if rating.Movie.IDs.IMDB != "" {
+			movieRatings[rating.Movie.IDs.IMDB] = rating.Rating
+		}
+	}
+
+	// Create a map to track plays for determining rewatches
+	moviePlays := make(map[string]int)
+	for _, movie := range movies {
+		if movie.Movie.IDs.IMDB != "" {
+			moviePlays[movie.Movie.IDs.IMDB] += movie.Plays
+		}
+	}
+
+	// Write movies
+	for _, movie := range movies {
+		// Parse watched date
+		watchedDate := ""
+		if movie.LastWatchedAt != "" {
+			if parsedTime, err := time.Parse(time.RFC3339, movie.LastWatchedAt); err == nil {
+				watchedDate = parsedTime.Format(e.config.Export.DateFormat)
+			}
+		}
+
+		// Get rating (scale is already 1-10 in Trakt)
+		rating := ""
+		if r, exists := movieRatings[movie.Movie.IDs.IMDB]; exists {
+			rating = strconv.FormatFloat(r, 'f', 0, 64)
+		}
+
+		// Determine if this is a rewatch
+		rewatch := "false"
+		if movie.Plays > 1 {
+			rewatch = "true"
+		}
+
+		// Convert TMDB ID to string
+		tmdbID := strconv.Itoa(movie.Movie.IDs.TMDB)
+
+		record := []string{
+			movie.Movie.Title,
+			strconv.Itoa(movie.Movie.Year),
+			movie.Movie.IDs.IMDB,
+			tmdbID,
+			watchedDate,
+			rating,
+			rewatch,
+		}
+
+		if err := writer.Write(record); err != nil {
+			return fmt.Errorf("failed to write movie record: %w", err)
+		}
+	}
+
+	e.log.Info("export.letterboxd_export_complete", map[string]interface{}{
+		"count": len(movies),
+		"path":  filePath,
+	})
+	return nil
 } 

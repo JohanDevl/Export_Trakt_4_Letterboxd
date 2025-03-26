@@ -519,4 +519,9 @@ func (c *Client) GetWatchlist() ([]WatchlistMovie, error) {
 		"count": len(watchlist),
 	})
 	return watchlist, nil
+}
+
+// GetConfig returns the client's configuration
+func (c *Client) GetConfig() *config.Config {
+	return c.config
 } 
