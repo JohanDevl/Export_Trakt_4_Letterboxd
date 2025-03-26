@@ -27,6 +27,7 @@ type LetterboxdConfig struct {
 	ExportDir          string `toml:"export_dir"`
 	WatchedFilename    string `toml:"watched_filename"`
 	CollectionFilename string `toml:"collection_filename"`
+	ShowsFilename      string `toml:"shows_filename"`
 }
 
 // ExportConfig holds export settings

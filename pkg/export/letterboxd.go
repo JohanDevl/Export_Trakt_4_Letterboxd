@@ -156,4 +156,79 @@ func (e *LetterboxdExporter) ExportCollectionMovies(movies []api.CollectionMovie
 		"path":  filePath,
 	})
 	return nil
+}
+
+// ExportShows exports the user's watched shows to a CSV file
+func (e *LetterboxdExporter) ExportShows(shows []api.WatchedShow) error {
+	if err := os.MkdirAll(e.config.Letterboxd.ExportDir, 0755); err != nil {
+		e.log.Error("errors.export_dir_create_failed", map[string]interface{}{
+			"error": err.Error(),
+		})
+		return fmt.Errorf("failed to create export directory: %w", err)
+	}
+
+	// Use configured filename, or generate one with timestamp if not specified
+	var filename string
+	if e.config.Letterboxd.ShowsFilename != "" {
+		filename = e.config.Letterboxd.ShowsFilename
+	} else {
+		filename = fmt.Sprintf("shows-export-%s.csv", time.Now().Format("2006-01-02"))
+	}
+	filePath := filepath.Join(e.config.Letterboxd.ExportDir, filename)
+
+	file, err := os.Create(filePath)
+	if err != nil {
+		e.log.Error("errors.file_create_failed", map[string]interface{}{
+			"error": err.Error(),
+		})
+		return fmt.Errorf("failed to create export file: %w", err)
+	}
+	defer file.Close()
+
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+
+	// Write header
+	header := []string{"Title", "Year", "Season", "Episode", "EpisodeTitle", "LastWatched", "IMDb ID"}
+	if err := writer.Write(header); err != nil {
+		return fmt.Errorf("failed to write header: %w", err)
+	}
+
+	// Write episodes
+	episodeCount := 0
+	for _, show := range shows {
+		for _, season := range show.Seasons {
+			for _, episode := range season.Episodes {
+				// Parse watched date
+				watchedDate := ""
+				if show.LastWatchedAt != "" {
+					if parsedTime, err := time.Parse(time.RFC3339, show.LastWatchedAt); err == nil {
+						watchedDate = parsedTime.Format(e.config.Export.DateFormat)
+					}
+				}
+
+				record := []string{
+					show.Show.Title,
+					strconv.Itoa(show.Show.Year),
+					strconv.Itoa(season.Number),
+					strconv.Itoa(episode.Number),
+					episode.Title,
+					watchedDate,
+					show.Show.IDs.IMDB,
+				}
+
+				if err := writer.Write(record); err != nil {
+					return fmt.Errorf("failed to write episode record: %w", err)
+				}
+				episodeCount++
+			}
+		}
+	}
+
+	e.log.Info("export.shows_export_complete", map[string]interface{}{
+		"shows":    len(shows),
+		"episodes": episodeCount,
+		"path":     filePath,
+	})
+	return nil
 } 

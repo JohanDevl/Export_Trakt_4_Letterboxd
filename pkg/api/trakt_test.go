@@ -490,4 +490,86 @@ func TestGetCollectionMoviesError(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "API request failed with status 401")
 	assert.Nil(t, movies)
+}
+
+func TestGetWatchedShows(t *testing.T) {
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("X-Ratelimit-Remaining", "120")
+
+		// Check if valid authorization header is present
+		authHeader := r.Header.Get("Authorization")
+		if authHeader != "Bearer test-token" {
+			w.WriteHeader(http.StatusUnauthorized)
+			json.NewEncoder(w).Encode(map[string]string{"error": "Invalid token"})
+			return
+		}
+
+		// Return successful response
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintf(w, `[
+			{
+				"show": {
+					"title": "Game of Thrones",
+					"year": 2011,
+					"ids": {
+						"trakt": 1,
+						"slug": "game-of-thrones",
+						"tvdb": 121361,
+						"imdb": "tt0944947",
+						"tmdb": 1399
+					}
+				},
+				"seasons": [
+					{
+						"number": 1,
+						"episodes": [
+							{
+								"number": 1,
+								"title": "Winter Is Coming",
+								"ids": {
+									"trakt": 73640,
+									"tvdb": 3254641,
+									"imdb": "tt1480055",
+									"tmdb": 63056
+								}
+							}
+						]
+					}
+				],
+				"last_watched_at": "2022-01-01T12:00:00Z"
+			}
+		]`)
+	}))
+	defer mockServer.Close()
+
+	// Create a test config
+	cfg := &config.Config{
+		Trakt: config.TraktConfig{
+			ClientID:     "test-client-id",
+			ClientSecret: "test-client-secret",
+			AccessToken:  "test-token",
+			APIBaseURL:   mockServer.URL,
+		},
+	}
+
+	// Create a test logger
+	log := &MockLogger{}
+
+	// Create a client with the mock server
+	client := NewClient(cfg, log)
+
+	// Test the GetWatchedShows method
+	shows, err := client.GetWatchedShows()
+	assert.NoError(t, err)
+	assert.NotNil(t, shows)
+	assert.Len(t, shows, 1)
+	assert.Equal(t, "Game of Thrones", shows[0].Show.Title)
+	assert.Equal(t, 2011, shows[0].Show.Year)
+	assert.Equal(t, "tt0944947", shows[0].Show.IDs.IMDB)
+	assert.Len(t, shows[0].Seasons, 1)
+	assert.Equal(t, 1, shows[0].Seasons[0].Number)
+	assert.Len(t, shows[0].Seasons[0].Episodes, 1)
+	assert.Equal(t, 1, shows[0].Seasons[0].Episodes[0].Number)
+	assert.Equal(t, "Winter Is Coming", shows[0].Seasons[0].Episodes[0].Title)
 } 

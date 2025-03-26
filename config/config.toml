@@ -10,6 +10,7 @@ api_base_url = "https://api.trakt.tv"
 export_dir = "exports"
 watched_filename = "trakt-watched-films.csv"
 collection_filename = "trakt-collection-films.csv"
+shows_filename = "trakt-shows.csv"
 
 # Export Settings
 [export]

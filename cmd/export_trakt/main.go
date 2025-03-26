@@ -15,7 +15,7 @@ import (
 func main() {
 	// Parse command line flags
 	configPath := flag.String("config", "config/config.toml", "Path to configuration file")
-	exportType := flag.String("export", "watched", "Type of export (watched, collection, all)")
+	exportType := flag.String("export", "watched", "Type of export (watched, collection, shows, all)")
 	flag.Parse()
 
 	// Initialize logger
@@ -63,12 +63,15 @@ func main() {
 		exportWatchedMovies(traktClient, letterboxdExporter, log)
 	case "collection":
 		exportCollection(traktClient, letterboxdExporter, log)
+	case "shows":
+		exportShows(traktClient, letterboxdExporter, log)
 	case "all":
 		exportWatchedMovies(traktClient, letterboxdExporter, log)
 		exportCollection(traktClient, letterboxdExporter, log)
+		exportShows(traktClient, letterboxdExporter, log)
 	default:
 		log.Error("errors.invalid_export_type", map[string]interface{}{"type": *exportType})
-		fmt.Printf("Invalid export type: %s. Valid types are 'watched', 'collection', or 'all'\n", *exportType)
+		fmt.Printf("Invalid export type: %s. Valid types are 'watched', 'collection', 'shows', or 'all'\n", *exportType)
 		os.Exit(1)
 	}
 
@@ -108,6 +111,36 @@ func exportCollection(client *api.Client, exporter *export.LetterboxdExporter, l
 	// Export collection
 	log.Info("export.exporting_collection", nil)
 	if err := exporter.ExportCollectionMovies(movies); err != nil {
+		log.Error("export.export_failed", map[string]interface{}{"error": err.Error()})
+		os.Exit(1)
+	}
+}
+
+func exportShows(client *api.Client, exporter *export.LetterboxdExporter, log logger.Logger) {
+	// Get watched shows
+	log.Info("export.retrieving_watched_shows", nil)
+	shows, err := client.GetWatchedShows()
+	if err != nil {
+		log.Error("errors.api_request_failed", map[string]interface{}{"error": err.Error()})
+		os.Exit(1)
+	}
+
+	// Count total episodes
+	episodeCount := 0
+	for _, show := range shows {
+		for _, season := range show.Seasons {
+			episodeCount += len(season.Episodes)
+		}
+	}
+
+	log.Info("export.shows_retrieved", map[string]interface{}{
+		"shows":    len(shows),
+		"episodes": episodeCount,
+	})
+
+	// Export shows
+	log.Info("export.exporting_shows", nil)
+	if err := exporter.ExportShows(shows); err != nil {
 		log.Error("export.export_failed", map[string]interface{}{"error": err.Error()})
 		os.Exit(1)
 	}

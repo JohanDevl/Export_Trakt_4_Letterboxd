@@ -1,0 +1,37 @@
+{
+  "app": {
+    "name": "Export Trakt 4 Letterboxd",
+    "description": "Export your Trakt.tv history to Letterboxd format"
+  },
+  "startup": {
+    "loading_config": "Loading configuration from {{.path}}",
+    "starting": "Starting Export Trakt 4 Letterboxd",
+    "config_loaded": "Configuration loaded successfully"
+  },
+  "export": {
+    "retrieving_movies": "Retrieving movies from Trakt.tv",
+    "movies_retrieved": "Retrieved {{.count}} movies from Trakt.tv",
+    "exporting_movies": "Exporting movies to Letterboxd format",
+    "export_complete": "Successfully exported {{.count}} movies to {{.path}}",
+    "export_failed": "Failed to export movies: {{.error}}",
+    "retrieving_watched_movies": "Retrieving watched movies from Trakt.tv",
+    "exporting_watched_movies": "Exporting watched movies to Letterboxd format",
+    "retrieving_collection": "Retrieving collection movies from Trakt.tv",
+    "collection_retrieved": "Retrieved {{.count}} movies from your Trakt.tv collection",
+    "exporting_collection": "Exporting collection movies to Letterboxd format",
+    "collection_export_complete": "Successfully exported {{.count}} collection movies to {{.path}}",
+    "retrieving_watched_shows": "Retrieving watched shows from Trakt.tv",
+    "shows_retrieved": "Retrieved {{.shows}} shows with {{.episodes}} episodes from Trakt.tv",
+    "exporting_shows": "Exporting TV shows to CSV format",
+    "shows_export_complete": "Successfully exported {{.shows}} shows with {{.episodes}} episodes to {{.path}}"
+  },
+  "errors": {
+    "config_load_failed": "Failed to load configuration: {{.error}}",
+    "api_request_failed": "API request failed: {{.error}}",
+    "export_dir_create_failed": "Failed to create export directory: {{.error}}",
+    "file_create_failed": "Failed to create file: {{.error}}",
+    "log_file_failed": "Failed to set log file: {{.error}}",
+    "translator_failed": "Failed to initialize translator: {{.error}}",
+    "invalid_export_type": "Invalid export type: {{.type}}"
+  }
+}

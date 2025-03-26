@@ -12,6 +12,7 @@ import (
 	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/config"
 	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/logger"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // MockLogger implements the logger.Logger interface for testing
@@ -295,4 +296,119 @@ func TestExportCollectionMovies(t *testing.T) {
 	assert.Equal(t, "2010", records[2][1])
 	assert.Equal(t, "2023-03-20", records[2][2])
 	assert.Equal(t, "tt1375666", records[2][3])
+}
+
+func TestExportShows(t *testing.T) {
+	// Create a temporary directory for test files
+	tempDir, err := os.MkdirTemp("", "letterboxd-test")
+	require.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	// Create a test config
+	cfg := &config.Config{
+		Letterboxd: config.LetterboxdConfig{
+			ExportDir:     tempDir,
+			ShowsFilename: "test-shows-export.csv",
+		},
+		Export: config.ExportConfig{
+			DateFormat: "2006-01-02",
+		},
+	}
+
+	// Create a test logger
+	log := &MockLogger{}
+
+	// Create an exporter with the test config
+	exporter := NewLetterboxdExporter(cfg, log)
+
+	// Create some test data
+	testShow := api.WatchedShow{
+		Show: api.ShowInfo{
+			Title: "Game of Thrones",
+			Year:  2011,
+			IDs: api.ShowIDs{
+				IMDB: "tt0944947",
+			},
+		},
+		Seasons: []api.ShowSeason{
+			{
+				Number: 1,
+				Episodes: []api.EpisodeInfo{
+					{
+						Number: 1,
+						Title:  "Winter Is Coming",
+						IDs: api.EpisodeIDs{
+							Trakt: 73640,
+							TVDB:  3254641,
+						},
+					},
+					{
+						Number: 2,
+						Title:  "The Kingsroad",
+						IDs: api.EpisodeIDs{
+							Trakt: 73641,
+							TVDB:  3254651,
+						},
+					},
+				},
+			},
+			{
+				Number: 2,
+				Episodes: []api.EpisodeInfo{
+					{
+						Number: 1,
+						Title:  "The North Remembers",
+						IDs: api.EpisodeIDs{
+							Trakt: 73642,
+							TVDB:  4077553,
+						},
+					},
+				},
+			},
+		},
+		LastWatchedAt: "2022-01-01T12:00:00Z",
+	}
+
+	shows := []api.WatchedShow{testShow}
+
+	// Test the export function
+	err = exporter.ExportShows(shows)
+	require.NoError(t, err)
+
+	// Verify the file exists
+	filePath := filepath.Join(tempDir, "test-shows-export.csv")
+	_, err = os.Stat(filePath)
+	require.NoError(t, err)
+
+	// Read the file content
+	file, err := os.Open(filePath)
+	require.NoError(t, err)
+	defer file.Close()
+
+	reader := csv.NewReader(file)
+	lines, err := reader.ReadAll()
+	require.NoError(t, err)
+
+	// Verify header
+	require.Equal(t, []string{"Title", "Year", "Season", "Episode", "EpisodeTitle", "LastWatched", "IMDb ID"}, lines[0])
+
+	// Verify content
+	require.Len(t, lines, 4) // header + 3 episodes
+	require.Equal(t, "Game of Thrones", lines[1][0])
+	require.Equal(t, "2011", lines[1][1])
+	require.Equal(t, "1", lines[1][2])
+	require.Equal(t, "1", lines[1][3])
+	require.Equal(t, "Winter Is Coming", lines[1][4])
+	require.Equal(t, "2022-01-01", lines[1][5])
+	require.Equal(t, "tt0944947", lines[1][6])
+
+	require.Equal(t, "Game of Thrones", lines[2][0])
+	require.Equal(t, "1", lines[2][2])
+	require.Equal(t, "2", lines[2][3])
+	require.Equal(t, "The Kingsroad", lines[2][4])
+
+	require.Equal(t, "Game of Thrones", lines[3][0])
+	require.Equal(t, "2", lines[3][2])
+	require.Equal(t, "1", lines[3][3])
+	require.Equal(t, "The North Remembers", lines[3][4])
 } 
