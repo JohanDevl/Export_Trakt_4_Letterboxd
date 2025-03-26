@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 
@@ -26,15 +27,28 @@ type MovieIDs struct {
 
 // MovieInfo represents the basic movie information
 type MovieInfo struct {
-	Title string   `json:"title"`
-	Year  int     `json:"year"`
-	IDs   MovieIDs `json:"ids"`
+	Title    string   `json:"title"`
+	Year     int      `json:"year"`
+	IDs      MovieIDs `json:"ids"`
+	Tagline  string   `json:"tagline,omitempty"`
+	Overview string   `json:"overview,omitempty"`
+	Released string   `json:"released,omitempty"`
+	Runtime  int      `json:"runtime,omitempty"`
+	Country  string   `json:"country,omitempty"`
+	Updated  string   `json:"updated_at,omitempty"`
+	Trailer  string   `json:"trailer,omitempty"`
+	Homepage string   `json:"homepage,omitempty"`
+	Rating   float64  `json:"rating,omitempty"`
+	Votes    int      `json:"votes,omitempty"`
+	Comment  int      `json:"comment_count,omitempty"`
+	Genres   []string `json:"genres,omitempty"`
 }
 
 // Movie represents a watched movie with its metadata
 type Movie struct {
 	Movie         MovieInfo `json:"movie"`
 	LastWatchedAt string    `json:"last_watched_at"`
+	Plays         int       `json:"plays,omitempty"`
 }
 
 // CollectionMovie represents a movie in a collection
@@ -54,9 +68,22 @@ type ShowIDs struct {
 
 // ShowInfo represents the basic show information
 type ShowInfo struct {
-	Title string  `json:"title"`
-	Year  int     `json:"year"`
-	IDs   ShowIDs `json:"ids"`
+	Title     string   `json:"title"`
+	Year      int      `json:"year"`
+	IDs       ShowIDs  `json:"ids"`
+	Overview  string   `json:"overview,omitempty"`
+	FirstAired string  `json:"first_aired,omitempty"`
+	Runtime   int      `json:"runtime,omitempty"`
+	Network   string   `json:"network,omitempty"`
+	Country   string   `json:"country,omitempty"`
+	Updated   string   `json:"updated_at,omitempty"`
+	Trailer   string   `json:"trailer,omitempty"`
+	Homepage  string   `json:"homepage,omitempty"`
+	Status    string   `json:"status,omitempty"`
+	Rating    float64  `json:"rating,omitempty"`
+	Votes     int      `json:"votes,omitempty"`
+	Comment   int      `json:"comment_count,omitempty"`
+	Genres    []string `json:"genres,omitempty"`
 }
 
 // EpisodeIDs represents the various IDs associated with an episode
@@ -72,6 +99,12 @@ type EpisodeInfo struct {
 	Number     int        `json:"number"`
 	Title      string     `json:"title"`
 	IDs        EpisodeIDs `json:"ids"`
+	Overview   string     `json:"overview,omitempty"`
+	FirstAired string     `json:"first_aired,omitempty"`
+	Updated    string     `json:"updated_at,omitempty"`
+	Rating     float64    `json:"rating,omitempty"`
+	Votes      int        `json:"votes,omitempty"`
+	Comment    int        `json:"comment_count,omitempty"`
 }
 
 // WatchedShow represents a watched show with its metadata
@@ -79,6 +112,7 @@ type WatchedShow struct {
 	Show          ShowInfo     `json:"show"`
 	Seasons       []ShowSeason `json:"seasons"`
 	LastWatchedAt string       `json:"last_watched_at"`
+	Plays         int          `json:"plays,omitempty"`
 }
 
 // ShowSeason represents a season of a show
@@ -136,9 +170,30 @@ func (c *Client) makeRequest(req *http.Request) (*http.Response, error) {
 	return nil, fmt.Errorf("max retries exceeded: %w", lastErr)
 }
 
+// addExtendedInfo adds the extended parameter to the URL if it's configured
+func (c *Client) addExtendedInfo(endpoint string) string {
+	if c.config.Trakt.ExtendedInfo == "" {
+		return endpoint
+	}
+
+	baseURL, err := url.Parse(endpoint)
+	if err != nil {
+		c.logger.Warn("api.url_parse_error", map[string]interface{}{
+			"error": err.Error(),
+		})
+		return endpoint
+	}
+
+	q := baseURL.Query()
+	q.Set("extended", c.config.Trakt.ExtendedInfo)
+	baseURL.RawQuery = q.Encode()
+	return baseURL.String()
+}
+
 // GetWatchedMovies retrieves the list of watched movies from Trakt
 func (c *Client) GetWatchedMovies() ([]Movie, error) {
-	req, err := http.NewRequest("GET", c.config.Trakt.APIBaseURL+"/sync/watched/movies", nil)
+	endpoint := c.addExtendedInfo(c.config.Trakt.APIBaseURL + "/sync/watched/movies")
+	req, err := http.NewRequest("GET", endpoint, nil)
 	if err != nil {
 		c.logger.Error("errors.api_request_failed", map[string]interface{}{
 			"error": err.Error(),
@@ -198,7 +253,8 @@ func (c *Client) GetWatchedMovies() ([]Movie, error) {
 
 // GetCollectionMovies retrieves the list of movies in the user's collection from Trakt
 func (c *Client) GetCollectionMovies() ([]CollectionMovie, error) {
-	req, err := http.NewRequest("GET", c.config.Trakt.APIBaseURL+"/sync/collection/movies", nil)
+	endpoint := c.addExtendedInfo(c.config.Trakt.APIBaseURL + "/sync/collection/movies")
+	req, err := http.NewRequest("GET", endpoint, nil)
 	if err != nil {
 		c.logger.Error("errors.api_request_failed", map[string]interface{}{
 			"error": err.Error(),
@@ -261,7 +317,8 @@ func (c *Client) GetCollectionMovies() ([]CollectionMovie, error) {
 
 // GetWatchedShows retrieves the list of watched shows from Trakt
 func (c *Client) GetWatchedShows() ([]WatchedShow, error) {
-	req, err := http.NewRequest("GET", c.config.Trakt.APIBaseURL+"/sync/watched/shows", nil)
+	endpoint := c.addExtendedInfo(c.config.Trakt.APIBaseURL + "/sync/watched/shows")
+	req, err := http.NewRequest("GET", endpoint, nil)
 	if err != nil {
 		c.logger.Error("errors.api_request_failed", map[string]interface{}{
 			"error": err.Error(),
@@ -320,4 +377,146 @@ func (c *Client) GetWatchedShows() ([]WatchedShow, error) {
 		"count": len(shows),
 	})
 	return shows, nil
+}
+
+// Rating represents a user rating
+type Rating struct {
+	Movie      MovieInfo `json:"movie"`
+	RatedAt    string    `json:"rated_at"`
+	Rating     float64   `json:"rating"`
+}
+
+// WatchlistMovie represents a movie in the user's watchlist
+type WatchlistMovie struct {
+	Movie     MovieInfo `json:"movie"`
+	ListedAt  string    `json:"listed_at"`
+	Notes     string    `json:"notes,omitempty"`
+}
+
+// GetRatings retrieves the user's ratings from Trakt
+func (c *Client) GetRatings() ([]Rating, error) {
+	endpoint := c.addExtendedInfo(c.config.Trakt.APIBaseURL + "/sync/ratings/movies")
+	req, err := http.NewRequest("GET", endpoint, nil)
+	if err != nil {
+		c.logger.Error("errors.api_request_failed", map[string]interface{}{
+			"error": err.Error(),
+		})
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Add required headers
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("trakt-api-version", "2")
+	req.Header.Set("trakt-api-key", c.config.Trakt.ClientID)
+	req.Header.Set("Authorization", "Bearer "+c.config.Trakt.AccessToken)
+
+	resp, err := c.makeRequest(req)
+	if err != nil {
+		c.logger.Error("errors.api_request_failed", map[string]interface{}{
+			"error": err.Error(),
+		})
+		return nil, fmt.Errorf("failed to execute request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Handle rate limiting
+	if limit := resp.Header.Get("X-Ratelimit-Remaining"); limit != "" {
+		remaining, _ := strconv.Atoi(limit)
+		if remaining < 100 {
+			c.logger.Warn("api.rate_limit_warning", map[string]interface{}{
+				"remaining": remaining,
+			})
+		}
+	}
+
+	// Check response status
+	if resp.StatusCode != http.StatusOK {
+		var errorResp map[string]string
+		if err := json.NewDecoder(resp.Body).Decode(&errorResp); err != nil {
+			errorResp = map[string]string{"error": "unknown error"}
+		}
+		c.logger.Error("errors.api_request_failed", map[string]interface{}{
+			"status": resp.StatusCode,
+			"error":  errorResp["error"],
+		})
+		return nil, fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, errorResp["error"])
+	}
+
+	// Parse response
+	var ratings []Rating
+	if err := json.NewDecoder(resp.Body).Decode(&ratings); err != nil {
+		c.logger.Error("errors.api_response_parse_failed", map[string]interface{}{
+			"error": err.Error(),
+		})
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	c.logger.Info("api.ratings_fetched", map[string]interface{}{
+		"count": len(ratings),
+	})
+	return ratings, nil
+}
+
+// GetWatchlist retrieves the user's movie watchlist from Trakt
+func (c *Client) GetWatchlist() ([]WatchlistMovie, error) {
+	endpoint := c.addExtendedInfo(c.config.Trakt.APIBaseURL + "/sync/watchlist/movies")
+	req, err := http.NewRequest("GET", endpoint, nil)
+	if err != nil {
+		c.logger.Error("errors.api_request_failed", map[string]interface{}{
+			"error": err.Error(),
+		})
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Add required headers
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("trakt-api-version", "2")
+	req.Header.Set("trakt-api-key", c.config.Trakt.ClientID)
+	req.Header.Set("Authorization", "Bearer "+c.config.Trakt.AccessToken)
+
+	resp, err := c.makeRequest(req)
+	if err != nil {
+		c.logger.Error("errors.api_request_failed", map[string]interface{}{
+			"error": err.Error(),
+		})
+		return nil, fmt.Errorf("failed to execute request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Handle rate limiting
+	if limit := resp.Header.Get("X-Ratelimit-Remaining"); limit != "" {
+		remaining, _ := strconv.Atoi(limit)
+		if remaining < 100 {
+			c.logger.Warn("api.rate_limit_warning", map[string]interface{}{
+				"remaining": remaining,
+			})
+		}
+	}
+
+	// Check response status
+	if resp.StatusCode != http.StatusOK {
+		var errorResp map[string]string
+		if err := json.NewDecoder(resp.Body).Decode(&errorResp); err != nil {
+			errorResp = map[string]string{"error": "unknown error"}
+		}
+		c.logger.Error("errors.api_request_failed", map[string]interface{}{
+			"status": resp.StatusCode,
+			"error":  errorResp["error"],
+		})
+		return nil, fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, errorResp["error"])
+	}
+
+	// Parse response
+	var watchlist []WatchlistMovie
+	if err := json.NewDecoder(resp.Body).Decode(&watchlist); err != nil {
+		c.logger.Error("errors.api_response_parse_failed", map[string]interface{}{
+			"error": err.Error(),
+		})
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	c.logger.Info("api.watchlist_fetched", map[string]interface{}{
+		"count": len(watchlist),
+	})
+	return watchlist, nil
 } 

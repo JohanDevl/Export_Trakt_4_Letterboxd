@@ -572,4 +572,181 @@ func TestGetWatchedShows(t *testing.T) {
 	assert.Len(t, shows[0].Seasons[0].Episodes, 1)
 	assert.Equal(t, 1, shows[0].Seasons[0].Episodes[0].Number)
 	assert.Equal(t, "Winter Is Coming", shows[0].Seasons[0].Episodes[0].Title)
+}
+
+func TestGetRatings(t *testing.T) {
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("X-Ratelimit-Remaining", "120")
+
+		// Check if valid authorization header is present
+		authHeader := r.Header.Get("Authorization")
+		if authHeader != "Bearer test-token" {
+			w.WriteHeader(http.StatusUnauthorized)
+			json.NewEncoder(w).Encode(map[string]string{"error": "Invalid token"})
+			return
+		}
+
+		// Check if extended parameter is present
+		extended := r.URL.Query().Get("extended")
+		assert.Equal(t, "full", extended)
+
+		// Return successful response
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintf(w, `[
+			{
+				"movie": {
+					"title": "Inception",
+					"year": 2010,
+					"ids": {
+						"trakt": 16662,
+						"slug": "inception-2010",
+						"imdb": "tt1375666",
+						"tmdb": 27205
+					},
+					"tagline": "Your mind is the scene of the crime",
+					"overview": "A thief who steals corporate secrets through the use of dream-sharing technology..."
+				},
+				"rated_at": "2022-01-01T00:00:00.000Z",
+				"rating": 8.0
+			}
+		]`)
+	}))
+	defer mockServer.Close()
+
+	// Create a test config
+	cfg := &config.Config{
+		Trakt: config.TraktConfig{
+			ClientID:     "test-client-id",
+			ClientSecret: "test-client-secret",
+			AccessToken:  "test-token",
+			APIBaseURL:   mockServer.URL,
+			ExtendedInfo: "full",
+		},
+	}
+
+	// Create a test logger
+	log := &MockLogger{}
+
+	// Create a client with the mock server
+	client := NewClient(cfg, log)
+
+	// Test the GetRatings method
+	ratings, err := client.GetRatings()
+	assert.NoError(t, err)
+	assert.NotNil(t, ratings)
+	assert.Len(t, ratings, 1)
+	assert.Equal(t, "Inception", ratings[0].Movie.Title)
+	assert.Equal(t, 2010, ratings[0].Movie.Year)
+	assert.Equal(t, "tt1375666", ratings[0].Movie.IDs.IMDB)
+	assert.Equal(t, "Your mind is the scene of the crime", ratings[0].Movie.Tagline)
+	assert.Equal(t, 8.0, ratings[0].Rating)
+}
+
+func TestGetWatchlist(t *testing.T) {
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("X-Ratelimit-Remaining", "120")
+
+		// Check if valid authorization header is present
+		authHeader := r.Header.Get("Authorization")
+		if authHeader != "Bearer test-token" {
+			w.WriteHeader(http.StatusUnauthorized)
+			json.NewEncoder(w).Encode(map[string]string{"error": "Invalid token"})
+			return
+		}
+
+		// Check if extended parameter is present
+		extended := r.URL.Query().Get("extended")
+		assert.Equal(t, "full", extended)
+
+		// Return successful response
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintf(w, `[
+			{
+				"movie": {
+					"title": "The Dark Knight",
+					"year": 2008,
+					"ids": {
+						"trakt": 6,
+						"slug": "the-dark-knight-2008",
+						"imdb": "tt0468569",
+						"tmdb": 155
+					},
+					"tagline": "Why So Serious?",
+					"overview": "Batman raises the stakes in his war on crime..."
+				},
+				"listed_at": "2022-01-01T00:00:00.000Z",
+				"notes": "Want to watch this"
+			}
+		]`)
+	}))
+	defer mockServer.Close()
+
+	// Create a test config
+	cfg := &config.Config{
+		Trakt: config.TraktConfig{
+			ClientID:     "test-client-id",
+			ClientSecret: "test-client-secret",
+			AccessToken:  "test-token",
+			APIBaseURL:   mockServer.URL,
+			ExtendedInfo: "full",
+		},
+	}
+
+	// Create a test logger
+	log := &MockLogger{}
+
+	// Create a client with the mock server
+	client := NewClient(cfg, log)
+
+	// Test the GetWatchlist method
+	watchlist, err := client.GetWatchlist()
+	assert.NoError(t, err)
+	assert.NotNil(t, watchlist)
+	assert.Len(t, watchlist, 1)
+	assert.Equal(t, "The Dark Knight", watchlist[0].Movie.Title)
+	assert.Equal(t, 2008, watchlist[0].Movie.Year)
+	assert.Equal(t, "tt0468569", watchlist[0].Movie.IDs.IMDB)
+	assert.Equal(t, "Why So Serious?", watchlist[0].Movie.Tagline)
+	assert.Equal(t, "Want to watch this", watchlist[0].Notes)
+}
+
+func TestAddExtendedInfo(t *testing.T) {
+	// Test with extended info
+	cfg := &config.Config{
+		Trakt: config.TraktConfig{
+			APIBaseURL:   "https://api.trakt.tv",
+			ExtendedInfo: "full",
+		},
+	}
+	log := &MockLogger{}
+	client := NewClient(cfg, log)
+
+	url := client.addExtendedInfo("https://api.trakt.tv/movies/popular")
+	assert.Equal(t, "https://api.trakt.tv/movies/popular?extended=full", url)
+
+	// Test without extended info
+	cfg = &config.Config{
+		Trakt: config.TraktConfig{
+			APIBaseURL:   "https://api.trakt.tv",
+			ExtendedInfo: "",
+		},
+	}
+	client = NewClient(cfg, log)
+
+	url = client.addExtendedInfo("https://api.trakt.tv/movies/popular")
+	assert.Equal(t, "https://api.trakt.tv/movies/popular", url)
+
+	// Test with invalid URL
+	cfg = &config.Config{
+		Trakt: config.TraktConfig{
+			APIBaseURL:   "https://api.trakt.tv",
+			ExtendedInfo: "full",
+		},
+	}
+	client = NewClient(cfg, log)
+
+	url = client.addExtendedInfo("://invalid")
+	assert.Equal(t, "://invalid", url)
 } 

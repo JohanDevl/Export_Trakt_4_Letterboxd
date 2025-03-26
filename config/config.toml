@@ -4,6 +4,7 @@ client_id = ""
 client_secret = ""
 access_token = ""
 api_base_url = "https://api.trakt.tv"
+extended_info = "full"
 
 # Letterboxd Export Configuration
 [letterboxd]

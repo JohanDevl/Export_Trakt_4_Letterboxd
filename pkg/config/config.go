@@ -20,6 +20,7 @@ type TraktConfig struct {
 	ClientSecret string `toml:"client_secret"`
 	AccessToken  string `toml:"access_token"`
 	APIBaseURL   string `toml:"api_base_url"`
+	ExtendedInfo string `toml:"extended_info"`
 }
 
 // LetterboxdConfig holds Letterboxd export configuration

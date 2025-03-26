@@ -23,7 +23,15 @@
     "retrieving_watched_shows": "Retrieving watched shows from Trakt.tv",
     "shows_retrieved": "Retrieved {{.shows}} shows with {{.episodes}} episodes from Trakt.tv",
     "exporting_shows": "Exporting TV shows to CSV format",
-    "shows_export_complete": "Successfully exported {{.shows}} shows with {{.episodes}} episodes to {{.path}}"
+    "shows_export_complete": "Successfully exported {{.shows}} shows with {{.episodes}} episodes to {{.path}}",
+    "retrieving_ratings": "Retrieving movie ratings from Trakt.tv",
+    "ratings_retrieved": "Retrieved {{.count}} movie ratings from Trakt.tv",
+    "exporting_ratings": "Exporting movie ratings to Letterboxd format",
+    "ratings_export_complete": "Successfully exported {{.count}} movie ratings to {{.path}}",
+    "retrieving_watchlist": "Retrieving movie watchlist from Trakt.tv",
+    "watchlist_retrieved": "Retrieved {{.count}} movies from your Trakt.tv watchlist",
+    "exporting_watchlist": "Exporting movie watchlist to Letterboxd format",
+    "watchlist_export_complete": "Successfully exported {{.count}} watchlist movies to {{.path}}"
   },
   "errors": {
     "config_load_failed": "Failed to load configuration: {{.error}}",
@@ -32,6 +40,8 @@
     "file_create_failed": "Failed to create file: {{.error}}",
     "log_file_failed": "Failed to set log file: {{.error}}",
     "translator_failed": "Failed to initialize translator: {{.error}}",
-    "invalid_export_type": "Invalid export type: {{.type}}"
+    "invalid_export_type": "Invalid export type: {{.type}}",
+    "api_url_parse_error": "Failed to parse API URL: {{.error}}",
+    "api_response_parse_failed": "Failed to parse API response: {{.error}}"
   }
 }
