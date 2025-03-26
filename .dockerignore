@@ -29,6 +29,7 @@ tmp/
 exports/
 logs/
 config/
+!config/config.example.toml
 *.csv
 *.json
 
