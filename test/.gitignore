@@ -1,0 +1,6 @@
+# Test configuration and data files
+config/
+logs/
+exports/
+*.bak
+*.log 
