@@ -216,14 +216,14 @@ La documentation complète est disponible dans le [Wiki du projet](https://githu
 
 Vous y trouverez :
 
-- [Guide d'installation](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/wiki/en-Installation)
-- [Référence CLI](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/wiki/en-CLI-Reference)
-- [Fonctionnalités d'export](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/wiki/en-Export-Features)
-- [Guide API Trakt](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/wiki/en-Trakt-API-Guide)
-- [Internationalisation](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/wiki/en-Internationalization)
-- [Guide de migration](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/wiki/en-Migration-Guide)
-- [Tests](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/wiki/en-Testing)
-- [CI/CD](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/wiki/en-CI-CD)
+- [Guide d'installation](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/wiki/Installation)
+- [Référence CLI](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/wiki/CLI-Reference)
+- [Fonctionnalités d'export](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/wiki/Export-Features)
+- [Guide API Trakt](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/wiki/Trakt-API-Guide)
+- [Internationalisation](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/wiki/Internationalization)
+- [Guide de migration](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/wiki/Migration-Guide)
+- [Tests](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/wiki/Testing)
+- [CI/CD](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/wiki/CI-CD)
 
 ## Troubleshooting
 
