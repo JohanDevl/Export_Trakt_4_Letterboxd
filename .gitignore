@@ -24,6 +24,9 @@ creds.js
 # Private Files
 *.json
 !tests/mocks/*.json
+!locales/*.json
+!temp_locales/*.json
+!locales/*/translation.json
 *.cfg
 *.csv
 *.csv.gz
@@ -194,3 +197,8 @@ test_run/
 test_export.sh
 test_real_data.sh
 test_prod/
+
+# Config files with credentials
+config/config.toml
+# But keep the example file
+!config/config.example.toml

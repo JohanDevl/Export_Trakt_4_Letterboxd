@@ -1,28 +1,38 @@
-## Description
+## Pull Request Description
 
-Please include a summary of the change and which issue is fixed. Please also include relevant motivation and context.
+<!-- Describe what changes this PR introduces and why -->
 
-Fixes # (issue)
+## Related Issues
 
-## Type of change
+<!-- Link to related issues using the syntax: "Fixes #123" or "Relates to #456" -->
 
-Please delete options that are not relevant.
+## Type of Change
 
 - [ ] Bug fix (non-breaking change which fixes an issue)
 - [ ] New feature (non-breaking change which adds functionality)
 - [ ] Breaking change (fix or feature that would cause existing functionality to not work as expected)
-- [ ] Documentation update
+- [ ] This change requires a documentation update
+- [ ] Refactoring (no functional changes)
+- [ ] CI/CD or build process changes
 
-## How Has This Been Tested?
+## Checklist
 
-Please describe the tests that you ran to verify your changes. Provide instructions so we can reproduce.
-
-## Checklist:
-
-- [ ] My code follows the style guidelines of this project
-- [ ] I have performed a self-review of my own code
-- [ ] I have commented my code, particularly in hard-to-understand areas
-- [ ] I have made corresponding changes to the documentation
+- [ ] I have read the [CONTRIBUTING](../blob/main/CONTRIBUTING.md) document
+- [ ] My code follows the code style of this project
+- [ ] I have added tests that prove my fix is effective or that my feature works
+- [ ] New and existing unit tests pass locally with my changes
+- [ ] I have updated the documentation accordingly
 - [ ] My changes generate no new warnings
-- [ ] I have tested my changes and they work as expected
 - [ ] Any dependent changes have been merged and published in downstream modules
+
+## Screenshots (if applicable)
+
+<!-- Add screenshots here if UI changes are made -->
+
+## Testing Steps
+
+<!-- Provide instructions so we can reproduce your testing -->
+
+## Additional Information
+
+<!-- Any additional information about the PR -->

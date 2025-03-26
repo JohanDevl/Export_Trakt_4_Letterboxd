@@ -1,0 +1,35 @@
+# Trakt.tv API Configuration
+[trakt]
+# Get these credentials at https://trakt.tv/oauth/applications
+# NOTE: You must configure these values for the application to work
+client_id = "YOUR_CLIENT_ID"
+client_secret = "YOUR_CLIENT_SECRET"
+access_token = "YOUR_ACCESS_TOKEN"
+api_base_url = "https://api.trakt.tv"
+# Options: "min", "full", "metadata", "letterboxd"
+# Use "letterboxd" to enable export in Letterboxd import CSV format
+extended_info = "full"
+
+# Letterboxd Export Configuration
+[letterboxd]
+export_dir = "exports"
+# Optional: specify filenames for exports
+# watched_filename = "watched.csv"
+# collection_filename = "collection.csv"
+# shows_filename = "shows.csv"
+
+# Export Settings
+[export]
+format = "csv"
+date_format = "2006-01-02"
+
+# Logging Configuration
+[logging]
+level = "info"
+file = "logs/export.log"
+
+# Internationalization Settings
+[i18n]
+default_language = "en"
+language = "en"
+locales_dir = "temp_locales" 
