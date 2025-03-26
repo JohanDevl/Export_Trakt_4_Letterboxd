@@ -10,6 +10,7 @@ type Config struct {
 	Letterboxd LetterboxdConfig `toml:"letterboxd"`
 	Export    ExportConfig    `toml:"export"`
 	Logging   LoggingConfig   `toml:"logging"`
+	I18n      I18nConfig      `toml:"i18n"`
 }
 
 // TraktConfig holds Trakt.tv API configuration
@@ -35,6 +36,13 @@ type ExportConfig struct {
 type LoggingConfig struct {
 	Level string `toml:"level"`
 	File  string `toml:"file"`
+}
+
+// I18nConfig holds internationalization settings
+type I18nConfig struct {
+	DefaultLanguage string `toml:"default_language"`
+	Language       string `toml:"language"`
+	LocalesDir    string `toml:"locales_dir"`
 }
 
 // LoadConfig reads the config file and returns a Config struct

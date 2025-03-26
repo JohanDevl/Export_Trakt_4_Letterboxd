@@ -17,4 +17,10 @@ date_format = "2006-01-02"
 # Logging Configuration
 [logging]
 level = "info"
-file = "logs/export.log" 
+file = "logs/export.log"
+
+# Internationalization Settings
+[i18n]
+default_language = "en"
+language = "en"
+locales_dir = "locales" 
