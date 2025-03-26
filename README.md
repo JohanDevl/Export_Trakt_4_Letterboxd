@@ -17,9 +17,9 @@
 
 This project allows you to export your Trakt.tv data to a format compatible with Letterboxd.
 
-## 🚨 Important Update: Migration to Go 🚨
+## 🚀 Go Implementation 🚀
 
-We're migrating the application from Bash to Go for better performance, maintainability, and extended features. The Go version is currently under development in the `feature/go-migration` branch and includes:
+This application is now built entirely in Go, providing:
 
 - Modern, modular Go architecture with clean separation of concerns
 - Improved error handling and logging with multiple levels
@@ -27,15 +27,12 @@ We're migrating the application from Bash to Go for better performance, maintain
 - Robust test coverage (over 80% across all packages)
 - Enhanced Trakt.tv API client with retry mechanism and rate limiting
 
-Stay tuned for the upcoming 2.0 release with these improvements!
-
 ## Quick Start
 
 ### Prerequisites
 
 - A Trakt.tv account
 - A Trakt.tv application (Client ID and Client Secret)
-- jq and curl (for local installation)
 - Docker (for containerized installation)
 
 ### Using Docker (Recommended)
@@ -60,8 +57,7 @@ Stay tuned for the upcoming 2.0 release with these improvements!
    docker run -it --name trakt-export \
      -v $(pwd)/config:/app/config \
      -v $(pwd)/logs:/app/logs \
-     -v $(pwd)/copy:/app/copy \
-     -v $(pwd)/backup:/app/backup \
+     -v $(pwd)/exports:/app/exports \
      johandevl/export-trakt-4-letterboxd:latest
    ```
 
@@ -71,9 +67,7 @@ Stay tuned for the upcoming 2.0 release with these improvements!
    docker compose --profile scheduled up -d
    ```
 
-See [Docker Usage Guide](docs/DOCKER_USAGE.md) for more details.
-
-### Local Installation
+### Local Installation (From Source)
 
 1. Clone the repository:
 
@@ -82,23 +76,16 @@ See [Docker Usage Guide](docs/DOCKER_USAGE.md) for more details.
    cd Export_Trakt_4_Letterboxd
    ```
 
-2. Run the installation script:
+2. Build the Go application:
 
    ```bash
-   ./install.sh
+   go build -o export_trakt ./cmd/export_trakt/
    ```
 
-3. Configure Trakt authentication:
-
+3. Run the application:
    ```bash
-   ./setup_trakt.sh
+   ./export_trakt --config ./config/config.toml
    ```
-
-4. Export your data:
-   ```bash
-   ./Export_Trakt_4_Letterboxd.sh [option]
-   ```
-   Options: `normal` (default), `initial`, or `complete`
 
 ## Features
 
@@ -106,50 +93,23 @@ See [Docker Usage Guide](docs/DOCKER_USAGE.md) for more details.
 - Export watch history with dates and ratings
 - Export watchlist items
 - Automatic detection of rewatched movies
-- Supports various export modes (normal, initial, complete)
+- Supports various export modes
 - Modular code structure for better maintainability
-- Automated exports with cron
+- Automated exports with scheduling
 - Docker support
-- Coming soon: Go implementation with improved performance and reliability
+- Complete Go implementation with improved performance and reliability
 
 ## Project Structure
 
-### Current Bash Version
-
-The codebase has been modularized for better maintenance and readability:
-
-```
-Export_Trakt_4_Letterboxd/
-├── lib/                     # Library modules
-│   ├── config.sh            # Configuration management
-│   ├── utils.sh             # Utility functions and debugging
-│   ├── trakt_api.sh         # API interaction functions
-│   ├── data_processing.sh   # Data transformation functions
-│   └── main.sh              # Main orchestration module
-├── config/                  # Configuration files
-├── logs/                    # Log output
-├── backup/                  # Backup of API responses
-├── TEMP/                    # Temporary processing files
-├── copy/                    # Output CSV files
-├── tests/                   # Automated tests
-│   ├── unit/                # Unit tests for library modules
-│   ├── integration/         # Integration tests
-│   ├── mocks/               # Mock API responses
-│   ├── run_tests.sh         # Test runner script
-│   └── test_helper.bash     # Test helper functions
-├── Export_Trakt_4_Letterboxd.sh # Main script (simplified)
-├── setup_trakt.sh           # Authentication setup
-└── install.sh               # Installation script
-```
-
-### Go Version (In Development)
-
-The new Go implementation follows a modern application structure:
+The Go implementation follows a modern application structure:
 
 ```
 Export_Trakt_4_Letterboxd/
 ├── cmd/                     # Application entry points
 │   └── export_trakt/        # Main executable
+├── internal/                # Private application code
+│   ├── models/              # Data models
+│   └── utils/               # Private utilities
 ├── pkg/                     # Packages for core functionality
 │   ├── api/                 # Trakt.tv API client
 │   ├── config/              # Configuration management
@@ -160,9 +120,8 @@ Export_Trakt_4_Letterboxd/
 │   ├── en.json              # English translations
 │   └── fr.json              # French translations
 ├── config/                  # Configuration files
-├── tests/                   # Test files
-│   └── integration/         # Integration tests
-└── coverage.html            # Test coverage report
+├── build/                   # Compiled binaries
+└── logs/                    # Log output
 ```
 
 ## Testing
@@ -171,44 +130,20 @@ The project includes comprehensive automated tests to ensure code quality and pr
 
 ### Running Tests
 
-To run the tests, you need to have the following dependencies installed:
+To run the tests, you need to have Go installed.
 
-- jq
-- bats-core (installed as Git submodule)
-- Go (for Go version)
-
-Run all tests for the Bash version:
-
-```bash
-./tests/run_tests.sh
-```
-
-Run all tests for the Go version:
+Run all tests:
 
 ```bash
 go test -v ./...
 ```
 
-Generate a coverage report for the Go version:
+Generate a coverage report:
 
 ```bash
 go test -coverprofile=coverage.out ./...
 go tool cover -html=coverage.out -o coverage.html
 ```
-
-### Testing Framework
-
-The testing framework uses:
-
-- Bats (Bash Automated Testing System) for testing the Bash version
-- Go testing framework for the Go version
-- Mock API responses to test without real API calls
-- Integration tests to verify the complete export process
-- Unit tests for core library functions
-
-### Continuous Integration
-
-Tests are automatically run in the CI/CD pipeline for every pull request to ensure code quality before merging.
 
 ## Documentation
 

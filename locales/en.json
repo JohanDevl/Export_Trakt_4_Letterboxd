@@ -31,9 +31,7 @@
     "retrieving_watchlist": "Retrieving movie watchlist from Trakt.tv",
     "watchlist_retrieved": "Retrieved {{.count}} movies from your Trakt.tv watchlist",
     "exporting_watchlist": "Exporting movie watchlist to Letterboxd format",
-    "watchlist_export_complete": "Successfully exported {{.count}} watchlist movies to {{.path}}",
-    "exporting_letterboxd_format": "Exporting in Letterboxd import format",
-    "letterboxd_export_complete": "Successfully exported {{.count}} movies to Letterboxd import format at {{.path}}"
+    "watchlist_export_complete": "Successfully exported {{.count}} watchlist movies to {{.path}}"
   },
   "errors": {
     "config_load_failed": "Failed to load configuration: {{.error}}",

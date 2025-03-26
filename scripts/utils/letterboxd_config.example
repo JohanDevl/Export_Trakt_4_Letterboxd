@@ -1,8 +1,0 @@
-{
-  "Username": "your_letterboxd_username",
-  "Password": "your_letterboxd_password",
-  "StatsFile": "./movie_stats.md",
-  "Title": "My Movie Collection Statistics",
-  "Tags": ["statistics", "trakt", "export", "movies"],
-  "Visibility": "public"
-} 
