@@ -105,8 +105,13 @@ func (t *Translator) Translate(messageID string, templateData map[string]interfa
 	})
 
 	if err != nil {
-		// If error, return the original ID without logging
-		// This prevents recursive logging calls
+		// Log a warning about the missing translation
+		t.log.Warn("errors.translation_not_found", map[string]interface{}{
+			"messageID": messageID,
+			"error":     err.Error(),
+		})
+		
+		// If error, return the original ID
 		return messageID
 	}
 
