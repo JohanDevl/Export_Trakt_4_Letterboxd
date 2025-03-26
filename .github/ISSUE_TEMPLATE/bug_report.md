@@ -1,35 +1,57 @@
 ---
-name: Bug report
+name: Bug Report
 about: Create a report to help us improve
-title: "[BUG] "
-labels: bug
+title: "[Bug] "
+labels: "bug"
 assignees: ""
 ---
 
-**Describe the bug**
-A clear and concise description of what the bug is.
+## Bug Report
 
-**To Reproduce**
-Steps to reproduce the behavior:
+### Description
 
-1. Go to '...'
-2. Run command '....'
-3. See error
+<!-- A clear and concise description of what the bug is -->
 
-**Expected behavior**
-A clear and concise description of what you expected to happen.
+### Version Information
 
-**Screenshots**
-If applicable, add screenshots to help explain your problem.
+- Version: <!-- e.g., v2.0.0, v2.0.0-beta1 -->
+- Platform: <!-- e.g., Linux, macOS, Windows, Docker -->
+- Architecture: <!-- e.g., amd64, arm64 -->
 
-**Environment (please complete the following information):**
+### Steps to Reproduce
 
-- OS: [e.g. Ubuntu 20.04, macOS 12.0]
-- Docker version (if applicable): [e.g. 20.10.12]
-- Script version: [e.g. commit hash or version tag]
+1. <!-- First step -->
+2. <!-- Second step -->
+3. <!-- And so on... -->
 
-**Logs**
-Please include relevant logs from the `logs` directory if applicable.
+### Expected Behavior
 
-**Additional context**
-Add any other context about the problem here.
+<!-- A clear and concise description of what you expected to happen -->
+
+### Actual Behavior
+
+<!-- A clear and concise description of what actually happened -->
+
+### Screenshots
+
+<!-- If applicable, add screenshots to help explain your problem -->
+
+### Configuration File
+
+<!-- Please provide your config.toml (with sensitive information redacted) -->
+
+```toml
+# Paste your config here
+```
+
+### Logs
+
+<!-- Please include relevant logs -->
+
+```
+Paste logs here or attach log files
+```
+
+### Additional Context
+
+<!-- Add any other context about the problem here -->

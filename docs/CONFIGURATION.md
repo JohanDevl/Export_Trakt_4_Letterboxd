@@ -1,132 +1,349 @@
-# Configuration and Basic Usage
+# Configuration Guide
 
-This document provides detailed information about configuring and using the Export Trakt 4 Letterboxd application.
+This document provides detailed information about configuring Export Trakt for Letterboxd to suit your needs.
 
-## Prerequisites
+## Table of Contents
 
-- A Trakt.tv account
-- A Trakt.tv application (Client ID and Client Secret)
-- jq (for JSON processing)
-- curl (for API requests)
+- [Configuration File](#configuration-file)
+- [Configuration Options](#configuration-options)
+- [Environment Variables](#environment-variables)
+- [Command-Line Overrides](#command-line-overrides)
+- [Configuration Examples](#configuration-examples)
+- [Advanced Configuration](#advanced-configuration)
 
-## Creating a Trakt.tv Application
+## Configuration File
 
-1. Log in to your Trakt.tv account
-2. Go to https://trakt.tv/oauth/applications
-3. Click on "New Application"
-4. Fill in the information:
-   - Name: Export Trakt 4 Letterboxd
-   - Redirect URL: urn:ietf:wg:oauth:2.0:oob
-   - Description: (optional)
-5. Save the application
-6. Note your Client ID and Client Secret
+Export Trakt for Letterboxd uses a TOML configuration file located at `config/config.toml` by default. This file contains all the settings needed to run the application.
 
-## Setting Up the Configuration File
+### Basic Structure
 
-Copy the example configuration file to create your own:
+The configuration file is organized into sections:
+
+```toml
+[trakt]
+# Trakt.tv API settings
+
+[export]
+# Export settings
+
+[logging]
+# Logging configuration
+
+[i18n]
+# Internationalization settings
+```
+
+### Creating a Configuration File
+
+You can create a configuration file manually or use the application's interactive setup:
 
 ```bash
-cp .config.cfg.example .config.cfg
+# Interactive setup
+export-trakt setup
+
+# Or manually create the file
+mkdir -p config
+touch config/config.toml
 ```
 
-You can edit the configuration file manually if you prefer, but it's recommended to use the setup script in the next step.
+## Configuration Options
 
-## Authentication Configuration
+### Trakt Section
 
-Run the configuration script:
+The `[trakt]` section contains settings for connecting to the Trakt.tv API:
+
+```toml
+[trakt]
+# Required: Your Trakt.tv API client ID
+client_id = "YOUR_CLIENT_ID"
+
+# Required: Your Trakt.tv API client secret
+client_secret = "YOUR_CLIENT_SECRET"
+
+# Optional: Redirect URI for OAuth authentication
+# Default: "urn:ietf:wg:oauth:2.0:oob"
+redirect_uri = "urn:ietf:wg:oauth:2.0:oob"
+
+# Optional: Token file path for storing authentication tokens
+# Default: "./config/token.json"
+token_file = "./config/token.json"
+
+# Optional: API request timeout in seconds
+# Default: 30
+timeout = 30
+
+# Optional: Maximum number of retries for failed API requests
+# Default: 3
+max_retries = 3
+
+# Optional: API request rate limit per minute
+# Default: 60
+rate_limit = 60
+```
+
+### Export Section
+
+The `[export]` section controls how data is exported:
+
+```toml
+[export]
+# Optional: Directory where export files will be saved
+# Default: "./exports"
+output_dir = "./exports"
+
+# Optional: Export file naming format
+# Default: "trakt_{{type}}_{{timestamp}}.csv"
+file_format = "trakt_{{type}}_{{timestamp}}.csv"
+
+# Optional: Default export mode
+# Options: "normal", "complete", "initial"
+# Default: "normal"
+mode = "normal"
+
+# Optional: Include watchlist items in export
+# Default: true
+include_watchlist = true
+
+# Optional: Include collection items in export
+# Default: false
+include_collections = false
+
+# Optional: Include ratings in export
+# Default: true
+include_ratings = true
+
+# Optional: Minimum rating to include (0-10 scale)
+# Default: 0 (include all ratings)
+min_rating = 0
+
+# Optional: Convert Trakt's 10-point scale to Letterboxd's 5-star scale
+# Default: true
+convert_ratings = true
+
+# Optional: Keep temporary files after export
+# Default: false
+keep_temp_files = false
+```
+
+### Logging Section
+
+The `[logging]` section configures logging behavior:
+
+```toml
+[logging]
+# Optional: Log level
+# Options: "debug", "info", "warn", "error"
+# Default: "info"
+level = "info"
+
+# Optional: Log file path
+# Default: "./logs/export.log"
+file = "./logs/export.log"
+
+# Optional: Maximum log file size in MB before rotation
+# Default: 10
+max_size = 10
+
+# Optional: Maximum number of log files to keep
+# Default: 5
+max_files = 5
+
+# Optional: Enable console logging
+# Default: true
+console = true
+
+# Optional: Enable color in console output
+# Default: true
+color = true
+```
+
+### Internationalization Section
+
+The `[i18n]` section configures language settings:
+
+```toml
+[i18n]
+# Optional: UI language
+# Options: "en", "fr", etc. (depends on available translations)
+# Default: "en"
+language = "en"
+
+# Optional: Path to directory containing locale files
+# Default: "./locales"
+locales_dir = "./locales"
+```
+
+## Environment Variables
+
+All configuration options can also be set using environment variables, which is particularly useful in containerized environments. Environment variables take precedence over the configuration file.
+
+Variables follow the pattern: `EXPORT_TRAKT_<SECTION>_<OPTION>` (uppercase, with underscores).
+
+Examples:
 
 ```bash
-./setup_trakt.sh
+# Set Trakt.tv client ID
+export EXPORT_TRAKT_TRAKT_CLIENT_ID="your-client-id"
+
+# Set log level to debug
+export EXPORT_TRAKT_LOGGING_LEVEL="debug"
+
+# Enable collection export
+export EXPORT_TRAKT_EXPORT_INCLUDE_COLLECTIONS="true"
 ```
 
-This script will guide you through the following steps:
+In Docker, you can set these in your docker-compose.yml:
 
-1. Enter your Client ID and Client Secret
-2. Enter your Trakt username
-3. Obtain an authorization code
-4. Generate access tokens
+```yaml
+services:
+  export-trakt:
+    image: johandevl/export-trakt-4-letterboxd:latest
+    environment:
+      - EXPORT_TRAKT_TRAKT_CLIENT_ID=your-client-id
+      - EXPORT_TRAKT_TRAKT_CLIENT_SECRET=your-client-secret
+      - EXPORT_TRAKT_EXPORT_OUTPUT_DIR=/app/exports
+```
 
-## Basic Usage
+## Command-Line Overrides
 
-### Export Your Data
+Most configuration options can be overridden using command-line flags, which take highest precedence:
 
 ```bash
-./Export_Trakt_4_Letterboxd.sh [option]
+# Override output directory
+export-trakt --output-dir /custom/path/to/exports
+
+# Override log level
+export-trakt --log-level debug
+
+# Use a different configuration file
+export-trakt --config /path/to/custom-config.toml
 ```
 
-Available options:
+Run `export-trakt --help` to see all available command-line options.
 
-- `normal` (default): Exports rated movies, rated episodes, movie and TV show history, and watchlist
-- `initial`: Exports only rated and watched movies
-- `complete`: Exports all available data
+## Configuration Examples
 
-### Result
+### Basic Configuration
 
-The script generates a `letterboxd_import.csv` file that you can import on Letterboxd at the following address: https://letterboxd.com/import/
+A minimal configuration file with just the required settings:
 
-## Configuration File Options
-
-The configuration file (`.config.cfg`) contains several options that you can customize:
-
-```
-# Trakt API credentials
-CLIENT_ID="YOUR_TRAKT_CLIENT_ID"
-CLIENT_SECRET="YOUR_TRAKT_CLIENT_SECRET"
-TRAKT_USERNAME="YOUR_TRAKT_USERNAME"
-
-# TMDB API key (optional, for better movie matching)
-TMDB_API_KEY="YOUR_TMDB_API_KEY"
-
-# Export options
-EXPORT_RATINGS=true
-EXPORT_HISTORY=true
-EXPORT_WATCHLIST=true
-EXPORT_EPISODES=true
-
-# Date format for export (YYYY-MM-DD)
-DATE_FORMAT="%Y-%m-%d"
-
-# Minimum rating to export (1-10)
-MIN_RATING=1
-
-# Export path
-EXPORT_PATH="/app/copy"
-
-# Backup options
-BACKUP_ENABLED=true
-BACKUP_DIR="/app/backup"
-
-# Log options
-LOG_ENABLED=true
-LOG_DIR="/app/logs"
-LOG_LEVEL="info"
-
-# Advanced options
-USE_TMDB_FOR_MATCHING=true
-INCLUDE_YEAR_IN_TITLE=true
-INCLUDE_LETTERBOXD_TAGS=true
+```toml
+[trakt]
+client_id = "your-client-id"
+client_secret = "your-client-secret"
 ```
 
-## Troubleshooting
+### Complete Export Configuration
 
-### No Data is Exported
+Configuration optimized for a complete export of all Trakt.tv data:
 
-If the script runs without error but no data is exported:
+```toml
+[trakt]
+client_id = "your-client-id"
+client_secret = "your-client-secret"
+max_retries = 5
+timeout = 60
 
-1. Check that your Trakt.tv profile is public
-2. Verify that you have correctly configured authentication
-3. Run the configuration script again: `./setup_trakt.sh`
+[export]
+mode = "complete"
+output_dir = "./exports/complete"
+include_watchlist = true
+include_collections = true
+include_ratings = true
+file_format = "trakt_complete_{{type}}_{{timestamp}}.csv"
 
-### Authentication Errors
+[logging]
+level = "info"
+file = "./logs/complete_export.log"
+```
 
-If you encounter authentication errors:
+### Regular Update Configuration
 
-1. Check that your Client ID and Client Secret are correct
-2. Get a new access token by running `./setup_trakt.sh`
+Configuration for regular updates to Letterboxd:
 
-### File Permission Issues
+```toml
+[trakt]
+client_id = "your-client-id"
+client_secret = "your-client-secret"
 
-If you encounter file permission issues:
+[export]
+mode = "normal"
+output_dir = "./exports/updates"
+include_watchlist = false
+min_rating = 0
 
-1. Make sure the scripts are executable: `chmod +x *.sh`
-2. Check that you have write permissions to the output directories
+[logging]
+level = "info"
+file = "./logs/updates.log"
+max_files = 10
+```
+
+### Development Configuration
+
+Configuration useful during development:
+
+```toml
+[trakt]
+client_id = "your-client-id"
+client_secret = "your-client-secret"
+
+[export]
+mode = "normal"
+output_dir = "./dev_exports"
+keep_temp_files = true
+
+[logging]
+level = "debug"
+file = "./logs/dev.log"
+console = true
+color = true
+
+[i18n]
+language = "en"
+```
+
+## Advanced Configuration
+
+### Multiple Configuration Files
+
+You can maintain multiple configuration files for different purposes and select which to use at runtime:
+
+```bash
+# Use complete export configuration
+export-trakt --config ./config/complete.toml
+
+# Use update configuration
+export-trakt --config ./config/update.toml
+```
+
+### Using jq to Modify Configuration
+
+You can programmatically modify your configuration using tools like `jq`:
+
+```bash
+# Update the output directory
+cat config/config.toml | jq '.export.output_dir = "./new_exports"' > config/config.toml.new
+mv config/config.toml.new config/config.toml
+```
+
+### Secure Storage of API Keys
+
+For improved security, consider:
+
+1. Using environment variables for sensitive data
+2. Using a secrets manager
+3. Setting restricted file permissions on your config file:
+
+```bash
+chmod 600 config/config.toml
+```
+
+### Configuration Validation
+
+The application validates your configuration at startup. For manual validation:
+
+```bash
+export-trakt validate --config ./config/config.toml
+```
+
+This will check your configuration for errors without running the export.
