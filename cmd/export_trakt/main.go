@@ -24,7 +24,7 @@ func main() {
 	log.Info("startup.loading_config", map[string]interface{}{"path": *configPath})
 	cfg, err := config.LoadConfig(*configPath)
 	if err != nil {
-		log.Errorf("errors.config_load_failed", map[string]interface{}{"error": err})
+		log.Error("errors.config_load_failed", map[string]interface{}{"error": err.Error()})
 		os.Exit(1)
 	}
 
@@ -32,7 +32,7 @@ func main() {
 	log.SetLogLevel(cfg.Logging.Level)
 	if cfg.Logging.File != "" {
 		if err := log.SetLogFile(cfg.Logging.File); err != nil {
-			log.Errorf("Failed to set log file: %v", err)
+			log.Error("errors.log_file_failed", map[string]interface{}{"error": err.Error()})
 			os.Exit(1)
 		}
 	}
@@ -40,24 +40,24 @@ func main() {
 	// Initialize translator
 	translator, err := i18n.NewTranslator(&cfg.I18n, log)
 	if err != nil {
-		log.Errorf("Failed to initialize translator: %v", err)
+		log.Error("errors.translator_failed", map[string]interface{}{"error": err.Error()})
 		os.Exit(1)
 	}
 
 	// Update logger to use translator
 	log.SetTranslator(translator)
 
-	log.Info("startup.starting")
-	log.Info("startup.config_loaded")
+	log.Info("startup.starting", nil)
+	log.Info("startup.config_loaded", nil)
 
 	// Initialize Trakt client
-	traktClient := api.NewTraktClient(&cfg.Trakt, log)
+	traktClient := api.NewClient(cfg, log)
 
 	// Get watched movies
-	log.Info("export.retrieving_movies")
+	log.Info("export.retrieving_movies", nil)
 	movies, err := traktClient.GetWatchedMovies()
 	if err != nil {
-		log.Errorf("errors.api_request_failed", map[string]interface{}{"error": err})
+		log.Error("errors.api_request_failed", map[string]interface{}{"error": err.Error()})
 		os.Exit(1)
 	}
 
@@ -67,9 +67,9 @@ func main() {
 	letterboxdExporter := export.NewLetterboxdExporter(cfg, log)
 
 	// Export movies
-	log.Info("export.exporting_movies")
+	log.Info("export.exporting_movies", nil)
 	if err := letterboxdExporter.ExportMovies(movies); err != nil {
-		log.Errorf("export.export_failed", map[string]interface{}{"error": err})
+		log.Error("export.export_failed", map[string]interface{}{"error": err.Error()})
 		os.Exit(1)
 	}
 

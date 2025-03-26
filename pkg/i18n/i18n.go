@@ -14,14 +14,14 @@ import (
 
 // Translator handles all internationalization operations
 type Translator struct {
-	bundle *i18n.Bundle
-	config *config.I18nConfig
-	log    *logger.Logger
+	bundle    *i18n.Bundle
+	config    *config.I18nConfig
+	log       logger.Logger
 	localizer *i18n.Localizer
 }
 
 // NewTranslator creates a new translator instance
-func NewTranslator(cfg *config.I18nConfig, log *logger.Logger) (*Translator, error) {
+func NewTranslator(cfg *config.I18nConfig, log logger.Logger) (*Translator, error) {
 	bundle := i18n.NewBundle(language.English)
 	bundle.RegisterUnmarshalFunc("json", json.Unmarshal)
 
@@ -57,11 +57,16 @@ func (t *Translator) loadTranslations() error {
 
 		path := filepath.Join(t.config.LocalesDir, entry.Name())
 		if _, err := t.bundle.LoadMessageFile(path); err != nil {
-			t.log.Warnf("Failed to load translation file %s: %v", path, err)
+			t.log.Warn("errors.translation_file_load_failed", map[string]interface{}{
+				"path":  path,
+				"error": err.Error(),
+			})
 			continue
 		}
 
-		t.log.Debugf("Loaded translation file: %s", path)
+		t.log.Debug("i18n.translation_file_loaded", map[string]interface{}{
+			"path": path,
+		})
 	}
 
 	return nil
@@ -75,11 +80,14 @@ func (t *Translator) Translate(messageID string, templateData map[string]interfa
 
 	translation, err := t.localizer.Localize(&i18n.LocalizeConfig{
 		DefaultMessage: &msg,
-		TemplateData:  templateData,
+		TemplateData:   templateData,
 	})
 
 	if err != nil {
-		t.log.Warnf("Failed to translate message %s: %v", messageID, err)
+		t.log.Warn("errors.translation_failed", map[string]interface{}{
+			"messageID": messageID,
+			"error":     err.Error(),
+		})
 		return messageID
 	}
 
@@ -90,5 +98,7 @@ func (t *Translator) Translate(messageID string, templateData map[string]interfa
 func (t *Translator) SetLanguage(lang string) {
 	t.localizer = i18n.NewLocalizer(t.bundle, lang, t.config.DefaultLanguage)
 	t.config.Language = lang
-	t.log.Infof("Language changed to: %s", lang)
+	t.log.Info("i18n.language_changed", map[string]interface{}{
+		"language": lang,
+	})
 } 

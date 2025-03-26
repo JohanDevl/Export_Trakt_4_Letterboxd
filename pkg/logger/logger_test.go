@@ -46,8 +46,19 @@ func TestNewLogger(t *testing.T) {
 	if logger == nil {
 		t.Error("Expected non-nil logger")
 	}
-	if logger.Logger == nil {
-		t.Error("Expected non-nil internal logger")
+	
+	// We can't access the internal logger directly in the interface-based implementation
+	// Instead, test that basic logging works
+	var buf bytes.Buffer
+	stdLogger, ok := logger.(*StandardLogger)
+	if !ok {
+		t.Fatal("Expected StandardLogger implementation")
+	}
+	stdLogger.SetOutput(&buf)
+	
+	logger.Info("test message")
+	if !strings.Contains(buf.String(), "test message") {
+		t.Error("Expected log to contain the test message")
 	}
 }
 
@@ -87,9 +98,14 @@ func TestSetLogLevel(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			logger := NewLogger()
+			stdLogger, ok := logger.(*StandardLogger)
+			if !ok {
+				t.Fatal("Expected StandardLogger implementation")
+			}
+			
 			logger.SetLogLevel(tt.level)
-			if logger.GetLevel() != tt.expectedLevel {
-				t.Errorf("Expected level %v, got %v", tt.expectedLevel, logger.GetLevel())
+			if stdLogger.GetLevel() != tt.expectedLevel {
+				t.Errorf("Expected level %v, got %v", tt.expectedLevel, stdLogger.GetLevel())
 			}
 		})
 	}
@@ -144,7 +160,11 @@ func TestSetLogFile(t *testing.T) {
 func TestLoggingWithTranslation(t *testing.T) {
 	var buf bytes.Buffer
 	logger := NewLogger()
-	logger.SetOutput(&buf)
+	stdLogger, ok := logger.(*StandardLogger)
+	if !ok {
+		t.Fatal("Expected StandardLogger implementation")
+	}
+	stdLogger.SetOutput(&buf)
 	logger.SetLogLevel("debug")
 
 	mockTranslator := NewMockTranslator()
@@ -222,7 +242,11 @@ func TestLoggingWithTranslation(t *testing.T) {
 func TestLoggingLevelFiltering(t *testing.T) {
 	var buf bytes.Buffer
 	logger := NewLogger()
-	logger.SetOutput(&buf)
+	stdLogger, ok := logger.(*StandardLogger)
+	if !ok {
+		t.Fatal("Expected StandardLogger implementation")
+	}
+	stdLogger.SetOutput(&buf)
 	logger.SetLogLevel("info")
 
 	mockTranslator := NewMockTranslator()
@@ -245,13 +269,16 @@ func TestLoggingLevelFiltering(t *testing.T) {
 func TestLoggingWithoutTranslator(t *testing.T) {
 	var buf bytes.Buffer
 	logger := NewLogger()
-	logger.SetOutput(&buf)
+	stdLogger, ok := logger.(*StandardLogger)
+	if !ok {
+		t.Fatal("Expected StandardLogger implementation")
+	}
+	stdLogger.SetOutput(&buf)
 	logger.SetLogLevel("info")
 
-	// Log without translator should use raw message ID
-	messageID := "test.raw.message"
-	logger.Info(messageID, nil)
-	if !strings.Contains(buf.String(), messageID) {
-		t.Errorf("Expected raw message ID '%s' in log, got '%s'", messageID, buf.String())
+	// Log without translator should use message ID directly
+	logger.Info("direct.message", nil)
+	if !strings.Contains(buf.String(), "direct.message") {
+		t.Error("Message ID should be used directly when no translator is set")
 	}
 } 
