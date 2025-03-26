@@ -1,7 +1,52 @@
-.git
+# Git and GitHub
+.git/
+.github/
 .gitignore
-.DS_Store
+
+# Development and CI files
+.vscode/
+.idea/
+*.swp
+*.swo
+.env
+.env.example
+docker-compose*.yml
+.dockerignore
+*.md
+!README.md
+!LICENSE
+
+# Build artifacts
+bin/
+coverage*
+*.out
+*.test
+*.prof
+__debug_bin*
+tmp/
+
+# Generated data
+exports/
 logs/
+config/
+*.csv
+*.json
+
+# Node.js files (for old version)
+node_modules/
+npm-debug.log
+
+# Go specific
+vendor/
+dist/
+
+# Test directories
+tests/
+
+# Documentation
+docs/
+
+.DS_Store
 backup/
 copy/
 brain_ops/
@@ -9,6 +54,4 @@ TEMP/
 *.tar.gz
 letterboxd_import.csv
 watched_*.csv
-watchlist_*.csv
-README.md
-LICENSE 
+watchlist_*.csv 
