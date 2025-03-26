@@ -10,6 +10,7 @@ import (
 
 	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/config"
 	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/logger"
+	"github.com/stretchr/testify/assert"
 )
 
 // MockLogger implements the logger.Logger interface for testing
@@ -377,4 +378,116 @@ func TestResponseParsing(t *testing.T) {
 			tc.validate(t, movies)
 		})
 	}
+}
+
+func TestGetCollectionMovies(t *testing.T) {
+	// Set up mock HTTP server
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Check request method and path
+		assert.Equal(t, "GET", r.Method)
+		assert.Equal(t, "/sync/collection/movies", r.URL.Path)
+
+		// Check required headers
+		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+		assert.Equal(t, "2", r.Header.Get("trakt-api-version"))
+		assert.Equal(t, "test-client-id", r.Header.Get("trakt-api-key"))
+		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+
+		// Set rate limiting headers
+		w.Header().Set("X-Ratelimit-Remaining", "150")
+
+		// Return mock response
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`[
+			{
+				"movie": {
+					"title": "The Dark Knight",
+					"year": 2008,
+					"ids": {
+						"trakt": 16,
+						"slug": "the-dark-knight-2008",
+						"imdb": "tt0468569",
+						"tmdb": 155
+					}
+				},
+				"collected_at": "2023-01-15T23:40:30.000Z"
+			},
+			{
+				"movie": {
+					"title": "Inception",
+					"year": 2010,
+					"ids": {
+						"trakt": 417,
+						"slug": "inception-2010",
+						"imdb": "tt1375666",
+						"tmdb": 27205
+					}
+				},
+				"collected_at": "2023-03-20T18:25:43.000Z"
+			}
+		]`))
+	}))
+	defer mockServer.Close()
+
+	// Create client with mock server URL
+	mockConfig := &config.Config{
+		Trakt: config.TraktConfig{
+			ClientID:    "test-client-id",
+			AccessToken: "test-token",
+			APIBaseURL:  mockServer.URL,
+		},
+	}
+	mockLogger := &MockLogger{}
+	client := NewClient(mockConfig, mockLogger)
+
+	// Call the method to test
+	movies, err := client.GetCollectionMovies()
+
+	// Assert no error
+	assert.NoError(t, err)
+
+	// Assert movies were correctly parsed
+	assert.Equal(t, 2, len(movies))
+
+	// Assert first movie details
+	assert.Equal(t, "The Dark Knight", movies[0].Movie.Title)
+	assert.Equal(t, 2008, movies[0].Movie.Year)
+	assert.Equal(t, 16, movies[0].Movie.IDs.Trakt)
+	assert.Equal(t, "tt0468569", movies[0].Movie.IDs.IMDB)
+	assert.Equal(t, "2023-01-15T23:40:30.000Z", movies[0].CollectedAt)
+
+	// Assert second movie details
+	assert.Equal(t, "Inception", movies[1].Movie.Title)
+	assert.Equal(t, 2010, movies[1].Movie.Year)
+	assert.Equal(t, 417, movies[1].Movie.IDs.Trakt)
+	assert.Equal(t, "tt1375666", movies[1].Movie.IDs.IMDB)
+	assert.Equal(t, "2023-03-20T18:25:43.000Z", movies[1].CollectedAt)
+}
+
+func TestGetCollectionMoviesError(t *testing.T) {
+	// Set up mock server that returns an error
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		w.Write([]byte(`{"error": "Invalid OAuth token"}`))
+	}))
+	defer mockServer.Close()
+
+	// Create client with mock server URL
+	mockConfig := &config.Config{
+		Trakt: config.TraktConfig{
+			ClientID:    "test-client-id",
+			AccessToken: "invalid-token",
+			APIBaseURL:  mockServer.URL,
+		},
+	}
+	mockLogger := &MockLogger{}
+	client := NewClient(mockConfig, mockLogger)
+
+	// Call the method to test
+	movies, err := client.GetCollectionMovies()
+
+	// Assert error
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "API request failed with status 401")
+	assert.Nil(t, movies)
 } 

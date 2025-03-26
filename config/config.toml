@@ -8,6 +8,8 @@ api_base_url = "https://api.trakt.tv"
 # Letterboxd Export Configuration
 [letterboxd]
 export_dir = "exports"
+watched_filename = "trakt-watched-films.csv"
+collection_filename = "trakt-collection-films.csv"
 
 # Export Settings
 [export]

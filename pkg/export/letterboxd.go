@@ -36,7 +36,13 @@ func (e *LetterboxdExporter) ExportMovies(movies []api.Movie) error {
 		return fmt.Errorf("failed to create export directory: %w", err)
 	}
 
-	filename := fmt.Sprintf("letterboxd-export-%s.csv", time.Now().Format("2006-01-02"))
+	// Use configured filename, or generate one with timestamp if not specified
+	var filename string
+	if e.config.Letterboxd.WatchedFilename != "" {
+		filename = e.config.Letterboxd.WatchedFilename
+	} else {
+		filename = fmt.Sprintf("letterboxd-export-%s.csv", time.Now().Format("2006-01-02"))
+	}
 	filePath := filepath.Join(e.config.Letterboxd.ExportDir, filename)
 
 	file, err := os.Create(filePath)
@@ -81,6 +87,71 @@ func (e *LetterboxdExporter) ExportMovies(movies []api.Movie) error {
 	}
 
 	e.log.Info("export.export_complete", map[string]interface{}{
+		"count": len(movies),
+		"path":  filePath,
+	})
+	return nil
+}
+
+// ExportCollectionMovies exports the user's movie collection to a CSV file in Letterboxd format
+func (e *LetterboxdExporter) ExportCollectionMovies(movies []api.CollectionMovie) error {
+	if err := os.MkdirAll(e.config.Letterboxd.ExportDir, 0755); err != nil {
+		e.log.Error("errors.export_dir_create_failed", map[string]interface{}{
+			"error": err.Error(),
+		})
+		return fmt.Errorf("failed to create export directory: %w", err)
+	}
+
+	// Use configured filename, or generate one with timestamp if not specified
+	var filename string
+	if e.config.Letterboxd.CollectionFilename != "" {
+		filename = e.config.Letterboxd.CollectionFilename
+	} else {
+		filename = fmt.Sprintf("collection-export-%s.csv", time.Now().Format("2006-01-02"))
+	}
+	filePath := filepath.Join(e.config.Letterboxd.ExportDir, filename)
+
+	file, err := os.Create(filePath)
+	if err != nil {
+		e.log.Error("errors.file_create_failed", map[string]interface{}{
+			"error": err.Error(),
+		})
+		return fmt.Errorf("failed to create export file: %w", err)
+	}
+	defer file.Close()
+
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+
+	// Write header
+	header := []string{"Title", "Year", "CollectedDate", "IMDb ID"}
+	if err := writer.Write(header); err != nil {
+		return fmt.Errorf("failed to write header: %w", err)
+	}
+
+	// Write movies
+	for _, movie := range movies {
+		// Parse collected date
+		collectedDate := ""
+		if movie.CollectedAt != "" {
+			if parsedTime, err := time.Parse(time.RFC3339, movie.CollectedAt); err == nil {
+				collectedDate = parsedTime.Format(e.config.Export.DateFormat)
+			}
+		}
+
+		record := []string{
+			movie.Movie.Title,
+			strconv.Itoa(movie.Movie.Year),
+			collectedDate,
+			movie.Movie.IDs.IMDB,
+		}
+
+		if err := writer.Write(record); err != nil {
+			return fmt.Errorf("failed to write movie record: %w", err)
+		}
+	}
+
+	e.log.Info("export.collection_export_complete", map[string]interface{}{
 		"count": len(movies),
 		"path":  filePath,
 	})

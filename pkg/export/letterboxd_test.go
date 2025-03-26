@@ -1,6 +1,7 @@
 package export
 
 import (
+	"encoding/csv"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/api"
 	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/config"
 	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/logger"
+	"github.com/stretchr/testify/assert"
 )
 
 // MockLogger implements the logger.Logger interface for testing
@@ -208,4 +210,89 @@ func TestExportMoviesErrorHandling(t *testing.T) {
 	if err == nil {
 		t.Error("Expected error for invalid export directory, got nil")
 	}
+}
+
+func TestExportCollectionMovies(t *testing.T) {
+	// Create a temporary directory for the test
+	tempDir, err := os.MkdirTemp("", "export_test")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create mock config and logger
+	mockConfig := &config.Config{
+		Letterboxd: config.LetterboxdConfig{
+			ExportDir: tempDir,
+		},
+		Export: config.ExportConfig{
+			DateFormat: "2006-01-02",
+		},
+	}
+	mockLogger := &MockLogger{}
+
+	// Create test movies
+	testMovies := []api.CollectionMovie{
+		{
+			Movie: api.MovieInfo{
+				Title: "The Dark Knight",
+				Year:  2008,
+				IDs: api.MovieIDs{
+					Trakt: 16,
+					IMDB:  "tt0468569",
+					TMDB:  155,
+					Slug:  "the-dark-knight-2008",
+				},
+			},
+			CollectedAt: "2023-01-15T23:40:30.000Z",
+		},
+		{
+			Movie: api.MovieInfo{
+				Title: "Inception",
+				Year:  2010,
+				IDs: api.MovieIDs{
+					Trakt: 417,
+					IMDB:  "tt1375666",
+					TMDB:  27205,
+					Slug:  "inception-2010",
+				},
+			},
+			CollectedAt: "2023-03-20T18:25:43.000Z",
+		},
+	}
+
+	// Create exporter and export movies
+	exporter := NewLetterboxdExporter(mockConfig, mockLogger)
+	err = exporter.ExportCollectionMovies(testMovies)
+
+	// Assert no error
+	assert.NoError(t, err)
+
+	// Find the CSV file (it has a timestamp in the name)
+	files, err := filepath.Glob(filepath.Join(tempDir, "collection-export-*.csv"))
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(files), "Expected 1 export file")
+
+	// Read the CSV file
+	file, err := os.Open(files[0])
+	assert.NoError(t, err)
+	defer file.Close()
+
+	reader := csv.NewReader(file)
+	records, err := reader.ReadAll()
+	assert.NoError(t, err)
+
+	// Check the header
+	assert.Equal(t, []string{"Title", "Year", "CollectedDate", "IMDb ID"}, records[0])
+
+	// Check movie records
+	assert.Equal(t, "The Dark Knight", records[1][0])
+	assert.Equal(t, "2008", records[1][1])
+	assert.Equal(t, "2023-01-15", records[1][2])
+	assert.Equal(t, "tt0468569", records[1][3])
+
+	assert.Equal(t, "Inception", records[2][0])
+	assert.Equal(t, "2010", records[2][1])
+	assert.Equal(t, "2023-03-20", records[2][2])
+	assert.Equal(t, "tt1375666", records[2][3])
 } 

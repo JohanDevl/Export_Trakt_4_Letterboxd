@@ -15,6 +15,7 @@ import (
 func main() {
 	// Parse command line flags
 	configPath := flag.String("config", "config/config.toml", "Path to configuration file")
+	exportType := flag.String("export", "watched", "Type of export (watched, collection, all)")
 	flag.Parse()
 
 	// Initialize logger
@@ -53,9 +54,31 @@ func main() {
 	// Initialize Trakt client
 	traktClient := api.NewClient(cfg, log)
 
+	// Initialize Letterboxd exporter
+	letterboxdExporter := export.NewLetterboxdExporter(cfg, log)
+
+	// Perform the export based on type
+	switch *exportType {
+	case "watched":
+		exportWatchedMovies(traktClient, letterboxdExporter, log)
+	case "collection":
+		exportCollection(traktClient, letterboxdExporter, log)
+	case "all":
+		exportWatchedMovies(traktClient, letterboxdExporter, log)
+		exportCollection(traktClient, letterboxdExporter, log)
+	default:
+		log.Error("errors.invalid_export_type", map[string]interface{}{"type": *exportType})
+		fmt.Printf("Invalid export type: %s. Valid types are 'watched', 'collection', or 'all'\n", *exportType)
+		os.Exit(1)
+	}
+
+	fmt.Println(translator.Translate("app.description", nil))
+}
+
+func exportWatchedMovies(client *api.Client, exporter *export.LetterboxdExporter, log logger.Logger) {
 	// Get watched movies
-	log.Info("export.retrieving_movies", nil)
-	movies, err := traktClient.GetWatchedMovies()
+	log.Info("export.retrieving_watched_movies", nil)
+	movies, err := client.GetWatchedMovies()
 	if err != nil {
 		log.Error("errors.api_request_failed", map[string]interface{}{"error": err.Error()})
 		os.Exit(1)
@@ -63,15 +86,29 @@ func main() {
 
 	log.Info("export.movies_retrieved", map[string]interface{}{"count": len(movies)})
 
-	// Initialize Letterboxd exporter
-	letterboxdExporter := export.NewLetterboxdExporter(cfg, log)
-
 	// Export movies
-	log.Info("export.exporting_movies", nil)
-	if err := letterboxdExporter.ExportMovies(movies); err != nil {
+	log.Info("export.exporting_watched_movies", nil)
+	if err := exporter.ExportMovies(movies); err != nil {
 		log.Error("export.export_failed", map[string]interface{}{"error": err.Error()})
 		os.Exit(1)
 	}
+}
 
-	fmt.Println(translator.Translate("app.description", nil))
+func exportCollection(client *api.Client, exporter *export.LetterboxdExporter, log logger.Logger) {
+	// Get collection movies
+	log.Info("export.retrieving_collection", nil)
+	movies, err := client.GetCollectionMovies()
+	if err != nil {
+		log.Error("errors.api_request_failed", map[string]interface{}{"error": err.Error()})
+		os.Exit(1)
+	}
+
+	log.Info("export.collection_retrieved", map[string]interface{}{"count": len(movies)})
+
+	// Export collection
+	log.Info("export.exporting_collection", nil)
+	if err := exporter.ExportCollectionMovies(movies); err != nil {
+		log.Error("export.export_failed", map[string]interface{}{"error": err.Error()})
+		os.Exit(1)
+	}
 } 
