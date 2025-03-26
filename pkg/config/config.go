@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"github.com/BurntSushi/toml"
 )
 
@@ -49,7 +50,95 @@ type I18nConfig struct {
 func LoadConfig(path string) (*Config, error) {
 	var config Config
 	if _, err := toml.DecodeFile(path, &config); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to decode config file: %w", err)
 	}
+
+	if err := config.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid configuration: %w", err)
+	}
+
 	return &config, nil
+}
+
+// Validate checks if the configuration is valid
+func (c *Config) Validate() error {
+	if err := c.Trakt.Validate(); err != nil {
+		return fmt.Errorf("trakt config: %w", err)
+	}
+
+	if err := c.Letterboxd.Validate(); err != nil {
+		return fmt.Errorf("letterboxd config: %w", err)
+	}
+
+	if err := c.Export.Validate(); err != nil {
+		return fmt.Errorf("export config: %w", err)
+	}
+
+	if err := c.Logging.Validate(); err != nil {
+		return fmt.Errorf("logging config: %w", err)
+	}
+
+	if err := c.I18n.Validate(); err != nil {
+		return fmt.Errorf("i18n config: %w", err)
+	}
+
+	return nil
+}
+
+// Validate checks if the Trakt configuration is valid
+func (c *TraktConfig) Validate() error {
+	if c.APIBaseURL == "" {
+		return fmt.Errorf("api_base_url is required")
+	}
+	return nil
+}
+
+// Validate checks if the Letterboxd configuration is valid
+func (c *LetterboxdConfig) Validate() error {
+	if c.ExportDir == "" {
+		return fmt.Errorf("export_dir is required")
+	}
+	return nil
+}
+
+// Validate checks if the Export configuration is valid
+func (c *ExportConfig) Validate() error {
+	if c.Format == "" {
+		return fmt.Errorf("format is required")
+	}
+	if c.DateFormat == "" {
+		return fmt.Errorf("date_format is required")
+	}
+	return nil
+}
+
+// Validate checks if the Logging configuration is valid
+func (c *LoggingConfig) Validate() error {
+	if c.Level == "" {
+		return fmt.Errorf("level is required")
+	}
+	validLevels := map[string]bool{
+		"debug": true,
+		"info":  true,
+		"warn":  true,
+		"error": true,
+	}
+	if !validLevels[c.Level] {
+		return fmt.Errorf("invalid log level: %s", c.Level)
+	}
+	return nil
+}
+
+// Validate checks if the I18n configuration is valid
+func (c *I18nConfig) Validate() error {
+	if c.DefaultLanguage == "" {
+		return fmt.Errorf("default_language is required")
+	}
+	if c.Language == "" {
+		return fmt.Errorf("language is required")
+	}
+	if c.LocalesDir == "" {
+		return fmt.Errorf("locales_dir is required")
+	}
+	return nil
 } 
