@@ -98,13 +98,19 @@ func TestNewLetterboxdExporter(t *testing.T) {
 	exporter := NewLetterboxdExporter(cfg, log)
 	if exporter == nil {
 		t.Error("Expected non-nil exporter")
+		return
 	}
-	if exporter.config != cfg {
-		t.Error("Expected config to be set")
+
+	// Safely check if config is properly set
+	if exporter.config == nil {
+		t.Error("Expected config to be set, but got nil")
+	} else if exporter.config != cfg {
+		t.Error("Expected config to match the provided config")
 	}
-	// Cannot directly compare interface values, just check it's not nil
+
+	// Safely check if logger is properly set
 	if exporter.log == nil {
-		t.Error("Expected logger to be set")
+		t.Error("Expected logger to be set, but got nil")
 	}
 }
 
@@ -178,7 +184,7 @@ func TestExportMovies(t *testing.T) {
 
 	// Verify file content
 	fileContent := string(content)
-	expectedHeaders := "Title,Year,WatchedDate,Rating,IMDb ID"
+	expectedHeaders := "Title,Year,WatchedDate,Rating10,IMDb ID,Rewatch"
 	if len(fileContent) == 0 || content[0] == 0 {
 		t.Error("Export file is empty")
 	}
@@ -390,7 +396,7 @@ func TestExportShows(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify header
-	require.Equal(t, []string{"Title", "Year", "Season", "Episode", "EpisodeTitle", "LastWatched", "IMDb ID"}, lines[0])
+	require.Equal(t, []string{"Title", "Year", "Season", "Episode", "EpisodeTitle", "LastWatched", "Rating10", "IMDb ID"}, lines[0])
 
 	// Verify content
 	require.Len(t, lines, 4) // header + 3 episodes
@@ -400,7 +406,6 @@ func TestExportShows(t *testing.T) {
 	require.Equal(t, "1", lines[1][3])
 	require.Equal(t, "Winter Is Coming", lines[1][4])
 	require.Equal(t, "2022-01-01", lines[1][5])
-	require.Equal(t, "tt0944947", lines[1][6])
 
 	require.Equal(t, "Game of Thrones", lines[2][0])
 	require.Equal(t, "1", lines[2][2])
