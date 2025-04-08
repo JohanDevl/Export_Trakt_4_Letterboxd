@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"time"
 
@@ -58,7 +59,7 @@ func (e *LetterboxdExporter) ExportMovies(movies []api.Movie) error {
 	defer writer.Flush()
 
 	// Write header
-	header := []string{"Title", "Year", "WatchedDate", "Rating10", "IMDb ID"}
+	header := []string{"Title", "Year", "WatchedDate", "Rating10", "IMDb ID", "Rewatch"}
 	if err := writer.Write(header); err != nil {
 		return fmt.Errorf("failed to write header: %w", err)
 	}
@@ -81,8 +82,32 @@ func (e *LetterboxdExporter) ExportMovies(movies []api.Movie) error {
 		}
 	}
 
+	// Sort movies by watched date (most recent first)
+	sortedMovies := make([]api.Movie, len(movies))
+	copy(sortedMovies, movies)
+	
+	// Sort the movies slice by LastWatchedAt (newest to oldest)
+	sort.Slice(sortedMovies, func(i, j int) bool {
+		timeI, errI := time.Parse(time.RFC3339, sortedMovies[i].LastWatchedAt)
+		timeJ, errJ := time.Parse(time.RFC3339, sortedMovies[j].LastWatchedAt)
+		
+		// Handle parsing errors or empty dates
+		if errI != nil && errJ != nil {
+			return false // Both invalid, order doesn't matter
+		}
+		if errI != nil {
+			return false // i has invalid date, put at end
+		}
+		if errJ != nil {
+			return true // j has invalid date, i comes first
+		}
+		
+		// Return true if timeI is after timeJ (reverse chronological order)
+		return timeI.After(timeJ)
+	})
+
 	// Write movies
-	for _, movie := range movies {
+	for _, movie := range sortedMovies {
 		// Parse watched date
 		watchedDate := ""
 		if movie.LastWatchedAt != "" {
@@ -96,6 +121,12 @@ func (e *LetterboxdExporter) ExportMovies(movies []api.Movie) error {
 		if r, exists := movieRatings[movie.Movie.IDs.IMDB]; exists {
 			rating = r
 		}
+		
+		// Determine if this is a rewatch
+		rewatch := "false"
+		if movie.Plays > 1 {
+			rewatch = "true"
+		}
 
 		record := []string{
 			movie.Movie.Title,
@@ -103,6 +134,7 @@ func (e *LetterboxdExporter) ExportMovies(movies []api.Movie) error {
 			watchedDate,
 			rating,
 			movie.Movie.IDs.IMDB,
+			rewatch,
 		}
 
 		if err := writer.Write(record); err != nil {
