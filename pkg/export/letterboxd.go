@@ -58,9 +58,27 @@ func (e *LetterboxdExporter) ExportMovies(movies []api.Movie) error {
 	defer writer.Flush()
 
 	// Write header
-	header := []string{"Title", "Year", "WatchedDate", "Rating", "IMDb ID"}
+	header := []string{"Title", "Year", "WatchedDate", "Rating10", "IMDb ID"}
 	if err := writer.Write(header); err != nil {
 		return fmt.Errorf("failed to write header: %w", err)
+	}
+
+	// Get ratings for movies
+	ratings, err := e.fetchRatings()
+	if err != nil {
+		e.log.Warn("export.ratings_fetch_failed", map[string]interface{}{
+			"error": err.Error(),
+		})
+	}
+
+	// Create a map of movie ratings for quick lookup
+	movieRatings := make(map[string]string)
+	for _, rating := range ratings {
+		// Use IMDB ID as key for the ratings map
+		if rating.Movie.IDs.IMDB != "" {
+			// Convert to integer value (1-10)
+			movieRatings[rating.Movie.IDs.IMDB] = strconv.Itoa(int(rating.Rating))
+		}
 	}
 
 	// Write movies
@@ -73,11 +91,17 @@ func (e *LetterboxdExporter) ExportMovies(movies []api.Movie) error {
 			}
 		}
 
+		// Get rating for this movie
+		rating := ""
+		if r, exists := movieRatings[movie.Movie.IDs.IMDB]; exists {
+			rating = r
+		}
+
 		record := []string{
 			movie.Movie.Title,
 			strconv.Itoa(movie.Movie.Year),
 			watchedDate,
-			"", // Rating not available in the current API response
+			rating,
 			movie.Movie.IDs.IMDB,
 		}
 
@@ -194,6 +218,32 @@ func (e *LetterboxdExporter) ExportShows(shows []api.WatchedShow) error {
 		return fmt.Errorf("failed to write header: %w", err)
 	}
 
+	// Check if episode titles are available
+	missingTitles := true
+	checkLimit := 0
+	outerLoop:
+	for _, show := range shows {
+		for _, season := range show.Seasons {
+			for _, episode := range season.Episodes {
+				if episode.Title != "" {
+					missingTitles = false
+					break outerLoop
+				}
+				// Check only a reasonable number of episodes
+				checkLimit++
+				if checkLimit > 20 {
+					break outerLoop
+				}
+			}
+		}
+	}
+
+	if missingTitles {
+		e.log.Warn("export.episode_titles_missing", map[string]interface{}{
+			"message": "Episode titles are missing. Check your Trakt API extended_info setting.",
+		})
+	}
+
 	// Write episodes
 	episodeCount := 0
 	for _, show := range shows {
@@ -259,7 +309,7 @@ func (e *LetterboxdExporter) ExportRatings(ratings []api.Rating) error {
 	defer writer.Flush()
 
 	// Write header - Letterboxd format for ratings
-	header := []string{"Title", "Year", "Rating", "RatedDate", "IMDb ID"}
+	header := []string{"Title", "Year", "Rating10", "RatedDate", "IMDb ID"}
 	if err := writer.Write(header); err != nil {
 		return fmt.Errorf("failed to write header: %w", err)
 	}
@@ -274,18 +324,16 @@ func (e *LetterboxdExporter) ExportRatings(ratings []api.Rating) error {
 			}
 		}
 
-		// Convert Trakt rating (1-10) to Letterboxd rating (0.5-5 in 0.5 increments)
-		letterboxdRating := ""
+		// Use integer rating directly (1-10)
+		ratingStr := ""
 		if r.Rating > 0 {
-			// Convert Trakt 1-10 to Letterboxd 0.5-5
-			lbRating := r.Rating / 2
-			letterboxdRating = strconv.FormatFloat(lbRating, 'f', 1, 64)
+			ratingStr = strconv.Itoa(int(r.Rating))
 		}
 
 		record := []string{
 			r.Movie.Title,
 			strconv.Itoa(r.Movie.Year),
-			letterboxdRating,
+			ratingStr,
 			ratedDate,
 			r.Movie.IDs.IMDB,
 		}
@@ -328,7 +376,7 @@ func (e *LetterboxdExporter) ExportWatchlist(watchlist []api.WatchlistMovie) err
 	defer writer.Flush()
 
 	// Write header - Letterboxd format for watchlist
-	header := []string{"Title", "Year", "ListedDate", "Notes", "IMDb ID"}
+	header := []string{"Title", "Year", "ListedDate", "Rating10", "IMDb ID"}
 	if err := writer.Write(header); err != nil {
 		return fmt.Errorf("failed to write header: %w", err)
 	}
@@ -458,4 +506,11 @@ func (e *LetterboxdExporter) ExportLetterboxdFormat(movies []api.Movie, ratings 
 		"path":  filePath,
 	})
 	return nil
+}
+
+// fetchRatings is a helper function to get movie ratings
+func (e *LetterboxdExporter) fetchRatings() ([]api.Rating, error) {
+	// Create a new Trakt client with the same config
+	client := api.NewClient(e.config, e.log)
+	return client.GetRatings()
 } 

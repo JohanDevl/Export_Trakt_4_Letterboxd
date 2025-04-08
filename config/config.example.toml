@@ -32,4 +32,4 @@ file = "logs/export.log"
 [i18n]
 default_language = "en"
 language = "en"
-locales_dir = "temp_locales" 
+locales_dir = "locales" 

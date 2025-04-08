@@ -89,7 +89,8 @@ func (t *Translator) Translate(messageID string, templateData map[string]interfa
 
 	// Prevent recursion for error messages that might be logged during translation
 	if messageID == "errors.translation_failed" || 
-	   messageID == "errors.translation_file_load_failed" {
+	   messageID == "errors.translation_file_load_failed" || 
+	   messageID == "errors.translation_not_found" {
 		return messageID
 	}
 
@@ -105,13 +106,7 @@ func (t *Translator) Translate(messageID string, templateData map[string]interfa
 	})
 
 	if err != nil {
-		// Log a warning about the missing translation
-		t.log.Warn("errors.translation_not_found", map[string]interface{}{
-			"messageID": messageID,
-			"error":     err.Error(),
-		})
-		
-		// If error, return the original ID
+		// Return the original ID without logging to avoid recursion
 		return messageID
 	}
 
