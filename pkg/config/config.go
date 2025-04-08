@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+
 	"github.com/BurntSushi/toml"
 )
 
@@ -35,6 +36,7 @@ type LetterboxdConfig struct {
 type ExportConfig struct {
 	Format     string `toml:"format"`
 	DateFormat string `toml:"date_format"`
+	Timezone   string `toml:"timezone"`
 }
 
 // LoggingConfig holds logging settings
@@ -113,6 +115,7 @@ func (c *ExportConfig) Validate() error {
 	if c.DateFormat == "" {
 		return fmt.Errorf("date_format is required")
 	}
+	// If timezone is empty, we'll use UTC as default, so no error needed
 	return nil
 }
 

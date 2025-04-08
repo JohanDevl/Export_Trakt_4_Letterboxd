@@ -28,6 +28,36 @@ func NewLetterboxdExporter(cfg *config.Config, log logger.Logger) *LetterboxdExp
 	}
 }
 
+// getTimeInConfigTimezone returns the current time in the configured timezone
+func (e *LetterboxdExporter) getTimeInConfigTimezone() time.Time {
+	now := time.Now().UTC()
+	
+	// If timezone is not set, use UTC
+	if e.config.Export.Timezone == "" {
+		e.log.Info("export.using_default_timezone", map[string]interface{}{
+			"timezone": "UTC",
+		})
+		return now
+	}
+	
+	// Try to load the configured timezone
+	loc, err := time.LoadLocation(e.config.Export.Timezone)
+	if err != nil {
+		e.log.Warn("export.timezone_load_failed", map[string]interface{}{
+			"timezone": e.config.Export.Timezone,
+			"error": err.Error(),
+		})
+		return now // Fall back to UTC on error
+	}
+	
+	// Return the time in the configured timezone
+	e.log.Info("export.using_configured_timezone", map[string]interface{}{
+		"timezone": e.config.Export.Timezone,
+		"time": now.In(loc).Format(time.RFC3339),
+	})
+	return now.In(loc)
+}
+
 // ExportMovies exports the given movies to a CSV file in Letterboxd format
 func (e *LetterboxdExporter) ExportMovies(movies []api.Movie) error {
 	if err := os.MkdirAll(e.config.Letterboxd.ExportDir, 0755); err != nil {
@@ -42,7 +72,9 @@ func (e *LetterboxdExporter) ExportMovies(movies []api.Movie) error {
 	if e.config.Letterboxd.WatchedFilename != "" {
 		filename = e.config.Letterboxd.WatchedFilename
 	} else {
-		filename = fmt.Sprintf("letterboxd-export-%s.csv", time.Now().Format("2006-01-02"))
+		// Use the configured timezone for filename timestamp
+		now := e.getTimeInConfigTimezone()
+		filename = fmt.Sprintf("letterboxd-export-%s.csv", now.Format("2006-01-02"))
 	}
 	filePath := filepath.Join(e.config.Letterboxd.ExportDir, filename)
 
@@ -163,7 +195,9 @@ func (e *LetterboxdExporter) ExportCollectionMovies(movies []api.CollectionMovie
 	if e.config.Letterboxd.CollectionFilename != "" {
 		filename = e.config.Letterboxd.CollectionFilename
 	} else {
-		filename = fmt.Sprintf("collection-export-%s.csv", time.Now().Format("2006-01-02"))
+		// Use the configured timezone for filename timestamp
+		now := e.getTimeInConfigTimezone()
+		filename = fmt.Sprintf("collection-export-%s.csv", now.Format("2006-01-02"))
 	}
 	filePath := filepath.Join(e.config.Letterboxd.ExportDir, filename)
 
@@ -228,7 +262,9 @@ func (e *LetterboxdExporter) ExportShows(shows []api.WatchedShow) error {
 	if e.config.Letterboxd.ShowsFilename != "" {
 		filename = e.config.Letterboxd.ShowsFilename
 	} else {
-		filename = fmt.Sprintf("shows-export-%s.csv", time.Now().Format("2006-01-02"))
+		// Use the configured timezone for filename timestamp
+		now := e.getTimeInConfigTimezone()
+		filename = fmt.Sprintf("shows-export-%s.csv", now.Format("2006-01-02"))
 	}
 	filePath := filepath.Join(e.config.Letterboxd.ExportDir, filename)
 
@@ -370,7 +406,9 @@ func (e *LetterboxdExporter) ExportRatings(ratings []api.Rating) error {
 	}
 
 	// Use configured filename, or generate one with timestamp if not specified
-	filename := fmt.Sprintf("ratings-export-%s.csv", time.Now().Format("2006-01-02"))
+	// Use the configured timezone for filename timestamp
+	now := e.getTimeInConfigTimezone()
+	filename := fmt.Sprintf("ratings-export-%s.csv", now.Format("2006-01-02"))
 	filePath := filepath.Join(e.config.Letterboxd.ExportDir, filename)
 
 	file, err := os.Create(filePath)
@@ -437,7 +475,9 @@ func (e *LetterboxdExporter) ExportWatchlist(watchlist []api.WatchlistMovie) err
 	}
 
 	// Use configured filename, or generate one with timestamp if not specified
-	filename := fmt.Sprintf("watchlist-export-%s.csv", time.Now().Format("2006-01-02"))
+	// Use the configured timezone for filename timestamp
+	now := e.getTimeInConfigTimezone()
+	filename := fmt.Sprintf("watchlist-export-%s.csv", now.Format("2006-01-02"))
 	filePath := filepath.Join(e.config.Letterboxd.ExportDir, filename)
 
 	file, err := os.Create(filePath)
