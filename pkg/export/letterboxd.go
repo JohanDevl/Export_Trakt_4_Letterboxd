@@ -58,13 +58,41 @@ func (e *LetterboxdExporter) getTimeInConfigTimezone() time.Time {
 	return now.In(loc)
 }
 
-// ExportMovies exports the given movies to a CSV file in Letterboxd format
-func (e *LetterboxdExporter) ExportMovies(movies []api.Movie) error {
-	if err := os.MkdirAll(e.config.Letterboxd.ExportDir, 0755); err != nil {
+// getExportDir creates and returns the path to the directory where exports should be saved
+func (e *LetterboxdExporter) getExportDir() (string, error) {
+	// Get current time in configured timezone
+	now := e.getTimeInConfigTimezone()
+	
+	// Create a subdirectory with date and time
+	dirName := fmt.Sprintf("export_%s_%s", 
+		now.Format("2006-01-02"),
+		now.Format("15-04"))
+	
+	// Full path to the export directory
+	exportDir := filepath.Join(e.config.Letterboxd.ExportDir, dirName)
+	
+	// Create the directory
+	if err := os.MkdirAll(exportDir, 0755); err != nil {
 		e.log.Error("errors.export_dir_create_failed", map[string]interface{}{
 			"error": err.Error(),
+			"path": exportDir,
 		})
-		return fmt.Errorf("failed to create export directory: %w", err)
+		return "", fmt.Errorf("failed to create export directory: %w", err)
+	}
+	
+	e.log.Info("export.using_directory", map[string]interface{}{
+		"path": exportDir,
+	})
+	
+	return exportDir, nil
+}
+
+// ExportMovies exports the given movies to a CSV file in Letterboxd format
+func (e *LetterboxdExporter) ExportMovies(movies []api.Movie) error {
+	// Get export directory
+	exportDir, err := e.getExportDir()
+	if err != nil {
+		return err
 	}
 
 	// Use configured filename, or generate one with timestamp if not specified
@@ -74,9 +102,11 @@ func (e *LetterboxdExporter) ExportMovies(movies []api.Movie) error {
 	} else {
 		// Use the configured timezone for filename timestamp
 		now := e.getTimeInConfigTimezone()
-		filename = fmt.Sprintf("letterboxd-export-%s.csv", now.Format("2006-01-02"))
+		filename = fmt.Sprintf("letterboxd-export_%s_%s.csv", 
+			now.Format("2006-01-02"),
+			now.Format("15-04"))
 	}
-	filePath := filepath.Join(e.config.Letterboxd.ExportDir, filename)
+	filePath := filepath.Join(exportDir, filename)
 
 	file, err := os.Create(filePath)
 	if err != nil {
@@ -183,11 +213,10 @@ func (e *LetterboxdExporter) ExportMovies(movies []api.Movie) error {
 
 // ExportCollectionMovies exports the user's movie collection to a CSV file in Letterboxd format
 func (e *LetterboxdExporter) ExportCollectionMovies(movies []api.CollectionMovie) error {
-	if err := os.MkdirAll(e.config.Letterboxd.ExportDir, 0755); err != nil {
-		e.log.Error("errors.export_dir_create_failed", map[string]interface{}{
-			"error": err.Error(),
-		})
-		return fmt.Errorf("failed to create export directory: %w", err)
+	// Get export directory
+	exportDir, err := e.getExportDir()
+	if err != nil {
+		return err
 	}
 
 	// Use configured filename, or generate one with timestamp if not specified
@@ -197,9 +226,11 @@ func (e *LetterboxdExporter) ExportCollectionMovies(movies []api.CollectionMovie
 	} else {
 		// Use the configured timezone for filename timestamp
 		now := e.getTimeInConfigTimezone()
-		filename = fmt.Sprintf("collection-export-%s.csv", now.Format("2006-01-02"))
+		filename = fmt.Sprintf("collection-export_%s_%s.csv", 
+			now.Format("2006-01-02"),
+			now.Format("15-04"))
 	}
-	filePath := filepath.Join(e.config.Letterboxd.ExportDir, filename)
+	filePath := filepath.Join(exportDir, filename)
 
 	file, err := os.Create(filePath)
 	if err != nil {
@@ -250,11 +281,10 @@ func (e *LetterboxdExporter) ExportCollectionMovies(movies []api.CollectionMovie
 
 // ExportShows exports the user's watched shows to a CSV file
 func (e *LetterboxdExporter) ExportShows(shows []api.WatchedShow) error {
-	if err := os.MkdirAll(e.config.Letterboxd.ExportDir, 0755); err != nil {
-		e.log.Error("errors.export_dir_create_failed", map[string]interface{}{
-			"error": err.Error(),
-		})
-		return fmt.Errorf("failed to create export directory: %w", err)
+	// Get export directory
+	exportDir, err := e.getExportDir()
+	if err != nil {
+		return err
 	}
 
 	// Use configured filename, or generate one with timestamp if not specified
@@ -264,9 +294,11 @@ func (e *LetterboxdExporter) ExportShows(shows []api.WatchedShow) error {
 	} else {
 		// Use the configured timezone for filename timestamp
 		now := e.getTimeInConfigTimezone()
-		filename = fmt.Sprintf("shows-export-%s.csv", now.Format("2006-01-02"))
+		filename = fmt.Sprintf("shows-export_%s_%s.csv", 
+			now.Format("2006-01-02"),
+			now.Format("15-04"))
 	}
-	filePath := filepath.Join(e.config.Letterboxd.ExportDir, filename)
+	filePath := filepath.Join(exportDir, filename)
 
 	file, err := os.Create(filePath)
 	if err != nil {
@@ -398,18 +430,19 @@ func (e *LetterboxdExporter) ExportShows(shows []api.WatchedShow) error {
 
 // ExportRatings exports the user's movie ratings to a CSV file in Letterboxd format
 func (e *LetterboxdExporter) ExportRatings(ratings []api.Rating) error {
-	if err := os.MkdirAll(e.config.Letterboxd.ExportDir, 0755); err != nil {
-		e.log.Error("errors.export_dir_create_failed", map[string]interface{}{
-			"error": err.Error(),
-		})
-		return fmt.Errorf("failed to create export directory: %w", err)
+	// Get export directory
+	exportDir, err := e.getExportDir()
+	if err != nil {
+		return err
 	}
 
 	// Use configured filename, or generate one with timestamp if not specified
 	// Use the configured timezone for filename timestamp
 	now := e.getTimeInConfigTimezone()
-	filename := fmt.Sprintf("ratings-export-%s.csv", now.Format("2006-01-02"))
-	filePath := filepath.Join(e.config.Letterboxd.ExportDir, filename)
+	filename := fmt.Sprintf("ratings-export_%s_%s.csv", 
+		now.Format("2006-01-02"),
+		now.Format("15-04"))
+	filePath := filepath.Join(exportDir, filename)
 
 	file, err := os.Create(filePath)
 	if err != nil {
@@ -467,18 +500,19 @@ func (e *LetterboxdExporter) ExportRatings(ratings []api.Rating) error {
 
 // ExportWatchlist exports the user's movie watchlist to a CSV file in Letterboxd format
 func (e *LetterboxdExporter) ExportWatchlist(watchlist []api.WatchlistMovie) error {
-	if err := os.MkdirAll(e.config.Letterboxd.ExportDir, 0755); err != nil {
-		e.log.Error("errors.export_dir_create_failed", map[string]interface{}{
-			"error": err.Error(),
-		})
-		return fmt.Errorf("failed to create export directory: %w", err)
+	// Get export directory
+	exportDir, err := e.getExportDir()
+	if err != nil {
+		return err
 	}
 
 	// Use configured filename, or generate one with timestamp if not specified
 	// Use the configured timezone for filename timestamp
 	now := e.getTimeInConfigTimezone()
-	filename := fmt.Sprintf("watchlist-export-%s.csv", now.Format("2006-01-02"))
-	filePath := filepath.Join(e.config.Letterboxd.ExportDir, filename)
+	filename := fmt.Sprintf("watchlist-export_%s_%s.csv", 
+		now.Format("2006-01-02"),
+		now.Format("15-04"))
+	filePath := filepath.Join(exportDir, filename)
 
 	file, err := os.Create(filePath)
 	if err != nil {
@@ -532,16 +566,15 @@ func (e *LetterboxdExporter) ExportWatchlist(watchlist []api.WatchlistMovie) err
 // The format matches the official Letterboxd import format with columns:
 // Title, Year, imdbID, tmdbID, WatchedDate, Rating10, Rewatch
 func (e *LetterboxdExporter) ExportLetterboxdFormat(movies []api.Movie, ratings []api.Rating) error {
-	if err := os.MkdirAll(e.config.Letterboxd.ExportDir, 0755); err != nil {
-		e.log.Error("errors.export_dir_create_failed", map[string]interface{}{
-			"error": err.Error(),
-		})
-		return fmt.Errorf("failed to create export directory: %w", err)
+	// Get export directory
+	exportDir, err := e.getExportDir()
+	if err != nil {
+		return err
 	}
 
 	// Use configured filename, or generate one with timestamp if not specified
 	filename := "letterboxd_import.csv"
-	filePath := filepath.Join(e.config.Letterboxd.ExportDir, filename)
+	filePath := filepath.Join(exportDir, filename)
 
 	file, err := os.Create(filePath)
 	if err != nil {
