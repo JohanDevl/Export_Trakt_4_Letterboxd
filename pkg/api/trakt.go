@@ -379,11 +379,26 @@ func (c *Client) GetWatchedShows() ([]WatchedShow, error) {
 	return shows, nil
 }
 
-// Rating represents a user rating
+// Rating represents a user rating for movies
 type Rating struct {
 	Movie      MovieInfo `json:"movie"`
 	RatedAt    string    `json:"rated_at"`
 	Rating     float64   `json:"rating"`
+}
+
+// ShowRating represents a user rating for shows
+type ShowRating struct {
+	Show      ShowInfo `json:"show"`
+	RatedAt   string   `json:"rated_at"`
+	Rating    float64  `json:"rating"`
+}
+
+// EpisodeRating represents a user rating for episodes
+type EpisodeRating struct {
+	Show     ShowInfo    `json:"show"`
+	Episode  EpisodeInfo `json:"episode"`
+	RatedAt  string      `json:"rated_at"`
+	Rating   float64     `json:"rating"`
 }
 
 // WatchlistMovie represents a movie in the user's watchlist
@@ -519,6 +534,134 @@ func (c *Client) GetWatchlist() ([]WatchlistMovie, error) {
 		"count": len(watchlist),
 	})
 	return watchlist, nil
+}
+
+// GetShowRatings retrieves the user's TV show ratings from Trakt
+func (c *Client) GetShowRatings() ([]ShowRating, error) {
+	endpoint := c.addExtendedInfo(c.config.Trakt.APIBaseURL + "/sync/ratings/shows")
+	req, err := http.NewRequest("GET", endpoint, nil)
+	if err != nil {
+		c.logger.Error("errors.api_request_failed", map[string]interface{}{
+			"error": err.Error(),
+		})
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Add required headers
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("trakt-api-version", "2")
+	req.Header.Set("trakt-api-key", c.config.Trakt.ClientID)
+	req.Header.Set("Authorization", "Bearer "+c.config.Trakt.AccessToken)
+
+	resp, err := c.makeRequest(req)
+	if err != nil {
+		c.logger.Error("errors.api_request_failed", map[string]interface{}{
+			"error": err.Error(),
+		})
+		return nil, fmt.Errorf("failed to execute request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Handle rate limiting
+	if limit := resp.Header.Get("X-Ratelimit-Remaining"); limit != "" {
+		remaining, _ := strconv.Atoi(limit)
+		if remaining < 100 {
+			c.logger.Warn("api.rate_limit_warning", map[string]interface{}{
+				"remaining": remaining,
+			})
+		}
+	}
+
+	// Check response status
+	if resp.StatusCode != http.StatusOK {
+		var errorResp map[string]string
+		if err := json.NewDecoder(resp.Body).Decode(&errorResp); err != nil {
+			errorResp = map[string]string{"error": "unknown error"}
+		}
+		c.logger.Error("errors.api_request_failed", map[string]interface{}{
+			"status": resp.StatusCode,
+			"error":  errorResp["error"],
+		})
+		return nil, fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, errorResp["error"])
+	}
+
+	// Parse response
+	var ratings []ShowRating
+	if err := json.NewDecoder(resp.Body).Decode(&ratings); err != nil {
+		c.logger.Error("errors.api_response_parse_failed", map[string]interface{}{
+			"error": err.Error(),
+		})
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	c.logger.Info("api.show_ratings_fetched", map[string]interface{}{
+		"count": len(ratings),
+	})
+	return ratings, nil
+}
+
+// GetEpisodeRatings retrieves the user's TV episode ratings from Trakt
+func (c *Client) GetEpisodeRatings() ([]EpisodeRating, error) {
+	endpoint := c.addExtendedInfo(c.config.Trakt.APIBaseURL + "/sync/ratings/episodes")
+	req, err := http.NewRequest("GET", endpoint, nil)
+	if err != nil {
+		c.logger.Error("errors.api_request_failed", map[string]interface{}{
+			"error": err.Error(),
+		})
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Add required headers
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("trakt-api-version", "2")
+	req.Header.Set("trakt-api-key", c.config.Trakt.ClientID)
+	req.Header.Set("Authorization", "Bearer "+c.config.Trakt.AccessToken)
+
+	resp, err := c.makeRequest(req)
+	if err != nil {
+		c.logger.Error("errors.api_request_failed", map[string]interface{}{
+			"error": err.Error(),
+		})
+		return nil, fmt.Errorf("failed to execute request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Handle rate limiting
+	if limit := resp.Header.Get("X-Ratelimit-Remaining"); limit != "" {
+		remaining, _ := strconv.Atoi(limit)
+		if remaining < 100 {
+			c.logger.Warn("api.rate_limit_warning", map[string]interface{}{
+				"remaining": remaining,
+			})
+		}
+	}
+
+	// Check response status
+	if resp.StatusCode != http.StatusOK {
+		var errorResp map[string]string
+		if err := json.NewDecoder(resp.Body).Decode(&errorResp); err != nil {
+			errorResp = map[string]string{"error": "unknown error"}
+		}
+		c.logger.Error("errors.api_request_failed", map[string]interface{}{
+			"status": resp.StatusCode,
+			"error":  errorResp["error"],
+		})
+		return nil, fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, errorResp["error"])
+	}
+
+	// Parse response
+	var ratings []EpisodeRating
+	if err := json.NewDecoder(resp.Body).Decode(&ratings); err != nil {
+		c.logger.Error("errors.api_response_parse_failed", map[string]interface{}{
+			"error": err.Error(),
+		})
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	c.logger.Info("api.episode_ratings_fetched", map[string]interface{}{
+		"count": len(ratings),
+	})
+	return ratings, nil
 }
 
 // GetConfig returns the client's configuration

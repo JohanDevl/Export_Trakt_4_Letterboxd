@@ -213,7 +213,7 @@ func (e *LetterboxdExporter) ExportShows(shows []api.WatchedShow) error {
 	defer writer.Flush()
 
 	// Write header
-	header := []string{"Title", "Year", "Season", "Episode", "EpisodeTitle", "LastWatched", "IMDb ID"}
+	header := []string{"Title", "Year", "Season", "Episode", "EpisodeTitle", "LastWatched", "Rating10", "IMDb ID"}
 	if err := writer.Write(header); err != nil {
 		return fmt.Errorf("failed to write header: %w", err)
 	}
@@ -244,6 +244,40 @@ func (e *LetterboxdExporter) ExportShows(shows []api.WatchedShow) error {
 		})
 	}
 
+	// Fetch episode ratings
+	episodeRatings, err := e.fetchEpisodeRatings()
+	if err != nil {
+		e.log.Warn("export.episode_ratings_fetch_failed", map[string]interface{}{
+			"error": err.Error(),
+		})
+	}
+
+	// Create a map of episode ratings for quick lookup
+	// Use a composite key of show_id:season:episode
+	episodeRatingMap := make(map[string]int)
+	for _, r := range episodeRatings {
+		if r.Show.IDs.Trakt > 0 && r.Episode.Season > 0 && r.Episode.Number > 0 {
+			key := fmt.Sprintf("%d:%d:%d", r.Show.IDs.Trakt, r.Episode.Season, r.Episode.Number)
+			episodeRatingMap[key] = int(r.Rating)
+		}
+	}
+
+	// Fetch show ratings too
+	showRatings, err := e.fetchShowRatings()
+	if err != nil {
+		e.log.Warn("export.show_ratings_fetch_failed", map[string]interface{}{
+			"error": err.Error(),
+		})
+	}
+
+	// Create a map of show ratings for quick lookup
+	showRatingMap := make(map[int]int)
+	for _, r := range showRatings {
+		if r.Show.IDs.Trakt > 0 {
+			showRatingMap[r.Show.IDs.Trakt] = int(r.Rating)
+		}
+	}
+
 	// Write episodes
 	episodeCount := 0
 	for _, show := range shows {
@@ -257,6 +291,16 @@ func (e *LetterboxdExporter) ExportShows(shows []api.WatchedShow) error {
 					}
 				}
 
+				// Get rating for this episode
+				rating := ""
+				key := fmt.Sprintf("%d:%d:%d", show.Show.IDs.Trakt, season.Number, episode.Number)
+				if r, exists := episodeRatingMap[key]; exists {
+					rating = strconv.Itoa(r)
+				} else if r, exists := showRatingMap[show.Show.IDs.Trakt]; exists {
+					// If no episode rating, use show rating
+					rating = strconv.Itoa(r)
+				}
+
 				record := []string{
 					show.Show.Title,
 					strconv.Itoa(show.Show.Year),
@@ -264,6 +308,7 @@ func (e *LetterboxdExporter) ExportShows(shows []api.WatchedShow) error {
 					strconv.Itoa(episode.Number),
 					episode.Title,
 					watchedDate,
+					rating,
 					show.Show.IDs.IMDB,
 				}
 
@@ -513,4 +558,18 @@ func (e *LetterboxdExporter) fetchRatings() ([]api.Rating, error) {
 	// Create a new Trakt client with the same config
 	client := api.NewClient(e.config, e.log)
 	return client.GetRatings()
+}
+
+// fetchShowRatings is a helper function to get show ratings
+func (e *LetterboxdExporter) fetchShowRatings() ([]api.ShowRating, error) {
+	// Create a new Trakt client with the same config
+	client := api.NewClient(e.config, e.log)
+	return client.GetShowRatings()
+}
+
+// fetchEpisodeRatings is a helper function to get episode ratings
+func (e *LetterboxdExporter) fetchEpisodeRatings() ([]api.EpisodeRating, error) {
+	// Create a new Trakt client with the same config
+	client := api.NewClient(e.config, e.log)
+	return client.GetEpisodeRatings()
 } 
