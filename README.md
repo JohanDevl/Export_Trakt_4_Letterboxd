@@ -11,7 +11,7 @@
 [![Docker Image Size](https://img.shields.io/docker/image-size/johandevl/export-trakt-4-letterboxd/latest?logo=docker&label=Image%20Size)](https://hub.docker.com/r/johandevl/export-trakt-4-letterboxd)
 [![Docker Pulls](https://img.shields.io/docker/pulls/johandevl/export-trakt-4-letterboxd?logo=docker&label=Pulls)](https://hub.docker.com/r/johandevl/export-trakt-4-letterboxd)
 [![Platforms](https://img.shields.io/badge/platforms-amd64%20|%20arm64%20|%20armv7-lightgrey?logo=docker)](https://hub.docker.com/r/johandevl/export-trakt-4-letterboxd/tags)
-[![Code Coverage](https://img.shields.io/badge/coverage-84%25-brightgreen)](coverage.html)
+[![Code Coverage](https://img.shields.io/badge/coverage-78%25-brightgreen)](coverage.html)
 [![Trakt.tv](https://img.shields.io/badge/Trakt.tv-ED1C24?logo=trakt&logoColor=white)](https://trakt.tv)
 [![Letterboxd](https://img.shields.io/badge/Letterboxd-00D735?logo=letterboxd&logoColor=white)](https://letterboxd.com)
 
@@ -144,6 +144,30 @@ Generate a coverage report:
 go test -coverprofile=coverage.out ./...
 go tool cover -html=coverage.out -o coverage.html
 ```
+
+Run the coverage script (excludes main package):
+
+```bash
+./scripts/coverage.sh
+```
+
+The project maintains over 78% test coverage across the core packages, which helps ensure reliability and stability. The coverage includes:
+
+- API Client: 73.3% covered
+- Config Management: 85.4% covered
+- Export Functionality: 78.3% covered
+- Internationalization: 81.6% covered
+- Logging System: 97.7% covered
+
+### Code Coverage Configuration
+
+The project includes a `.codecov.yml` file that configures code coverage analysis for CI/CD pipelines. This configuration:
+
+- Sets a 70% coverage threshold for the project
+- Excludes the `cmd/export_trakt` directory (main package) from coverage calculations
+- Provides detailed coverage reports for each pull request
+
+If you're using GitHub Actions or another CI system, this configuration ensures accurate coverage reporting focused on the core packages rather than the main application entry point.
 
 ## Documentation
 

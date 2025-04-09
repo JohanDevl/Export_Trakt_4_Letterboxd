@@ -281,4 +281,89 @@ func TestLoggingWithoutTranslator(t *testing.T) {
 	if !strings.Contains(buf.String(), "direct.message") {
 		t.Error("Message ID should be used directly when no translator is set")
 	}
+}
+
+// TestFormattingMethods tests all the formatting methods that use the same interface
+func TestFormattingMethods(t *testing.T) {
+	// Create a new logger and capture its output
+	logger := NewLogger()
+	stdLogger, ok := logger.(*StandardLogger)
+	if !ok {
+		t.Fatal("Expected StandardLogger implementation")
+	}
+	
+	var buf bytes.Buffer
+	stdLogger.SetOutput(&buf)
+	
+	// Set the log level to "debug" to ensure all messages are logged
+	logger.SetLogLevel("debug")
+	
+	// Set a mock translator
+	mockTranslator := NewMockTranslator()
+	logger.SetTranslator(mockTranslator)
+	
+	tests := []struct {
+		name        string
+		method      func(string, map[string]interface{})
+		messageID   string
+		data        map[string]interface{}
+		expectInLog string
+	}{
+		{
+			name: "Infof method",
+			method: func(m string, d map[string]interface{}) {
+				logger.Infof(m, d)
+			},
+			messageID:   "test.info",
+			data:        map[string]interface{}{"data": "formatted info"},
+			expectInLog: "Test info message",
+		},
+		{
+			name: "Errorf method",
+			method: func(m string, d map[string]interface{}) {
+				logger.Errorf(m, d)
+			},
+			messageID:   "test.error",
+			data:        map[string]interface{}{"data": "formatted error"},
+			expectInLog: "Test error message",
+		},
+		{
+			name: "Warnf method",
+			method: func(m string, d map[string]interface{}) {
+				logger.Warnf(m, d)
+			},
+			messageID:   "test.warn",
+			data:        map[string]interface{}{"data": "formatted warning"},
+			expectInLog: "Test warning message",
+		},
+		{
+			name: "Debugf method",
+			method: func(m string, d map[string]interface{}) {
+				logger.Debugf(m, d)
+			},
+			messageID:   "test.debug",
+			data:        map[string]interface{}{"data": "formatted debug"},
+			expectInLog: "Test debug message",
+		},
+	}
+	
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			buf.Reset()
+			tt.method(tt.messageID, tt.data)
+			logOutput := buf.String()
+			
+			if !strings.Contains(logOutput, tt.expectInLog) {
+				t.Errorf("Expected log to contain '%s', got '%s'", tt.expectInLog, logOutput)
+			}
+		})
+	}
+	
+	// Test with nil translator
+	logger.SetTranslator(nil)
+	buf.Reset()
+	logger.Infof("direct.message", nil)
+	if !strings.Contains(buf.String(), "direct.message") {
+		t.Error("Expected log to contain the direct message when no translator is set")
+	}
 } 

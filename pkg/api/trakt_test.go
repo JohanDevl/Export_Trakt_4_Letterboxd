@@ -492,224 +492,328 @@ func TestGetCollectionMoviesError(t *testing.T) {
 	assert.Nil(t, movies)
 }
 
+// TestGetWatchedShows tests the GetWatchedShows endpoint
 func TestGetWatchedShows(t *testing.T) {
-	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("X-Ratelimit-Remaining", "120")
-
-		// Check if valid authorization header is present
-		authHeader := r.Header.Get("Authorization")
-		if authHeader != "Bearer test-token" {
-			w.WriteHeader(http.StatusUnauthorized)
-			json.NewEncoder(w).Encode(map[string]string{"error": "Invalid token"})
-			return
+	// Create a test server
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Verify request
+		if r.URL.Path != "/sync/watched/shows" {
+			t.Errorf("Expected path '/sync/watched/shows', got '%s'", r.URL.Path)
+		}
+		if r.Header.Get("Content-Type") != "application/json" {
+			t.Errorf("Expected Content-Type 'application/json', got '%s'", r.Header.Get("Content-Type"))
+		}
+		if r.Header.Get("trakt-api-key") != "test_client_id" {
+			t.Errorf("Expected client ID header, got '%s'", r.Header.Get("trakt-api-key"))
+		}
+		if r.Header.Get("Authorization") != "Bearer test_access_token" {
+			t.Errorf("Expected auth header, got '%s'", r.Header.Get("Authorization"))
 		}
 
-		// Return successful response
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprintf(w, `[
+		// Return test response
+		shows := []WatchedShow{
 			{
-				"show": {
-					"title": "Game of Thrones",
-					"year": 2011,
-					"ids": {
-						"trakt": 1,
-						"slug": "game-of-thrones",
-						"tvdb": 121361,
-						"imdb": "tt0944947",
-						"tmdb": 1399
-					}
+				Show: ShowInfo{
+					Title: "Test Show",
+					Year:  2024,
+					IDs: ShowIDs{
+						Trakt:  12345,
+						TMDB:   67890,
+						IMDB:   "tt0123456",
+						Slug:   "test-show-2024",
+					},
 				},
-				"seasons": [
+				Seasons: []ShowSeason{
 					{
-						"number": 1,
-						"episodes": [
+						Number: 1,
+						Episodes: []EpisodeInfo{
 							{
-								"number": 1,
-								"title": "Winter Is Coming",
-								"ids": {
-									"trakt": 73640,
-									"tvdb": 3254641,
-									"imdb": "tt1480055",
-									"tmdb": 63056
-								}
-							}
-						]
-					}
-				],
-				"last_watched_at": "2022-01-01T12:00:00Z"
-			}
-		]`)
+								Number: 1,
+								IDs: EpisodeIDs{
+									Trakt: 12345,
+								},
+							},
+						},
+					},
+				},
+				LastWatchedAt: time.Now().Format(time.RFC3339),
+			},
+		}
+		json.NewEncoder(w).Encode(shows)
 	}))
-	defer mockServer.Close()
+	defer server.Close()
 
-	// Create a test config
+	// Create client with test server URL
 	cfg := &config.Config{
 		Trakt: config.TraktConfig{
-			ClientID:     "test-client-id",
-			ClientSecret: "test-client-secret",
-			AccessToken:  "test-token",
-			APIBaseURL:   mockServer.URL,
+			ClientID:     "test_client_id",
+			ClientSecret: "test_client_secret",
+			AccessToken:  "test_access_token",
+			APIBaseURL:   server.URL,
 		},
 	}
-
-	// Create a test logger
 	log := &MockLogger{}
-
-	// Create a client with the mock server
 	client := NewClient(cfg, log)
 
-	// Test the GetWatchedShows method
+	// Test successful request
 	shows, err := client.GetWatchedShows()
-	assert.NoError(t, err)
-	assert.NotNil(t, shows)
-	assert.Len(t, shows, 1)
-	assert.Equal(t, "Game of Thrones", shows[0].Show.Title)
-	assert.Equal(t, 2011, shows[0].Show.Year)
-	assert.Equal(t, "tt0944947", shows[0].Show.IDs.IMDB)
-	assert.Len(t, shows[0].Seasons, 1)
-	assert.Equal(t, 1, shows[0].Seasons[0].Number)
-	assert.Len(t, shows[0].Seasons[0].Episodes, 1)
-	assert.Equal(t, 1, shows[0].Seasons[0].Episodes[0].Number)
-	assert.Equal(t, "Winter Is Coming", shows[0].Seasons[0].Episodes[0].Title)
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+	if len(shows) != 1 {
+		t.Fatalf("Expected 1 show, got %d", len(shows))
+	}
+	if shows[0].Show.Title != "Test Show" {
+		t.Errorf("Expected show title 'Test Show', got '%s'", shows[0].Show.Title)
+	}
+	if len(shows[0].Seasons) != 1 {
+		t.Errorf("Expected 1 season, got %d", len(shows[0].Seasons))
+	}
+
+	// Verify the success message was logged
+	assert.Equal(t, "api.watched_shows_fetched", log.lastMessage)
+	assert.Equal(t, 1, log.lastData["count"])
 }
 
+func TestGetWatchedShowsError(t *testing.T) {
+	// Create a test server that returns an error
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(map[string]string{
+			"error": "Invalid access token",
+		})
+	}))
+	defer server.Close()
+
+	// Create client with test server URL
+	cfg := &config.Config{
+		Trakt: config.TraktConfig{
+			ClientID:     "test_client_id",
+			ClientSecret: "test_client_secret",
+			AccessToken:  "invalid_token",
+			APIBaseURL:   server.URL,
+		},
+	}
+	log := &MockLogger{}
+	client := NewClient(cfg, log)
+
+	// Test error handling
+	shows, err := client.GetWatchedShows()
+	if err == nil {
+		t.Error("Expected error but got none")
+	}
+	if shows != nil {
+		t.Error("Expected nil shows on error")
+	}
+	if log.lastMessage != "errors.api_request_failed" {
+		t.Errorf("Expected error message logged, got '%s'", log.lastMessage)
+	}
+}
+
+// TestGetRatings tests the GetRatings endpoint
 func TestGetRatings(t *testing.T) {
-	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("X-Ratelimit-Remaining", "120")
-
-		// Check if valid authorization header is present
-		authHeader := r.Header.Get("Authorization")
-		if authHeader != "Bearer test-token" {
-			w.WriteHeader(http.StatusUnauthorized)
-			json.NewEncoder(w).Encode(map[string]string{"error": "Invalid token"})
-			return
+	// Create a test server
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Verify request
+		if r.URL.Path != "/sync/ratings/movies" {
+			t.Errorf("Expected path '/sync/ratings/movies', got '%s'", r.URL.Path)
+		}
+		if r.Header.Get("Content-Type") != "application/json" {
+			t.Errorf("Expected Content-Type 'application/json', got '%s'", r.Header.Get("Content-Type"))
+		}
+		if r.Header.Get("trakt-api-key") != "test_client_id" {
+			t.Errorf("Expected client ID header, got '%s'", r.Header.Get("trakt-api-key"))
+		}
+		if r.Header.Get("Authorization") != "Bearer test_access_token" {
+			t.Errorf("Expected auth header, got '%s'", r.Header.Get("Authorization"))
 		}
 
-		// Check if extended parameter is present
-		extended := r.URL.Query().Get("extended")
-		assert.Equal(t, "full", extended)
-
-		// Return successful response
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprintf(w, `[
+		// Return test response
+		ratings := []Rating{
 			{
-				"movie": {
-					"title": "Inception",
-					"year": 2010,
-					"ids": {
-						"trakt": 16662,
-						"slug": "inception-2010",
-						"imdb": "tt1375666",
-						"tmdb": 27205
+				Movie: MovieInfo{
+					Title: "Test Movie",
+					Year:  2024,
+					IDs: MovieIDs{
+						Trakt:  12345,
+						TMDB:   67890,
+						IMDB:   "tt0123456",
+						Slug:   "test-movie-2024",
 					},
-					"tagline": "Your mind is the scene of the crime",
-					"overview": "A thief who steals corporate secrets through the use of dream-sharing technology..."
 				},
-				"rated_at": "2022-01-01T00:00:00.000Z",
-				"rating": 8.0
-			}
-		]`)
+				RatedAt: time.Now().Format(time.RFC3339),
+				Rating:  8.5,
+			},
+		}
+		json.NewEncoder(w).Encode(ratings)
 	}))
-	defer mockServer.Close()
+	defer server.Close()
 
-	// Create a test config
+	// Create client with test server URL
 	cfg := &config.Config{
 		Trakt: config.TraktConfig{
-			ClientID:     "test-client-id",
-			ClientSecret: "test-client-secret",
-			AccessToken:  "test-token",
-			APIBaseURL:   mockServer.URL,
-			ExtendedInfo: "full",
+			ClientID:     "test_client_id",
+			ClientSecret: "test_client_secret",
+			AccessToken:  "test_access_token",
+			APIBaseURL:   server.URL,
 		},
 	}
-
-	// Create a test logger
 	log := &MockLogger{}
-
-	// Create a client with the mock server
 	client := NewClient(cfg, log)
 
-	// Test the GetRatings method
+	// Test successful request
 	ratings, err := client.GetRatings()
-	assert.NoError(t, err)
-	assert.NotNil(t, ratings)
-	assert.Len(t, ratings, 1)
-	assert.Equal(t, "Inception", ratings[0].Movie.Title)
-	assert.Equal(t, 2010, ratings[0].Movie.Year)
-	assert.Equal(t, "tt1375666", ratings[0].Movie.IDs.IMDB)
-	assert.Equal(t, "Your mind is the scene of the crime", ratings[0].Movie.Tagline)
-	assert.Equal(t, 8.0, ratings[0].Rating)
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+	if len(ratings) != 1 {
+		t.Fatalf("Expected 1 rating, got %d", len(ratings))
+	}
+	if ratings[0].Movie.Title != "Test Movie" {
+		t.Errorf("Expected movie title 'Test Movie', got '%s'", ratings[0].Movie.Title)
+	}
+	if ratings[0].Rating != 8.5 {
+		t.Errorf("Expected rating 8.5, got %f", ratings[0].Rating)
+	}
 }
 
-func TestGetWatchlist(t *testing.T) {
-	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("X-Ratelimit-Remaining", "120")
-
-		// Check if valid authorization header is present
-		authHeader := r.Header.Get("Authorization")
-		if authHeader != "Bearer test-token" {
-			w.WriteHeader(http.StatusUnauthorized)
-			json.NewEncoder(w).Encode(map[string]string{"error": "Invalid token"})
-			return
-		}
-
-		// Check if extended parameter is present
-		extended := r.URL.Query().Get("extended")
-		assert.Equal(t, "full", extended)
-
-		// Return successful response
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprintf(w, `[
-			{
-				"movie": {
-					"title": "The Dark Knight",
-					"year": 2008,
-					"ids": {
-						"trakt": 6,
-						"slug": "the-dark-knight-2008",
-						"imdb": "tt0468569",
-						"tmdb": 155
-					},
-					"tagline": "Why So Serious?",
-					"overview": "Batman raises the stakes in his war on crime..."
-				},
-				"listed_at": "2022-01-01T00:00:00.000Z",
-				"notes": "Want to watch this"
-			}
-		]`)
+// TestGetRatingsError tests error handling in GetRatings
+func TestGetRatingsError(t *testing.T) {
+	// Create a test server that returns an error
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(map[string]string{
+			"error": "Invalid access token",
+		})
 	}))
-	defer mockServer.Close()
+	defer server.Close()
 
-	// Create a test config
+	// Create client with test server URL
 	cfg := &config.Config{
 		Trakt: config.TraktConfig{
-			ClientID:     "test-client-id",
-			ClientSecret: "test-client-secret",
-			AccessToken:  "test-token",
-			APIBaseURL:   mockServer.URL,
-			ExtendedInfo: "full",
+			ClientID:     "test_client_id",
+			ClientSecret: "test_client_secret",
+			AccessToken:  "invalid_token",
+			APIBaseURL:   server.URL,
 		},
 	}
-
-	// Create a test logger
 	log := &MockLogger{}
-
-	// Create a client with the mock server
 	client := NewClient(cfg, log)
 
-	// Test the GetWatchlist method
+	// Test error handling
+	ratings, err := client.GetRatings()
+	if err == nil {
+		t.Error("Expected error but got none")
+	}
+	if ratings != nil {
+		t.Error("Expected nil ratings on error")
+	}
+	if log.lastMessage != "errors.api_request_failed" {
+		t.Errorf("Expected error message logged, got '%s'", log.lastMessage)
+	}
+}
+
+// TestGetWatchlist tests the GetWatchlist endpoint
+func TestGetWatchlist(t *testing.T) {
+	// Create a test server
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Verify request
+		if r.URL.Path != "/sync/watchlist/movies" {
+			t.Errorf("Expected path '/sync/watchlist/movies', got '%s'", r.URL.Path)
+		}
+		if r.Header.Get("Content-Type") != "application/json" {
+			t.Errorf("Expected Content-Type 'application/json', got '%s'", r.Header.Get("Content-Type"))
+		}
+		if r.Header.Get("trakt-api-key") != "test_client_id" {
+			t.Errorf("Expected client ID header, got '%s'", r.Header.Get("trakt-api-key"))
+		}
+		if r.Header.Get("Authorization") != "Bearer test_access_token" {
+			t.Errorf("Expected auth header, got '%s'", r.Header.Get("Authorization"))
+		}
+
+		// Return test response
+		watchlist := []WatchlistMovie{
+			{
+				Movie: MovieInfo{
+					Title: "Test Movie",
+					Year:  2024,
+					IDs: MovieIDs{
+						Trakt:  12345,
+						TMDB:   67890,
+						IMDB:   "tt0123456",
+						Slug:   "test-movie-2024",
+					},
+				},
+				ListedAt: time.Now().Format(time.RFC3339),
+				Notes:    "Test notes",
+			},
+		}
+		json.NewEncoder(w).Encode(watchlist)
+	}))
+	defer server.Close()
+
+	// Create client with test server URL
+	cfg := &config.Config{
+		Trakt: config.TraktConfig{
+			ClientID:     "test_client_id",
+			ClientSecret: "test_client_secret",
+			AccessToken:  "test_access_token",
+			APIBaseURL:   server.URL,
+		},
+	}
+	log := &MockLogger{}
+	client := NewClient(cfg, log)
+
+	// Test successful request
 	watchlist, err := client.GetWatchlist()
-	assert.NoError(t, err)
-	assert.NotNil(t, watchlist)
-	assert.Len(t, watchlist, 1)
-	assert.Equal(t, "The Dark Knight", watchlist[0].Movie.Title)
-	assert.Equal(t, 2008, watchlist[0].Movie.Year)
-	assert.Equal(t, "tt0468569", watchlist[0].Movie.IDs.IMDB)
-	assert.Equal(t, "Why So Serious?", watchlist[0].Movie.Tagline)
-	assert.Equal(t, "Want to watch this", watchlist[0].Notes)
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+	if len(watchlist) != 1 {
+		t.Fatalf("Expected 1 watchlist item, got %d", len(watchlist))
+	}
+	if watchlist[0].Movie.Title != "Test Movie" {
+		t.Errorf("Expected movie title 'Test Movie', got '%s'", watchlist[0].Movie.Title)
+	}
+	if watchlist[0].Notes != "Test notes" {
+		t.Errorf("Expected notes 'Test notes', got '%s'", watchlist[0].Notes)
+	}
+}
+
+// TestGetWatchlistError tests error handling in GetWatchlist
+func TestGetWatchlistError(t *testing.T) {
+	// Create a test server that returns an error
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(map[string]string{
+			"error": "Invalid access token",
+		})
+	}))
+	defer server.Close()
+
+	// Create client with test server URL
+	cfg := &config.Config{
+		Trakt: config.TraktConfig{
+			ClientID:     "test_client_id",
+			ClientSecret: "test_client_secret",
+			AccessToken:  "invalid_token",
+			APIBaseURL:   server.URL,
+		},
+	}
+	log := &MockLogger{}
+	client := NewClient(cfg, log)
+
+	// Test error handling
+	watchlist, err := client.GetWatchlist()
+	if err == nil {
+		t.Error("Expected error but got none")
+	}
+	if watchlist != nil {
+		t.Error("Expected nil watchlist on error")
+	}
+	if log.lastMessage != "errors.api_request_failed" {
+		t.Errorf("Expected error message logged, got '%s'", log.lastMessage)
+	}
 }
 
 func TestAddExtendedInfo(t *testing.T) {
@@ -749,4 +853,246 @@ func TestAddExtendedInfo(t *testing.T) {
 
 	url = client.addExtendedInfo("://invalid")
 	assert.Equal(t, "://invalid", url)
+}
+
+// TestGetShowRatings tests the GetShowRatings endpoint
+func TestGetShowRatings(t *testing.T) {
+	// Create a test server
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Verify request
+		if r.URL.Path != "/sync/ratings/shows" {
+			t.Errorf("Expected path '/sync/ratings/shows', got '%s'", r.URL.Path)
+		}
+		if r.Header.Get("Content-Type") != "application/json" {
+			t.Errorf("Expected Content-Type 'application/json', got '%s'", r.Header.Get("Content-Type"))
+		}
+		if r.Header.Get("trakt-api-key") != "test_client_id" {
+			t.Errorf("Expected client ID header, got '%s'", r.Header.Get("trakt-api-key"))
+		}
+		if r.Header.Get("Authorization") != "Bearer test_access_token" {
+			t.Errorf("Expected auth header, got '%s'", r.Header.Get("Authorization"))
+		}
+
+		// Set rate-limiting header for coverage
+		w.Header().Set("X-Ratelimit-Remaining", "50")
+
+		// Return test response
+		ratings := []ShowRating{
+			{
+				Show: ShowInfo{
+					Title: "Test Show",
+					Year:  2020,
+					IDs: ShowIDs{
+						Trakt: 12345,
+						TMDB:  67890,
+						IMDB:  "tt0123456",
+						TVDB:  98765,
+						Slug:  "test-show-2020",
+					},
+				},
+				RatedAt: time.Now().Format(time.RFC3339),
+				Rating:  8.5,
+			},
+		}
+		json.NewEncoder(w).Encode(ratings)
+	}))
+	defer server.Close()
+
+	// Create client with test server URL
+	cfg := &config.Config{
+		Trakt: config.TraktConfig{
+			ClientID:     "test_client_id",
+			ClientSecret: "test_client_secret",
+			AccessToken:  "test_access_token",
+			APIBaseURL:   server.URL,
+		},
+	}
+	log := &MockLogger{}
+	client := NewClient(cfg, log)
+
+	// Test successful request
+	ratings, err := client.GetShowRatings()
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+	if len(ratings) != 1 {
+		t.Errorf("Expected 1 show rating, got %d", len(ratings))
+	}
+	if ratings[0].Show.Title != "Test Show" {
+		t.Errorf("Expected show title 'Test Show', got '%s'", ratings[0].Show.Title)
+	}
+	if ratings[0].Rating != 8.5 {
+		t.Errorf("Expected rating 8.5, got %f", ratings[0].Rating)
+	}
+}
+
+// TestGetShowRatingsError tests error handling in GetShowRatings
+func TestGetShowRatingsError(t *testing.T) {
+	// Create a test server that returns an error
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(map[string]string{
+			"error": "Invalid access token",
+		})
+	}))
+	defer server.Close()
+
+	// Create client with test server URL
+	cfg := &config.Config{
+		Trakt: config.TraktConfig{
+			ClientID:     "test_client_id",
+			ClientSecret: "test_client_secret",
+			AccessToken:  "invalid_token",
+			APIBaseURL:   server.URL,
+		},
+	}
+	log := &MockLogger{}
+	client := NewClient(cfg, log)
+
+	// Test error handling
+	ratings, err := client.GetShowRatings()
+	if err == nil {
+		t.Error("Expected error but got none")
+	}
+	if ratings != nil {
+		t.Errorf("Expected nil ratings, got %v", ratings)
+	}
+}
+
+// TestGetEpisodeRatings tests the GetEpisodeRatings endpoint
+func TestGetEpisodeRatings(t *testing.T) {
+	// Create a test server
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Verify request
+		if r.URL.Path != "/sync/ratings/episodes" {
+			t.Errorf("Expected path '/sync/ratings/episodes', got '%s'", r.URL.Path)
+		}
+		if r.Header.Get("Content-Type") != "application/json" {
+			t.Errorf("Expected Content-Type 'application/json', got '%s'", r.Header.Get("Content-Type"))
+		}
+		if r.Header.Get("trakt-api-key") != "test_client_id" {
+			t.Errorf("Expected client ID header, got '%s'", r.Header.Get("trakt-api-key"))
+		}
+		if r.Header.Get("Authorization") != "Bearer test_access_token" {
+			t.Errorf("Expected auth header, got '%s'", r.Header.Get("Authorization"))
+		}
+
+		// Set rate-limiting header for coverage
+		w.Header().Set("X-Ratelimit-Remaining", "50")
+
+		// Return test response
+		ratings := []EpisodeRating{
+			{
+				Show: ShowInfo{
+					Title: "Test Show",
+					Year:  2020,
+					IDs: ShowIDs{
+						Trakt: 12345,
+						TMDB:  67890,
+						IMDB:  "tt0123456",
+						TVDB:  98765,
+						Slug:  "test-show-2020",
+					},
+				},
+				Episode: EpisodeInfo{
+					Season: 1,
+					Number: 2,
+					Title:  "Test Episode",
+					IDs: EpisodeIDs{
+						Trakt: 54321,
+						TMDB:  9876,
+						TVDB:  1234,
+					},
+				},
+				RatedAt: time.Now().Format(time.RFC3339),
+				Rating:  9.0,
+			},
+		}
+		json.NewEncoder(w).Encode(ratings)
+	}))
+	defer server.Close()
+
+	// Create client with test server URL
+	cfg := &config.Config{
+		Trakt: config.TraktConfig{
+			ClientID:     "test_client_id",
+			ClientSecret: "test_client_secret",
+			AccessToken:  "test_access_token",
+			APIBaseURL:   server.URL,
+		},
+	}
+	log := &MockLogger{}
+	client := NewClient(cfg, log)
+
+	// Test successful request
+	ratings, err := client.GetEpisodeRatings()
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+	if len(ratings) != 1 {
+		t.Errorf("Expected 1 episode rating, got %d", len(ratings))
+	}
+	if ratings[0].Show.Title != "Test Show" {
+		t.Errorf("Expected show title 'Test Show', got '%s'", ratings[0].Show.Title)
+	}
+	if ratings[0].Episode.Title != "Test Episode" {
+		t.Errorf("Expected episode title 'Test Episode', got '%s'", ratings[0].Episode.Title)
+	}
+	if ratings[0].Rating != 9.0 {
+		t.Errorf("Expected rating 9.0, got %f", ratings[0].Rating)
+	}
+}
+
+// TestGetEpisodeRatingsError tests error handling in GetEpisodeRatings
+func TestGetEpisodeRatingsError(t *testing.T) {
+	// Create a test server that returns an error
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(map[string]string{
+			"error": "Invalid access token",
+		})
+	}))
+	defer server.Close()
+
+	// Create client with test server URL
+	cfg := &config.Config{
+		Trakt: config.TraktConfig{
+			ClientID:     "test_client_id",
+			ClientSecret: "test_client_secret",
+			AccessToken:  "invalid_token",
+			APIBaseURL:   server.URL,
+		},
+	}
+	log := &MockLogger{}
+	client := NewClient(cfg, log)
+
+	// Test error handling
+	ratings, err := client.GetEpisodeRatings()
+	if err == nil {
+		t.Error("Expected error but got none")
+	}
+	if ratings != nil {
+		t.Errorf("Expected nil ratings, got %v", ratings)
+	}
+}
+
+// TestGetConfig tests the GetConfig method
+func TestGetConfig(t *testing.T) {
+	// Create client with test config
+	expectedConfig := &config.Config{
+		Trakt: config.TraktConfig{
+			ClientID:     "test_client_id",
+			ClientSecret: "test_client_secret",
+			AccessToken:  "test_access_token",
+			APIBaseURL:   "https://api.trakt.tv",
+		},
+	}
+	log := &MockLogger{}
+	client := NewClient(expectedConfig, log)
+
+	// Test GetConfig
+	returnedConfig := client.GetConfig()
+	if returnedConfig != expectedConfig {
+		t.Errorf("Expected config to be the same as what was passed in")
+	}
 } 

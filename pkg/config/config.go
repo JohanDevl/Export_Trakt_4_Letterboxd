@@ -26,10 +26,13 @@ type TraktConfig struct {
 
 // LetterboxdConfig holds Letterboxd export configuration
 type LetterboxdConfig struct {
-	ExportDir          string `toml:"export_dir"`
-	WatchedFilename    string `toml:"watched_filename"`
-	CollectionFilename string `toml:"collection_filename"`
-	ShowsFilename      string `toml:"shows_filename"`
+	ExportDir                string `toml:"export_dir"`
+	WatchedFilename          string `toml:"watched_filename"`
+	CollectionFilename       string `toml:"collection_filename"`
+	ShowsFilename            string `toml:"shows_filename"`
+	RatingsFilename          string `toml:"ratings_filename"`
+	WatchlistFilename        string `toml:"watchlist_filename"`
+	LetterboxdImportFilename string `toml:"letterboxd_import_filename"`
 }
 
 // ExportConfig holds export settings

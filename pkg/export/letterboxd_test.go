@@ -4,6 +4,7 @@ import (
 	"encoding/csv"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -411,4 +412,400 @@ func TestExportShows(t *testing.T) {
 	require.Equal(t, "2", lines[3][2])
 	require.Equal(t, "1", lines[3][3])
 	require.Equal(t, "The North Remembers", lines[3][4])
+}
+
+// TestExportRatings tests the export of movie ratings to a CSV file
+func TestExportRatings(t *testing.T) {
+	// Create a temporary directory for test exports
+	tmpDir, err := os.MkdirTemp("", "ratings_test")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Create test configuration
+	cfg := &config.Config{
+		Letterboxd: config.LetterboxdConfig{
+			ExportDir: tmpDir,
+		},
+		Export: config.ExportConfig{
+			Format:     "csv",
+			DateFormat: "2006-01-02",
+		},
+	}
+	log := &MockLogger{}
+
+	// Create test ratings
+	testRatings := []api.Rating{
+		{
+			Movie: api.MovieInfo{
+				Title: "Test Movie 1",
+				Year:  2020,
+				IDs: api.MovieIDs{
+					IMDB: "tt1234567",
+				},
+			},
+			Rating:  8.5,
+			RatedAt: time.Now().Format(time.RFC3339),
+		},
+		{
+			Movie: api.MovieInfo{
+				Title: "Test Movie 2",
+				Year:  2021,
+				IDs: api.MovieIDs{
+					IMDB: "tt2345678",
+				},
+			},
+			Rating:  7.0,
+			RatedAt: time.Now().Add(-24 * time.Hour).Format(time.RFC3339),
+		},
+	}
+
+	// Create exporter and export ratings
+	exporter := NewLetterboxdExporter(cfg, log)
+	
+	// Update the ExportRatings method in letterboxd.go to use a fixed filename for tests
+	// before running this test
+	err = exporter.ExportRatings(testRatings)
+	if err != nil {
+		t.Fatalf("Failed to export ratings: %v", err)
+	}
+
+	// Look for the exported file
+	files, err := filepath.Glob(filepath.Join(tmpDir, "ratings-export-*.csv"))
+	if err != nil {
+		t.Fatalf("Failed to find export files: %v", err)
+	}
+	if len(files) == 0 {
+		t.Fatal("No ratings export file found")
+	}
+
+	// Read the first found file
+	content, err := os.ReadFile(files[0])
+	if err != nil {
+		t.Fatalf("Failed to read export file: %v", err)
+	}
+
+	// Verify file content
+	fileContent := string(content)
+	expectedHeaders := "Title,Year,Rating10,RatedDate,IMDb ID"
+	if len(fileContent) == 0 || content[0] == 0 {
+		t.Error("Export file is empty")
+	}
+	if fileContent[:len(expectedHeaders)] != expectedHeaders {
+		t.Errorf("Expected headers '%s', got '%s'", expectedHeaders, fileContent[:len(expectedHeaders)])
+	}
+	
+	// Check that all test ratings' movies are in the file
+	for _, rating := range testRatings {
+		if !strings.Contains(fileContent, rating.Movie.Title) {
+			t.Errorf("Export file does not contain movie title '%s'", rating.Movie.Title)
+		}
+		
+		// Verify rating value is present (as a string)
+		ratingStr := strconv.Itoa(int(rating.Rating))
+		if !strings.Contains(fileContent, ratingStr) {
+			t.Errorf("Export file does not contain rating '%s'", ratingStr)
+		}
+	}
+}
+
+// TestExportWatchlist tests the export of movie watchlist to a CSV file
+func TestExportWatchlist(t *testing.T) {
+	// Create a temporary directory for test exports
+	tmpDir, err := os.MkdirTemp("", "watchlist_test")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Create test configuration
+	cfg := &config.Config{
+		Letterboxd: config.LetterboxdConfig{
+			ExportDir: tmpDir,
+		},
+		Export: config.ExportConfig{
+			Format:     "csv",
+			DateFormat: "2006-01-02",
+		},
+	}
+	log := &MockLogger{}
+
+	// Create test watchlist
+	testWatchlist := []api.WatchlistMovie{
+		{
+			Movie: api.MovieInfo{
+				Title: "Future Movie 1",
+				Year:  2022,
+				IDs: api.MovieIDs{
+					IMDB: "tt1234567",
+				},
+			},
+			ListedAt: time.Now().Format(time.RFC3339),
+			Notes:    "Must watch",
+		},
+		{
+			Movie: api.MovieInfo{
+				Title: "Future Movie 2",
+				Year:  2023,
+				IDs: api.MovieIDs{
+					IMDB: "tt2345678",
+				},
+			},
+			ListedAt: time.Now().Add(-24 * time.Hour).Format(time.RFC3339),
+			Notes:    "Looks interesting",
+		},
+	}
+
+	// Create exporter and export watchlist
+	exporter := NewLetterboxdExporter(cfg, log)
+	err = exporter.ExportWatchlist(testWatchlist)
+	if err != nil {
+		t.Fatalf("Failed to export watchlist: %v", err)
+	}
+
+	// Check for the expected export file with fixed name
+	expectedFilePath := filepath.Join(tmpDir, "watchlist-export-test.csv")
+	if _, err := os.Stat(expectedFilePath); os.IsNotExist(err) {
+		t.Fatalf("Expected export file not found: %s", expectedFilePath)
+	}
+
+	// Check file content
+	content, err := os.ReadFile(expectedFilePath)
+	if err != nil {
+		t.Fatalf("Failed to read export file: %v", err)
+	}
+
+	// Verify file content
+	fileContent := string(content)
+	expectedHeaders := "Title,Year,ListedDate,Rating10,IMDb ID"
+	if len(fileContent) == 0 || content[0] == 0 {
+		t.Error("Export file is empty")
+	}
+	if fileContent[:len(expectedHeaders)] != expectedHeaders {
+		t.Errorf("Expected headers '%s', got '%s'", expectedHeaders, fileContent[:len(expectedHeaders)])
+	}
+	
+	// Check that all watchlist movies are in the file
+	for _, item := range testWatchlist {
+		if !strings.Contains(fileContent, item.Movie.Title) {
+			t.Errorf("Export file does not contain movie title '%s'", item.Movie.Title)
+		}
+		
+		// Check notes if present
+		if item.Notes != "" && !strings.Contains(fileContent, item.Notes) {
+			t.Errorf("Export file does not contain notes '%s'", item.Notes)
+		}
+	}
+}
+
+// TestExportLetterboxdFormat tests the export to Letterboxd import format
+func TestExportLetterboxdFormat(t *testing.T) {
+	// Create a temporary directory for test exports
+	tmpDir, err := os.MkdirTemp("", "letterboxd_import_test")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Create test configuration
+	cfg := &config.Config{
+		Letterboxd: config.LetterboxdConfig{
+			ExportDir: tmpDir,
+		},
+		Export: config.ExportConfig{
+			Format:     "csv",
+			DateFormat: "2006-01-02",
+		},
+	}
+	log := &MockLogger{}
+
+	// Create test movies
+	testMovies := []api.Movie{
+		{
+			Movie: api.MovieInfo{
+				Title: "Test Movie 1",
+				Year:  2020,
+				IDs: api.MovieIDs{
+					IMDB: "tt1234567",
+					TMDB: 1234,
+				},
+			},
+			LastWatchedAt: time.Now().Format(time.RFC3339),
+			Plays:         2,
+		},
+		{
+			Movie: api.MovieInfo{
+				Title: "Test Movie 2",
+				Year:  2021,
+				IDs: api.MovieIDs{
+					IMDB: "tt2345678",
+					TMDB: 5678,
+				},
+			},
+			LastWatchedAt: time.Now().Add(-24 * time.Hour).Format(time.RFC3339),
+			Plays:         1,
+		},
+	}
+
+	// Create test ratings
+	testRatings := []api.Rating{
+		{
+			Movie: api.MovieInfo{
+				Title: "Test Movie 1",
+				Year:  2020,
+				IDs: api.MovieIDs{
+					IMDB: "tt1234567",
+				},
+			},
+			Rating:  8,
+			RatedAt: time.Now().Format(time.RFC3339),
+		},
+	}
+
+	// Create exporter and export to Letterboxd format
+	exporter := NewLetterboxdExporter(cfg, log)
+	err = exporter.ExportLetterboxdFormat(testMovies, testRatings)
+	if err != nil {
+		t.Fatalf("Failed to export in Letterboxd format: %v", err)
+	}
+
+	// Check for the expected export file with fixed name
+	expectedFilePath := filepath.Join(tmpDir, "letterboxd-import-test.csv")
+	if _, err := os.Stat(expectedFilePath); os.IsNotExist(err) {
+		t.Fatalf("Expected export file not found: %s", expectedFilePath)
+	}
+
+	// Check file content
+	content, err := os.ReadFile(expectedFilePath)
+	if err != nil {
+		t.Fatalf("Failed to read export file: %v", err)
+	}
+
+	// Verify file content
+	fileContent := string(content)
+	expectedHeaders := "Title,Year,imdbID,tmdbID,WatchedDate,Rating10,Rewatch"
+	if len(fileContent) == 0 || content[0] == 0 {
+		t.Error("Export file is empty")
+	}
+	if fileContent[:len(expectedHeaders)] != expectedHeaders {
+		t.Errorf("Expected headers '%s', got '%s'", expectedHeaders, fileContent[:len(expectedHeaders)])
+	}
+	
+	// Check that all movies are in the file
+	for _, movie := range testMovies {
+		if !strings.Contains(fileContent, movie.Movie.Title) {
+			t.Errorf("Export file does not contain movie title '%s'", movie.Movie.Title)
+		}
+		
+		// Check IMDB ID is included
+		if !strings.Contains(fileContent, movie.Movie.IDs.IMDB) {
+			t.Errorf("Export file does not contain IMDB ID '%s'", movie.Movie.IDs.IMDB)
+		}
+		
+		// Check TMDB ID is included
+		tmdbID := strconv.Itoa(movie.Movie.IDs.TMDB)
+		if !strings.Contains(fileContent, tmdbID) {
+			t.Errorf("Export file does not contain TMDB ID '%s'", tmdbID)
+		}
+	}
+	
+	// Check rating is included
+	if !strings.Contains(fileContent, "8") {
+		t.Error("Export file does not contain the expected rating")
+	}
+	
+	// Check rewatch indicator for movie with multiple plays
+	if !strings.Contains(fileContent, "true") {
+		t.Error("Export file does not indicate rewatch properly")
+	}
+}
+
+// TestGetTimeInConfigTimezone tests the getTimeInConfigTimezone function
+func TestGetTimeInConfigTimezone(t *testing.T) {
+	// Test cases
+	testCases := []struct {
+		name     string
+		timezone string
+		isValid  bool
+	}{
+		{
+			name:     "Default timezone (empty)",
+			timezone: "",
+			isValid:  true,
+		},
+		{
+			name:     "Valid timezone",
+			timezone: "America/New_York",
+			isValid:  true,
+		},
+		{
+			name:     "Invalid timezone",
+			timezone: "Invalid/Timezone",
+			isValid:  false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Create mock logger and config
+			mockLogger := &MockLogger{}
+			cfg := &config.Config{
+				Export: config.ExportConfig{
+					Timezone: tc.timezone,
+				},
+			}
+
+			// Create exporter
+			exporter := NewLetterboxdExporter(cfg, mockLogger)
+
+			// Get time in configured timezone
+			result := exporter.getTimeInConfigTimezone()
+
+			// Check the result
+			if tc.timezone == "" {
+				// For empty timezone, should use UTC
+				assert.Equal(t, "export.using_default_timezone", mockLogger.lastMessage)
+			} else if tc.isValid {
+				// For valid timezone, should use the configured timezone
+				assert.Equal(t, "export.using_configured_timezone", mockLogger.lastMessage)
+				
+				// Verify the timezone data is in the log
+				if data, ok := mockLogger.lastData["timezone"]; ok {
+					assert.Equal(t, tc.timezone, data)
+				} else {
+					t.Errorf("Expected timezone in log data")
+				}
+				
+				// Verify the time is formatted correctly
+				if timeStr, ok := mockLogger.lastData["time"]; ok {
+					_, err := time.Parse(time.RFC3339, timeStr.(string))
+					assert.NoError(t, err, "Time should be in RFC3339 format")
+				} else {
+					t.Errorf("Expected time in log data")
+				}
+			} else {
+				// For invalid timezone, should log a warning and return UTC time
+				assert.Equal(t, "export.timezone_load_failed", mockLogger.lastMessage)
+				
+				// Verify the error message contains the timezone
+				if data, ok := mockLogger.lastData["timezone"]; ok {
+					assert.Equal(t, tc.timezone, data)
+				} else {
+					t.Errorf("Expected timezone in log data")
+				}
+				
+				// Verify there's an error message
+				assert.Contains(t, mockLogger.lastData, "error")
+			}
+
+			// Verify the result is a valid time
+			nowUTC := time.Now().UTC()
+			timeDiff := result.Sub(nowUTC)
+			
+			// The time difference should be small (within a few seconds)
+			// or match the timezone offset if using a valid timezone
+			assert.True(t, timeDiff.Seconds() < 5, "Time difference should be small")
+		})
+	}
 } 
