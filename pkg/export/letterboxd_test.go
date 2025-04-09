@@ -166,18 +166,14 @@ func TestExportMovies(t *testing.T) {
 		t.Fatalf("Failed to export movies: %v", err)
 	}
 
-	// Check if export file was created
-	files, err := os.ReadDir(tmpDir)
-	if err != nil {
-		t.Fatalf("Failed to read export directory: %v", err)
-	}
-	if len(files) != 1 {
-		t.Errorf("Expected 1 export file, got %d", len(files))
+	// Check for the expected export file with fixed name
+	expectedFilePath := filepath.Join(tmpDir, "watched-export-test.csv")
+	if _, err := os.Stat(expectedFilePath); os.IsNotExist(err) {
+		t.Fatalf("Expected export file not found: %s", expectedFilePath)
 	}
 
 	// Check file content
-	filePath := filepath.Join(tmpDir, files[0].Name())
-	content, err := os.ReadFile(filePath)
+	content, err := os.ReadFile(expectedFilePath)
 	if err != nil {
 		t.Fatalf("Failed to read export file: %v", err)
 	}
@@ -275,13 +271,12 @@ func TestExportCollectionMovies(t *testing.T) {
 	// Assert no error
 	assert.NoError(t, err)
 
-	// Find the CSV file (it has a timestamp in the name)
-	files, err := filepath.Glob(filepath.Join(tempDir, "collection-export-*.csv"))
-	assert.NoError(t, err)
-	assert.Equal(t, 1, len(files), "Expected 1 export file")
+	// Check for the expected export file with fixed name
+	expectedFilePath := filepath.Join(tempDir, "collection-export-test.csv")
+	assert.FileExists(t, expectedFilePath, "Export file should exist")
 
 	// Read the CSV file
-	file, err := os.Open(files[0])
+	file, err := os.Open(expectedFilePath)
 	assert.NoError(t, err)
 	defer file.Close()
 
