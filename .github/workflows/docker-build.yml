@@ -86,8 +86,8 @@ jobs:
           platforms: linux/amd64,linux/arm64,linux/arm/v7
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=${{ github.workflow }}-${{ github.ref_name }}
+          cache-to: ${{ github.event_name != 'pull_request' && format('type=gha,mode=max,scope={0}-{1}', github.workflow, github.ref_name) || '' }}
           build-args: |
             VERSION=${{ steps.meta.outputs.version }}
             COMMIT_SHA=${{ github.sha }}
