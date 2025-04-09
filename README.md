@@ -147,17 +147,17 @@ go tool cover -html=coverage.out -o coverage.html
 
 ## Documentation
 
-La documentation complète est disponible dans le [Wiki du projet](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/wiki).
+Complete documentation is available in the [project Wiki](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/wiki).
 
-Vous y trouverez :
+You will find:
 
-- [Guide d'installation](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/wiki/Installation)
-- [Référence CLI](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/wiki/CLI-Reference)
-- [Fonctionnalités d'export](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/wiki/Export-Features)
-- [Guide API Trakt](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/wiki/Trakt-API-Guide)
-- [Internationalisation](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/wiki/Internationalization)
-- [Guide de migration](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/wiki/Migration-Guide)
-- [Tests](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/wiki/Testing)
+- [Installation Guide](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/wiki/Installation)
+- [CLI Reference](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/wiki/CLI-Reference)
+- [Export Features](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/wiki/Export-Features)
+- [Trakt API Guide](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/wiki/Trakt-API-Guide)
+- [Internationalization](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/wiki/Internationalization)
+- [Migration Guide](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/wiki/Migration-Guide)
+- [Testing](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/wiki/Testing)
 - [CI/CD](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/wiki/CI-CD)
 
 ## Troubleshooting
@@ -166,7 +166,7 @@ If you encounter issues:
 
 1. Check that your Trakt.tv profile is public
 2. Verify your authentication configuration
-3. Run `./setup_trakt.sh` again to refresh your tokens
+3. Ensure your config.toml file has the correct Trakt.tv client ID and secret
 4. Check logs in the `logs` directory for detailed error information
 
 ## Acknowledgements
