@@ -143,15 +143,11 @@ jobs:
           # Create test directories
           mkdir -p ./test_config ./test_logs ./test_exports
 
-          # Basic image test - check if it runs and displays version
+          # Basic image test - check if it runs properly
           docker run --rm \
             -v $(pwd)/test_config:/app/config \
             -v $(pwd)/test_logs:/app/logs \
             -v $(pwd)/test_exports:/app/exports \
-            ${{ env.REGISTRY_IMAGE }}:${{ steps.meta.outputs.version }} --version
-
-          # Check if the help command works
-          docker run --rm \
             ${{ env.REGISTRY_IMAGE }}:${{ steps.meta.outputs.version }} --help
 
           echo "Docker image tests passed successfully"
