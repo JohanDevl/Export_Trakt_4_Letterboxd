@@ -95,13 +95,22 @@ func TestNewClient(t *testing.T) {
 	client := NewClient(cfg, log)
 	if client == nil {
 		t.Error("Expected non-nil client")
+		return
 	}
-	if client.config != cfg {
+	
+	// Now safely check fields since we know client is not nil
+	if client.config == nil {
 		t.Error("Expected config to be set")
+	} else if client.config != cfg {
+		t.Error("Expected config to be set correctly")
 	}
-	if client.logger != log {
+	
+	if client.logger == nil {
 		t.Error("Expected logger to be set")
+	} else if client.logger != log {
+		t.Error("Expected logger to be set correctly")
 	}
+	
 	if client.httpClient == nil {
 		t.Error("Expected non-nil HTTP client")
 	}
@@ -554,6 +563,20 @@ func TestGetWatchedShows(t *testing.T) {
 	}
 	log := &MockLogger{}
 	client := NewClient(cfg, log)
+	
+	// Verify client is properly initialized 
+	if client == nil {
+		t.Fatal("Expected non-nil client")
+	}
+	if client.config == nil {
+		t.Fatal("Expected non-nil config")
+	}
+	if client.logger == nil {
+		t.Fatal("Expected non-nil logger")
+	}
+	if client.httpClient == nil {
+		t.Fatal("Expected non-nil HTTP client")
+	}
 
 	// Test successful request
 	shows, err := client.GetWatchedShows()
@@ -596,6 +619,20 @@ func TestGetWatchedShowsError(t *testing.T) {
 	}
 	log := &MockLogger{}
 	client := NewClient(cfg, log)
+	
+	// Verify client is properly initialized 
+	if client == nil {
+		t.Fatal("Expected non-nil client")
+	}
+	if client.config == nil {
+		t.Fatal("Expected non-nil config")
+	}
+	if client.logger == nil {
+		t.Fatal("Expected non-nil logger")
+	}
+	if client.httpClient == nil {
+		t.Fatal("Expected non-nil HTTP client")
+	}
 
 	// Test error handling
 	shows, err := client.GetWatchedShows()

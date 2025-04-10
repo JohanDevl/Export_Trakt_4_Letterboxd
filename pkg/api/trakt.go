@@ -172,15 +172,22 @@ func (c *Client) makeRequest(req *http.Request) (*http.Response, error) {
 
 // addExtendedInfo adds the extended parameter to the URL if it's configured
 func (c *Client) addExtendedInfo(endpoint string) string {
+	// Safety checks
+	if c == nil || c.config == nil {
+		return endpoint
+	}
+	
 	if c.config.Trakt.ExtendedInfo == "" {
 		return endpoint
 	}
 
 	baseURL, err := url.Parse(endpoint)
 	if err != nil {
-		c.logger.Warn("api.url_parse_error", map[string]interface{}{
-			"error": err.Error(),
-		})
+		if c.logger != nil {
+			c.logger.Warn("api.url_parse_error", map[string]interface{}{
+				"error": err.Error(),
+			})
+		}
 		return endpoint
 	}
 
