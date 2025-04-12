@@ -181,7 +181,7 @@ func TestExportMovies(t *testing.T) {
 
 	// Verify file content
 	fileContent := string(content)
-	expectedHeaders := "Title,Year,WatchedDate,Rating10,IMDb ID,Rewatch"
+	expectedHeaders := "Title,Year,WatchedDate,Rating10,imdbID,tmdbID,Rewatch"
 	if len(fileContent) == 0 || content[0] == 0 {
 		t.Error("Export file is empty")
 	}
@@ -286,18 +286,20 @@ func TestExportCollectionMovies(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Check the header
-	assert.Equal(t, []string{"Title", "Year", "CollectedDate", "IMDb ID"}, records[0])
+	assert.Equal(t, []string{"Title", "Year", "CollectedDate", "imdbID", "tmdbID"}, records[0])
 
 	// Check movie records
 	assert.Equal(t, "The Dark Knight", records[1][0])
 	assert.Equal(t, "2008", records[1][1])
 	assert.Equal(t, "2023-01-15", records[1][2])
 	assert.Equal(t, "tt0468569", records[1][3])
+	assert.Equal(t, "155", records[1][4])
 
 	assert.Equal(t, "Inception", records[2][0])
 	assert.Equal(t, "2010", records[2][1])
 	assert.Equal(t, "2023-03-20", records[2][2])
 	assert.Equal(t, "tt1375666", records[2][3])
+	assert.Equal(t, "27205", records[2][4])
 }
 
 func TestExportShows(t *testing.T) {
