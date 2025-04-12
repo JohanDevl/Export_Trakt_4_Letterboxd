@@ -174,7 +174,7 @@ func (e *LetterboxdExporter) ExportMovies(movies []api.Movie) error {
 	defer writer.Flush()
 
 	// Write header
-	header := []string{"Title", "Year", "WatchedDate", "Rating10", "IMDb ID", "Rewatch"}
+	header := []string{"Title", "Year", "WatchedDate", "Rating10", "imdbID", "tmdbID", "Rewatch"}
 	if err := writer.Write(header); err != nil {
 		return fmt.Errorf("failed to write header: %w", err)
 	}
@@ -243,12 +243,16 @@ func (e *LetterboxdExporter) ExportMovies(movies []api.Movie) error {
 			rewatch = "true"
 		}
 
+		// Convert TMDB ID to string
+		tmdbID := strconv.Itoa(movie.Movie.IDs.TMDB)
+
 		record := []string{
 			movie.Movie.Title,
 			strconv.Itoa(movie.Movie.Year),
 			watchedDate,
 			rating,
 			movie.Movie.IDs.IMDB,
+			tmdbID,
 			rewatch,
 		}
 
@@ -305,7 +309,7 @@ func (e *LetterboxdExporter) ExportCollectionMovies(movies []api.CollectionMovie
 	defer writer.Flush()
 
 	// Write header
-	header := []string{"Title", "Year", "CollectedDate", "IMDb ID"}
+	header := []string{"Title", "Year", "CollectedDate", "imdbID", "tmdbID"}
 	if err := writer.Write(header); err != nil {
 		return fmt.Errorf("failed to write header: %w", err)
 	}
@@ -320,11 +324,15 @@ func (e *LetterboxdExporter) ExportCollectionMovies(movies []api.CollectionMovie
 			}
 		}
 
+		// Convert TMDB ID to string
+		tmdbID := strconv.Itoa(movie.Movie.IDs.TMDB)
+
 		record := []string{
 			movie.Movie.Title,
 			strconv.Itoa(movie.Movie.Year),
 			collectedDate,
 			movie.Movie.IDs.IMDB,
+			tmdbID,
 		}
 
 		if err := writer.Write(record); err != nil {

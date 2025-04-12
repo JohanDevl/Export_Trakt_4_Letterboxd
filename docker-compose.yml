@@ -3,8 +3,8 @@ version: "3.8"
 services:
   # Base service configuration (not started directly)
   export-trakt-base: &export-trakt-base
-    image: johandevl/export-trakt-4-letterboxd:latest
-    container_name: export-trakt
+    image: export-trakt-letterboxd:latest
+    container_name: export-trakt-custom-complete
     volumes:
       - ./config:/app/config
       - ./logs:/app/logs
@@ -32,7 +32,7 @@ services:
   export-trakt-complete:
     <<: *export-trakt-base
     profiles: ["complete"]
-    command: ["export", "--mode", "complete"]
+    command: ["export", "--mode", "complete", "-export", "all"]
 
   # Initial export
   export-trakt-initial:
