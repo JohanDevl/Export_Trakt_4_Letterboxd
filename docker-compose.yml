@@ -69,22 +69,22 @@ services:
 # Docker Compose usage examples:
 #
 # Default export (normal mode):
-# docker-compose up
+# docker compose up
 #
 # Interactive setup:
-# docker-compose --profile setup up
+# docker compose --profile setup up
 #
 # Complete export:
-# docker-compose --profile complete up
+# docker compose --profile complete up
 #
 # Initial export:
-# docker-compose --profile initial up
+# docker compose --profile initial up
 #
 # Validate configuration:
-# docker-compose --profile validate up
+# docker compose --profile validate up
 #
 # Scheduled export (runs as cron job):
-# docker-compose --profile scheduled up -d
+# docker compose --profile scheduled up -d
 
 volumes:
   trakt_logs:
