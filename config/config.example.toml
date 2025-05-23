@@ -13,18 +13,19 @@
 #
 # ═══════════════════════════════════════════════════════════════════════════════
 
+# Export Trakt 4 Letterboxd Configuration File
+# This is an example configuration file with enhanced security features
+
 # ┌─────────────────────────────────────────────────────────────────────────────┐
 # │                           🔑 TRAKT.TV API SETTINGS                         │
 # └─────────────────────────────────────────────────────────────────────────────┘
 [trakt]
-# 🆔 Your Trakt.tv application credentials
-# ⚠️  REQUIRED: Get these from https://trakt.tv/oauth/applications
-client_id = "YOUR_CLIENT_ID"
-client_secret = "YOUR_CLIENT_SECRET"
-access_token = "YOUR_ACCESS_TOKEN"
-
-# 🌐 API endpoint (don't change unless you know what you're doing)
-api_base_url = "https://api.trakt.tv"
+# Trakt.tv API configuration
+# Note: With enhanced security, credentials should be stored securely using keyring
+client_id = "your_trakt_client_id"           # Will be stored in keyring if security is enabled
+client_secret = "your_trakt_client_secret"   # Will be stored in keyring if security is enabled
+access_token = ""                            # Optional, will be obtained during OAuth flow
+api_base_url = "https://api.trakt.tv"        # HTTPS enforced when security.require_https = true
 
 # 📊 Data detail level for exports
 # Options: "min" | "full" | "metadata" | "letterboxd"
@@ -35,8 +36,14 @@ extended_info = "full"
 # │                        📽️  LETTERBOXD EXPORT SETTINGS                     │
 # └─────────────────────────────────────────────────────────────────────────────┘
 [letterboxd]
-# 📁 Directory where export files will be saved
-export_dir = "exports"
+# Letterboxd export configuration
+export_dir = "./exports"
+watched_filename = "watched.csv"
+collection_filename = "watchlist.csv"
+shows_filename = "shows.csv"
+ratings_filename = "ratings.csv"
+watchlist_filename = "watchlist.csv"
+letterboxd_import_filename = "letterboxd_import.csv"
 
 # 📄 Custom filenames (optional - uncomment to use)
 # watched_filename = "watched.csv"
@@ -47,7 +54,7 @@ export_dir = "exports"
 # │                          ⚙️  GENERAL EXPORT SETTINGS                      │
 # └─────────────────────────────────────────────────────────────────────────────┘
 [export]
-# 📋 Export file format
+# Export format settings
 format = "csv"
 
 # 📅 Date format in exports (Go time layout)
@@ -57,24 +64,23 @@ date_format = "2006-01-02"
 # 🌍 Timezone for export timestamps
 # Examples: "Europe/Paris", "America/New_York", "Asia/Tokyo"
 # 💡 Leave empty "" to use UTC
-timezone = ""
+timezone = "UTC"
 
 # ┌─────────────────────────────────────────────────────────────────────────────┐
 # │                            📝 LOGGING CONFIGURATION                        │
 # └─────────────────────────────────────────────────────────────────────────────┘
 [logging]
-# 📊 Log level: "debug" | "info" | "warn" | "error"
-# 💡 Use "debug" for troubleshooting, "info" for normal operation
+# Application logging configuration
 level = "info"
 
 # 📄 Log file location
-file = "logs/export.log"
+file = "./logs/app.log"
 
 # ┌─────────────────────────────────────────────────────────────────────────────┐
 # │                      🌐 INTERNATIONALIZATION SETTINGS                     │
 # └─────────────────────────────────────────────────────────────────────────────┘
 [i18n]
-# 🗣️ Default language for the application
+# Internationalization settings
 default_language = "en"
 
 # 🌏 Current language setting
@@ -82,7 +88,82 @@ default_language = "en"
 language = "en"
 
 # 📁 Directory containing translation files
-locales_dir = "locales"
+locales_dir = "./locales"
+
+# 🔒 Enhanced Security Configuration
+[security]
+# Enable encryption for sensitive data storage
+encryption_enabled = true
+
+# Keyring backend for credential storage
+# Options: "system" (OS keychain), "env" (environment variables), "file" (encrypted file)
+keyring_backend = "system"
+
+# Enable comprehensive audit logging
+audit_logging = true
+
+# Enable rate limiting for API calls
+rate_limit_enabled = true
+
+# Require HTTPS for all external communications
+require_https = true
+
+# Audit logging configuration
+[security.audit]
+# Audit log level: debug, info, warn, error
+log_level = "info"
+
+# Number of days to retain audit logs
+retention_days = 90
+
+# Include sensitive information in audit logs (NOT recommended for production)
+include_sensitive = false
+
+# Audit log output format: json, text
+output_format = "json"
+
+# 📝 Security Configuration Guidelines
+#
+# 1. Credential Management:
+#    - Use "system" keyring backend for maximum security on desktop systems
+#    - Use "env" backend for containerized deployments
+#    - Use "file" backend only for testing (less secure)
+#    - Never store credentials in plain text configuration files
+#
+# 2. Environment Variables (when using keyring_backend = "env"):
+#    - TRAKT_CLIENT_ID: Your Trakt.tv API client ID
+#    - TRAKT_CLIENT_SECRET: Your Trakt.tv API client secret
+#    - TRAKT_ACCESS_TOKEN: Your Trakt.tv access token (optional)
+#    - ENCRYPTION_KEY: Base64-encoded 32-byte encryption key (auto-generated if not provided)
+#
+# 3. File Permissions:
+#    - Ensure config files have restrictive permissions (0600)
+#    - Audit logs are created with secure permissions (0640)
+#    - Encrypted credential files use 0600 permissions
+#
+# 4. Security Levels:
+#    - High: encryption_enabled=true, audit_logging=true, require_https=true, keyring_backend="system"
+#    - Medium: encryption_enabled=true, require_https=true
+#    - Low: Basic configuration without enhanced security features
+#
+# 5. Production Recommendations:
+#    - Always enable encryption_enabled = true
+#    - Set audit_logging = true for compliance
+#    - Use require_https = true for secure communications
+#    - Set include_sensitive = false in audit logs
+#    - Regularly review and rotate credentials
+#    - Monitor audit logs for security events
+#
+# 6. Docker Deployment:
+#    - Use environment variables for credentials
+#    - Mount logs directory as volume for persistence
+#    - Run container as non-root user
+#    - Use secrets management for production deployments
+#
+# Example environment variable configuration:
+# TRAKT_CLIENT_ID=your_client_id_here
+# TRAKT_CLIENT_SECRET=your_client_secret_here
+# ENCRYPTION_KEY=base64_encoded_32_byte_key_here
 
 # ═══════════════════════════════════════════════════════════════════════════════
 #                                    📚 NOTES
