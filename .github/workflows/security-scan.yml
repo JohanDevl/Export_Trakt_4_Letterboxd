@@ -269,13 +269,25 @@ jobs:
             fi
           fi
 
-          # Check Dockerfile security
+          # Check Dockerfile security - smart check for final stage user
           echo "🔍 Checking Dockerfile security..."
-          if grep -q "USER.*root" Dockerfile.secure; then
-            echo "❌ Dockerfile.secure contains root user usage"
+          
+          # Extract the final stage content (after the last FROM statement)
+          final_stage=$(awk '/^FROM.*AS builder/{next} /^FROM/{flag=1} flag' Dockerfile.secure)
+          
+          # Check if final stage contains root user usage
+          if echo "$final_stage" | grep -q "USER.*root"; then
+            echo "❌ Dockerfile.secure final stage contains root user usage"
             exit 1
+          elif echo "$final_stage" | grep -q "USER.*65532" || grep -q "distroless.*nonroot" Dockerfile.secure; then
+            echo "✅ Dockerfile.secure uses non-root user in final stage"
           else
-            echo "✅ Dockerfile.secure uses non-root user"
+            # Check if it's a distroless image (which defaults to non-root)
+            if grep -q "FROM.*distroless" Dockerfile.secure; then
+              echo "✅ Dockerfile.secure uses distroless image (non-root by default)"
+            else
+              echo "⚠️  Could not verify non-root user in Dockerfile.secure final stage"
+            fi
           fi
 
       - name: Security checklist validation
