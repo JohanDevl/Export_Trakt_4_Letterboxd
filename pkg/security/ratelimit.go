@@ -190,15 +190,25 @@ func (rl *RateLimiter) createLimiter(service string) *bucketLimiter {
 	
 	if limit, exists = rl.config.Limits[service]; !exists {
 		// Use default limits
+		window := rl.config.WindowDuration
+		if window == 0 {
+			window = time.Minute // Default to 1 minute if not configured
+		}
+		
 		limit = RateLimit{
 			RequestsPerMinute: rl.config.DefaultLimit,
 			BurstCapacity:     rl.config.BurstLimit,
-			Window:           rl.config.WindowDuration,
+			Window:           window,
 		}
 	}
 
+	// Ensure Window is not zero to avoid division by zero
+	if limit.Window == 0 {
+		limit.Window = time.Minute
+	}
+
 	capacity := float64(limit.BurstCapacity)
-	refillRate := float64(limit.RequestsPerMinute) / limit.Window.Seconds() // Use configured window instead of hardcoded 60.0
+	refillRate := float64(limit.RequestsPerMinute) / limit.Window.Seconds()
 
 	return &bucketLimiter{
 		tokens:     capacity,

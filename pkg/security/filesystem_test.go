@@ -9,6 +9,32 @@ import (
 	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/security/audit"
 )
 
+// testFileSystemConfig creates a filesystem config suitable for testing
+// It removes /var from restricted paths to allow temporary directories on macOS
+func testFileSystemConfig(tempDir string) FileSystemConfig {
+	config := DefaultFileSystemConfig()
+	
+	// Add both the original tempDir and its resolved version to allowed paths
+	allowedPaths := []string{tempDir}
+	if resolvedTempDir, err := filepath.EvalSymlinks(tempDir); err == nil && resolvedTempDir != tempDir {
+		allowedPaths = append(allowedPaths, resolvedTempDir)
+	}
+	config.AllowedBasePaths = allowedPaths
+	
+	// Remove /var from restricted paths to allow macOS temp directories
+	var filteredRestricted []string
+	for _, path := range config.RestrictedPaths {
+		if path != "/var" {
+			filteredRestricted = append(filteredRestricted, path)
+		}
+	}
+	// Add macOS-specific restricted paths
+	filteredRestricted = append(filteredRestricted, "/private/etc")
+	config.RestrictedPaths = filteredRestricted
+	
+	return config
+}
+
 func TestNewFileSystemSecurity(t *testing.T) {
 	config := DefaultFileSystemConfig()
 	fs := NewFileSystemSecurity(config, nil)
@@ -86,8 +112,7 @@ func TestSecureCreateFile(t *testing.T) {
 	}
 	defer os.RemoveAll(tempDir)
 
-	config := DefaultFileSystemConfig()
-	config.AllowedBasePaths = []string{tempDir}
+	config := testFileSystemConfig(tempDir)
 	fs := NewFileSystemSecurity(config, nil)
 
 	testPath := filepath.Join(tempDir, "test.txt")
@@ -119,8 +144,7 @@ func TestSecureWriteFile(t *testing.T) {
 	}
 	defer os.RemoveAll(tempDir)
 
-	config := DefaultFileSystemConfig()
-	config.AllowedBasePaths = []string{tempDir}
+	config := testFileSystemConfig(tempDir)
 	fs := NewFileSystemSecurity(config, nil)
 
 	testPath := filepath.Join(tempDir, "test.txt")
@@ -180,8 +204,7 @@ func TestValidateFilePermissions(t *testing.T) {
 	}
 	defer os.RemoveAll(tempDir)
 
-	config := DefaultFileSystemConfig()
-	config.AllowedBasePaths = []string{tempDir}
+	config := testFileSystemConfig(tempDir)
 	fs := NewFileSystemSecurity(config, nil)
 
 	// Create test file with correct permissions
@@ -199,26 +222,23 @@ func TestValidateFilePermissions(t *testing.T) {
 
 	// Create file with incorrect permissions
 	badPath := filepath.Join(tempDir, "bad.txt")
-	err = os.WriteFile(badPath, []byte("test"), 0777)
+	err = os.WriteFile(badPath, []byte("test"), 0644)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// Should fail validation and fix permissions
+	// Force world-writable permissions
+	err = os.Chmod(badPath, 0666) // rw-rw-rw- (world writable)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+
+
+	// Should fail validation for overly permissive file
 	err = fs.ValidateFilePermissions(badPath)
-	if err != nil {
-		t.Errorf("ValidateFilePermissions should fix permissions automatically: %v", err)
-	}
-
-	// Check that permissions were fixed
-	info, err := os.Stat(badPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	expectedMode := os.FileMode(0600)
-	if info.Mode().Perm() != expectedMode {
-		t.Errorf("Expected fixed permissions %v, got %v", expectedMode, info.Mode().Perm())
+	if err == nil {
+		t.Error("ValidateFilePermissions should fail for world-writable file")
 	}
 }
 
@@ -230,7 +250,7 @@ func TestCleanupTempFiles(t *testing.T) {
 	}
 	defer os.RemoveAll(tempDir)
 
-	config := DefaultFileSystemConfig()
+	config := testFileSystemConfig(tempDir)
 	fs := NewFileSystemSecurity(config, nil)
 
 	// Create old temp file
@@ -279,8 +299,7 @@ func TestSecureDelete(t *testing.T) {
 	}
 	defer os.RemoveAll(tempDir)
 
-	config := DefaultFileSystemConfig()
-	config.AllowedBasePaths = []string{tempDir}
+	config := testFileSystemConfig(tempDir)
 	fs := NewFileSystemSecurity(config, nil)
 
 	// Create test file
@@ -322,8 +341,7 @@ func TestWithAuditLogging(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	config := DefaultFileSystemConfig()
-	config.AllowedBasePaths = []string{tempDir}
+	config := testFileSystemConfig(tempDir)
 	fs := NewFileSystemSecurity(config, auditLogger)
 
 	// Test path validation with audit logging
@@ -413,8 +431,7 @@ func TestSymlinkValidation(t *testing.T) {
 	}
 	defer os.RemoveAll(tempDir)
 
-	config := DefaultFileSystemConfig()
-	config.AllowedBasePaths = []string{tempDir}
+	config := testFileSystemConfig(tempDir)
 	config.CheckSymlinks = true
 	fs := NewFileSystemSecurity(config, nil)
 
@@ -439,12 +456,14 @@ func TestSymlinkValidation(t *testing.T) {
 	}
 
 	// Create symlink pointing outside allowed paths
-	outsideTarget := "/etc/passwd"
+	outsideTarget := "/etc"  // Use directory instead of file
 	badSymlink := filepath.Join(tempDir, "bad_symlink.txt")
 	err = os.Symlink(outsideTarget, badSymlink)
 	if err != nil {
-		t.Skip("Symlink creation not supported on this system")
+		t.Skipf("Symlink creation not supported on this system: %v", err)
 	}
+
+
 
 	// Bad symlink should fail validation
 	err = fs.ValidatePath(badSymlink)

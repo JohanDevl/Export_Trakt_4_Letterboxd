@@ -325,6 +325,28 @@ func (fs *FileSystemSecurity) enforceFilePermissions(path string, mode os.FileMo
 
 // checkSymlinks checks for symlink attacks in the path
 func (fs *FileSystemSecurity) checkSymlinks(path string) error {
+	// First check if the final path itself is a symlink
+	info, err := os.Lstat(path)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return fmt.Errorf("failed to check symlink: %w", err)
+		}
+		// File doesn't exist, check parent components
+	} else if info.Mode()&os.ModeSymlink != 0 {
+		// The final path is a symlink, resolve and validate it
+		realPath, err := filepath.EvalSymlinks(path)
+		if err != nil {
+			return fmt.Errorf("failed to resolve symlink: %w", err)
+		}
+
+		// Check if symlink points outside allowed paths
+		if err := fs.ValidatePath(realPath); err != nil {
+			fs.logSecurityViolation("symlink_attack", path, 
+				fmt.Sprintf("Symlink points to restricted location: %s -> %s", path, realPath))
+			return fmt.Errorf("symlink points to restricted location: %s", realPath)
+		}
+	}
+
 	// Check each component of the path for symlinks
 	components := strings.Split(path, string(filepath.Separator))
 	currentPath := ""
@@ -338,6 +360,11 @@ func (fs *FileSystemSecurity) checkSymlinks(path string) error {
 			currentPath = component
 		} else {
 			currentPath = filepath.Join(currentPath, component)
+		}
+
+		// Skip the final path since we already checked it above
+		if currentPath == path {
+			continue
 		}
 
 		// Check if current path component is a symlink
