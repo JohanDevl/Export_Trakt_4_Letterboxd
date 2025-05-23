@@ -1,0 +1,209 @@
+name: Docker Build and Publish
+
+on:
+  release:
+    types: [published]
+  push:
+    branches:
+      - main
+      - feature/go-migration
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - ".github/ISSUE_TEMPLATE/**"
+  pull_request:
+    branches:
+      - main
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - ".github/ISSUE_TEMPLATE/**"
+  workflow_dispatch:
+
+env:
+  REGISTRY_IMAGE: johandevl/export-trakt-4-letterboxd
+  GITHUB_REGISTRY: ghcr.io
+  GITHUB_IMAGE: ghcr.io/johandevl/export_trakt_4_letterboxd
+
+jobs:
+  build:
+    name: Build and push multi-platform Docker images
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      security-events: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ${{ env.REGISTRY_IMAGE }}
+            ${{ env.GITHUB_IMAGE }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,format=short
+            type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+
+      - name: Log in to Docker Hub
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.GITHUB_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set build date
+        id: build_date
+        run: echo "BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_OUTPUT
+
+      - name: Build and export Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          platforms: linux/amd64,linux/arm64,linux/arm/v7
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ github.workflow }}-${{ github.ref_name }}
+          cache-to: ${{ github.event_name != 'pull_request' && format('type=gha,mode=max,scope={0}-{1}', github.workflow, github.ref_name) || '' }}
+          build-args: |
+            VERSION=${{ steps.meta.outputs.version }}
+            COMMIT_SHA=${{ github.sha }}
+            BUILD_DATE=${{ steps.build_date.outputs.BUILD_DATE }}
+
+      - name: Scan image for vulnerabilities
+        if: github.event_name != 'pull_request'
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY_IMAGE }}:${{ steps.meta.outputs.version }}
+          format: "sarif"
+          output: "trivy-results.sarif"
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        if: github.event_name != 'pull_request'
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: "trivy-results.sarif"
+
+  test:
+    name: Test Docker image
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY_IMAGE }}
+          tags: |
+            type=sha,format=short
+
+      - name: Pull image for testing
+        run: docker pull ${{ env.REGISTRY_IMAGE }}:${{ steps.meta.outputs.version }}
+
+      - name: Test Docker image
+        run: |
+          # Create test directories
+          mkdir -p ./test_config ./test_logs ./test_exports
+
+          # Basic image test - check if it runs properly
+          docker run --rm \
+            -v $(pwd)/test_config:/app/config \
+            -v $(pwd)/test_logs:/app/logs \
+            -v $(pwd)/test_exports:/app/exports \
+            ${{ env.REGISTRY_IMAGE }}:${{ steps.meta.outputs.version }} --help
+
+          echo "Docker image tests passed successfully"
+
+  notify:
+    name: Notify on success or failure
+    needs: [build, test]
+    runs-on: ubuntu-latest
+    if: always() && github.event_name == 'release'
+
+    steps:
+      - name: Check build result
+        id: check
+        run: |
+          if ${{ needs.build.result == 'success' && needs.test.result == 'success' }}; then
+            echo "status=success" >> $GITHUB_OUTPUT
+          else
+            echo "status=failure" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create GitHub comment - Success
+        if: steps.check.outputs.status == 'success'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `✅ Docker images for version ${{ github.ref_name }} have been successfully built and published to:
+              
+              - Docker Hub: \`johandevl/export-trakt-4-letterboxd:${{ github.ref_name }}\`
+              - GitHub Packages: \`ghcr.io/johandevl/export_trakt_4_letterboxd:${{ github.ref_name }}\`
+              
+              The images are available for the following platforms:
+              - linux/amd64
+              - linux/arm64
+              - linux/arm/v7
+              
+              To use the image:
+              \`\`\`bash
+              docker pull johandevl/export-trakt-4-letterboxd:${{ github.ref_name }}
+              \`\`\`
+              `
+            })
+
+      - name: Create GitHub comment - Failure
+        if: steps.check.outputs.status == 'failure'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `❌ Docker image build for version ${{ github.ref_name }} failed. Please check the [workflow run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details.`
+            })
