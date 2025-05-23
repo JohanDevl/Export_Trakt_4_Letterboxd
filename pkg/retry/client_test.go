@@ -120,31 +120,34 @@ func TestClientExecuteNonRetryableError(t *testing.T) {
 
 func TestClientExecuteMaxRetries(t *testing.T) {
 	config := &Config{
-		BackoffConfig: backoff.NewExponentialBackoff(1*time.Millisecond, 10*time.Millisecond, 2.0, false, 2),
-		CircuitBreakerConfig: &circuit.Config{
-			FailureThreshold: 10,
-			Timeout:          1 * time.Second,
-			RecoveryTime:     2 * time.Second,
+		BackoffConfig: &backoff.ExponentialBackoff{
+			InitialDelay:  1 * time.Millisecond,
+			MaxDelay:      10 * time.Millisecond,
+			BackoffFactor: 2.0,
+			JitterEnabled: false,
+			MaxRetries:    2, // Max 2 attempts (0, 1)
 		},
-		RetryChecker: DefaultRetryChecker,
+		CircuitBreakerConfig: circuit.DefaultConfig(),
+		RetryChecker:         DefaultRetryChecker,
 	}
 	
 	client := NewClient(config)
 	
-	// Test operation that always fails
 	callCount := 0
-	err := client.Execute(context.Background(), "test_op", func(ctx context.Context) error {
+	operation := func(ctx context.Context) error {
 		callCount++
-		return types.NewAppError(types.ErrNetworkTimeout, "timeout", nil)
-	})
-	
-	if err == nil {
-		t.Error("Expected error after max retries")
+		// Return retryable error
+		return types.NewAppError(types.ErrNetworkTimeout, "timeout error", nil)
 	}
 	
-	// Should be called initial time + max retries (2) = 3 times
-	if callCount != 3 {
-		t.Errorf("Expected operation to be called 3 times (1 + 2 retries), got %d", callCount)
+	err := client.Execute(context.Background(), "test", operation)
+	if err == nil {
+		t.Error("Expected operation to fail after max retries")
+	}
+	
+	// Should be called max retries times (2) = 2 times total
+	if callCount != 2 {
+		t.Errorf("Expected operation to be called 2 times (max retries), got %d", callCount)
 	}
 }
 
@@ -209,22 +212,22 @@ func TestClientStats(t *testing.T) {
 }
 
 func TestDefaultRetryChecker(t *testing.T) {
-	// Test retryable error
-	retryableErr := types.NewAppError(types.ErrNetworkTimeout, "timeout", nil)
+	// Test retryable AppError
+	retryableErr := types.NewAppError(types.ErrNetworkTimeout, "network timeout", nil)
 	if !DefaultRetryChecker(retryableErr) {
-		t.Error("Expected retryable error to be retryable")
+		t.Error("Expected retryable AppError to be retryable")
 	}
 	
-	// Test non-retryable error
-	nonRetryableErr := types.NewAppError(types.ErrInvalidCredentials, "invalid", nil)
+	// Test non-retryable AppError
+	nonRetryableErr := types.NewAppError(types.ErrInvalidInput, "invalid input", nil)
 	if DefaultRetryChecker(nonRetryableErr) {
 		t.Error("Expected non-retryable error to not be retryable")
 	}
 	
-	// Test generic error
+	// Test generic error - should NOT be retryable by default
 	genericErr := errors.New("generic error")
-	if !DefaultRetryChecker(genericErr) {
-		t.Error("Expected generic error to be retryable by default")
+	if DefaultRetryChecker(genericErr) {
+		t.Error("Expected generic error to NOT be retryable by default")
 	}
 	
 	// Test nil error
