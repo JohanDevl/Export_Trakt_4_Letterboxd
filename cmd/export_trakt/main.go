@@ -4,7 +4,9 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/api"
@@ -289,10 +291,18 @@ func exportWatchlist(client *api.Client, exporter *export.LetterboxdExporter, lo
 
 // runExportOnce executes the export once and then exits
 func runExportOnce(cfg *config.Config, log logger.Logger, translator *i18n.Translator, exportType, exportMode string) {
+	log.Info("export.starting_execution", map[string]interface{}{
+		"export_type": exportType,
+		"export_mode": exportMode,
+		"timestamp":   time.Now().Format(time.RFC3339),
+	})
+
 	// Initialize Trakt client
+	log.Info("export.initializing_trakt_client", nil)
 	traktClient := api.NewClient(cfg, log)
 	
 	// Initialize Letterboxd exporter
+	log.Info("export.initializing_letterboxd_exporter", nil)
 	letterboxdExporter := export.NewLetterboxdExporter(cfg, log)
 	
 	// Log export mode
@@ -301,18 +311,28 @@ func runExportOnce(cfg *config.Config, log logger.Logger, translator *i18n.Trans
 	})
 	
 	// Perform the export based on type
+	log.Info("export.starting_data_retrieval", map[string]interface{}{
+		"export_type": exportType,
+	})
+
 	switch exportType {
 	case "watched":
+		log.Info("export.executing_watched_movies", nil)
 		exportWatchedMovies(traktClient, letterboxdExporter, log)
 	case "collection":
+		log.Info("export.executing_collection", nil)
 		exportCollection(traktClient, letterboxdExporter, log)
 	case "shows":
+		log.Info("export.executing_shows", nil)
 		exportShows(traktClient, letterboxdExporter, log)
 	case "ratings":
+		log.Info("export.executing_ratings", nil)
 		exportRatings(traktClient, letterboxdExporter, log)
 	case "watchlist":
+		log.Info("export.executing_watchlist", nil)
 		exportWatchlist(traktClient, letterboxdExporter, log)
 	case "all":
+		log.Info("export.executing_all_types", nil)
 		exportWatchedMovies(traktClient, letterboxdExporter, log)
 		exportCollection(traktClient, letterboxdExporter, log)
 		exportShows(traktClient, letterboxdExporter, log)
@@ -327,11 +347,32 @@ func runExportOnce(cfg *config.Config, log logger.Logger, translator *i18n.Trans
 	log.Info("export.completed_successfully", map[string]interface{}{
 		"export_type": exportType,
 		"export_mode": exportMode,
+		"timestamp":   time.Now().Format(time.RFC3339),
 	})
 }
 
 // runWithSchedule sets up a cron scheduler and runs the export according to the schedule
 func runWithSchedule(cfg *config.Config, log logger.Logger, translator *i18n.Translator, schedule, exportType, exportMode string) {
+	log.Info("scheduler.initializing", map[string]interface{}{
+		"schedule":    schedule,
+		"export_type": exportType,
+		"export_mode": exportMode,
+	})
+
+	// Check for verbose logging environment variable
+	if os.Getenv("EXPORT_VERBOSE") == "true" {
+		log.SetLogLevel("debug")
+		log.Info("scheduler.verbose_mode_enabled", nil)
+	}
+
+	// Override log level if LOG_LEVEL environment variable is set
+	if logLevel := os.Getenv("LOG_LEVEL"); logLevel != "" {
+		log.SetLogLevel(logLevel)
+		log.Info("scheduler.log_level_set", map[string]interface{}{
+			"level": logLevel,
+		})
+	}
+
 	// Validate cron expression
 	cronParser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
 	_, err := cronParser.Parse(schedule)
@@ -348,19 +389,38 @@ func runWithSchedule(cfg *config.Config, log logger.Logger, translator *i18n.Tra
 		os.Exit(1)
 	}
 
+	log.Info("scheduler.cron_validation_successful", map[string]interface{}{
+		"schedule": schedule,
+	})
+
 	// Create a new cron scheduler
 	c := cron.New()
 	
 	// Add the export job to the scheduler
 	entryID, err := c.AddFunc(schedule, func() {
-		log.Info("scheduler.executing_export", map[string]interface{}{
+		log.Info("scheduler.job_triggered", map[string]interface{}{
 			"schedule":    schedule,
+			"export_type": exportType,
+			"export_mode": exportMode,
+			"timestamp":   time.Now().Format(time.RFC3339),
+		})
+		
+		// Run the export with additional logging
+		log.Info("scheduler.starting_export_execution", map[string]interface{}{
 			"export_type": exportType,
 			"export_mode": exportMode,
 		})
 		
-		// Run the export
+		startTime := time.Now()
 		runExportOnce(cfg, log, translator, exportType, exportMode)
+		duration := time.Since(startTime)
+		
+		log.Info("scheduler.export_execution_completed", map[string]interface{}{
+			"export_type": exportType,
+			"export_mode": exportMode,
+			"duration":    duration.String(),
+			"next_run":    c.Entries()[0].Next.Format(time.RFC3339),
+		})
 	})
 	
 	if err != nil {
@@ -372,8 +432,14 @@ func runWithSchedule(cfg *config.Config, log logger.Logger, translator *i18n.Tra
 		os.Exit(1)
 	}
 	
+	log.Info("scheduler.job_added_successfully", map[string]interface{}{
+		"entry_id": entryID,
+		"schedule": schedule,
+	})
+	
 	// Start the cron scheduler
 	c.Start()
+	log.Info("scheduler.cron_started", nil)
 	
 	// Get the next run time
 	entries := c.Entries()
@@ -390,13 +456,53 @@ func runWithSchedule(cfg *config.Config, log logger.Logger, translator *i18n.Tra
 		fmt.Printf("Export Type: %s\n", exportType)
 		fmt.Printf("Export Mode: %s\n", exportMode)
 		fmt.Printf("Next run: %s\n", nextRun.Format("2006-01-02 15:04:05 MST"))
+		
+		// Log upcoming executions for the next hour
+		now := time.Now()
+		oneHourLater := now.Add(time.Hour)
+		log.Info("scheduler.upcoming_executions_preview", map[string]interface{}{
+			"next_hour_from": now.Format(time.RFC3339),
+			"next_hour_to":   oneHourLater.Format(time.RFC3339),
+		})
+		
+		count := 0
+		if len(entries) > 0 {
+			entry := entries[0]
+			nextExec := entry.Next
+			for nextExec.Before(oneHourLater) && count < 10 {
+				log.Info("scheduler.upcoming_execution", map[string]interface{}{
+					"execution_time": nextExec.Format("2006-01-02 15:04:05 MST"),
+					"in_minutes":     int(time.Until(nextExec).Minutes()),
+				})
+				// Calculate next execution after this one
+				schedule, _ := cronParser.Parse(schedule)
+				nextExec = schedule.Next(nextExec)
+				count++
+			}
+		}
 	}
 	
 	// Keep the program running until interrupted
 	log.Info("scheduler.waiting", map[string]interface{}{
 		"message": "Scheduler is running. Press Ctrl+C to stop.",
+		"pid":     os.Getpid(),
 	})
 	fmt.Println("Scheduler is running. Press Ctrl+C to stop...")
+	
+	// Set up signal handling for graceful shutdown
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	
+	go func() {
+		sig := <-sigChan
+		log.Info("scheduler.shutdown_signal_received", map[string]interface{}{
+			"signal": sig.String(),
+		})
+		fmt.Printf("\nReceived signal %s, shutting down gracefully...\n", sig)
+		c.Stop()
+		log.Info("scheduler.shutdown_complete", nil)
+		os.Exit(0)
+	}()
 	
 	// Block forever (or until SIGINT/SIGTERM)
 	select {}
