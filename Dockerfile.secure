@@ -2,7 +2,7 @@
 # This Dockerfile implements security best practices as specified in Issue #18
 
 # Build stage with security hardening
-FROM golang:1.22-alpine AS builder
+FROM golang:1.23-alpine AS builder
 
 # Security: Install only necessary build dependencies
 RUN apk add --no-cache \
@@ -49,27 +49,26 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
 # Verify the binary
 RUN file export-trakt && ldd export-trakt || true
 
+# Create directory structure in builder stage
+USER root
+RUN mkdir -p /app/runtime/config /app/runtime/logs /app/runtime/exports /app/runtime/tmp && \
+    chown -R 65532:65532 /app/runtime && \
+    chmod 755 /app/runtime && \
+    chmod 700 /app/runtime/config /app/runtime/logs && \
+    chmod 755 /app/runtime/exports && \
+    chmod 700 /app/runtime/tmp
+
 # 🛡️ Runtime stage - Distroless for maximum security
 FROM gcr.io/distroless/static-debian11:nonroot
-
-# Security: Run as non-root user (distroless provides this by default)
-# UID 65532 is the nonroot user in distroless
 
 # Security: Set secure working directory
 WORKDIR /app
 
-# Security: Create directories with minimal permissions
-USER root
-RUN mkdir -p /app/config /app/logs /app/exports /app/tmp && \
-    chown -R 65532:65532 /app && \
-    chmod 755 /app && \
-    chmod 700 /app/config /app/logs && \
-    chmod 755 /app/exports && \
-    chmod 700 /app/tmp
+# Copy pre-created directory structure with correct ownership
+COPY --from=builder --chown=65532:65532 /app/runtime /app
 
 # Copy binary with secure permissions
 COPY --from=builder --chown=65532:65532 /app/export-trakt /app/export-trakt
-RUN chmod 755 /app/export-trakt
 
 # Copy locales with secure permissions
 COPY --from=builder --chown=65532:65532 /app/locales /app/locales
@@ -77,8 +76,7 @@ COPY --from=builder --chown=65532:65532 /app/locales /app/locales
 # Copy security configuration template
 COPY --from=builder --chown=65532:65532 /app/config/config.example.toml /app/config/
 
-# Security: Switch back to non-root user
-USER 65532:65532
+# Security: User is already set to 65532:65532 in the distroless base image
 
 # Security: Set secure environment variables
 ENV EXPORT_TRAKT_EXPORT_OUTPUT_DIR=/app/exports \
