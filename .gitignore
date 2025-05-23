@@ -202,3 +202,4 @@ test_prod/
 config/config.toml
 # But keep the example file
 !config/config.example.toml
+export_trakt

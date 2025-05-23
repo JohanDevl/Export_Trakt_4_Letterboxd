@@ -1,10 +1,7 @@
-version: "3.8"
-
 services:
   # Base service configuration (not started directly)
   export-trakt-base: &export-trakt-base
     image: export-trakt-letterboxd:latest
-    container_name: export-trakt-custom-complete
     volumes:
       - ./config:/app/config
       - ./logs:/app/logs
@@ -13,10 +10,12 @@ services:
     environment:
       - TZ=UTC
 
-  # Normal export (default)
+  # === LEGACY SERVICES (Traditional command-based approach) ===
+
+  # Normal export (default - legacy)
   export-trakt:
     <<: *export-trakt-base
-    profiles: ["default", "export"]
+    profiles: ["default", "export", "legacy"]
     command: ["export", "--mode", "normal"]
 
   # Interactive setup
@@ -28,16 +27,16 @@ services:
     tty: true
     stdin_open: true
 
-  # Complete export
+  # Complete export (legacy)
   export-trakt-complete:
     <<: *export-trakt-base
-    profiles: ["complete"]
-    command: ["export", "--mode", "complete", "-export", "all"]
+    profiles: ["complete", "legacy"]
+    command: ["export", "--mode", "complete", "--export", "all"]
 
-  # Initial export
+  # Initial export (legacy)
   export-trakt-initial:
     <<: *export-trakt-base
-    profiles: ["initial"]
+    profiles: ["initial", "legacy"]
     command: ["export", "--mode", "initial"]
 
   # Validate configuration
@@ -46,45 +45,177 @@ services:
     profiles: ["validate"]
     command: ["validate"]
 
-  # Scheduled export (runs as cron job)
-  export-trakt-scheduled:
+  # === NEW IMMEDIATE EXECUTION SERVICES (--run flag) ===
+
+  # Run once - watched movies only
+  export-trakt-run-watched:
     <<: *export-trakt-base
-    profiles: ["scheduled"]
-    image: johandevl/export-trakt-4-letterboxd:latest
+    profiles: ["run", "run-watched"]
+    command: ["--run", "--export", "watched", "--mode", "normal"]
+
+  # Run once - all data (recommended)
+  export-trakt-run-all:
+    <<: *export-trakt-base
+    profiles: ["run", "run-all"]
+    command: ["--run", "--export", "all", "--mode", "complete"]
+
+  # Run once - collection only
+  export-trakt-run-collection:
+    <<: *export-trakt-base
+    profiles: ["run-collection"]
+    command: ["--run", "--export", "collection", "--mode", "normal"]
+
+  # Run once - ratings only
+  export-trakt-run-ratings:
+    <<: *export-trakt-base
+    profiles: ["run-ratings"]
+    command: ["--run", "--export", "ratings", "--mode", "complete"]
+
+  # Run once - watchlist only
+  export-trakt-run-watchlist:
+    <<: *export-trakt-base
+    profiles: ["run-watchlist"]
+    command: ["--run", "--export", "watchlist", "--mode", "normal"]
+
+  # Run once - shows only
+  export-trakt-run-shows:
+    <<: *export-trakt-base
+    profiles: ["run-shows"]
+    command: ["--run", "--export", "shows", "--mode", "complete"]
+
+  # === NEW SCHEDULED SERVICES (--schedule flag) ===
+
+  # Scheduled export - Every 6 hours (recommended for production)
+  export-trakt-schedule-6h:
+    <<: *export-trakt-base
+    profiles: ["schedule", "schedule-6h"]
+    container_name: export-trakt-schedule-6h
     restart: unless-stopped
-    # This entrypoint overrides the default to run as a cron job
-    entrypoint: ["/bin/sh", "-c"]
-    # Run every day at 2 AM
-    command: >
-      "
-      echo \"$$EXPORT_SCHEDULE\" > /tmp/crontab &&
-      echo \"# Run Export Trakt for Letterboxd\" >> /tmp/crontab &&
-      echo \"$$EXPORT_SCHEDULE /app/export-trakt export >> /app/logs/cron.log 2>&1\" >> /tmp/crontab &&
-      crond -f -d 8 -c /tmp
-      "
+    command:
+      ["--schedule", "0 */6 * * *", "--export", "all", "--mode", "complete"]
+
+  # Scheduled export - Daily at 2:30 AM
+  export-trakt-schedule-daily:
+    <<: *export-trakt-base
+    profiles: ["schedule-daily"]
+    container_name: export-trakt-schedule-daily
+    restart: unless-stopped
+    command:
+      ["--schedule", "30 2 * * *", "--export", "all", "--mode", "complete"]
+
+  # Scheduled export - Weekly (Sundays at 3 AM)
+  export-trakt-schedule-weekly:
+    <<: *export-trakt-base
+    profiles: ["schedule-weekly"]
+    container_name: export-trakt-schedule-weekly
+    restart: unless-stopped
+    command:
+      ["--schedule", "0 3 * * 0", "--export", "all", "--mode", "complete"]
+
+  # Scheduled export - High frequency (every 15 minutes) for testing
+  export-trakt-schedule-15min:
+    <<: *export-trakt-base
+    profiles: ["schedule-test", "schedule-15min"]
+    container_name: export-trakt-schedule-15min
+    restart: unless-stopped
+    command:
+      ["--schedule", "*/15 * * * *", "--export", "watched", "--mode", "normal"]
+
+  # Custom scheduled export (use environment variables to configure)
+  export-trakt-schedule-custom:
+    <<: *export-trakt-base
+    profiles: ["schedule-custom"]
+    container_name: export-trakt-schedule-custom
+    restart: unless-stopped
     environment:
       - TZ=UTC
-      - EXPORT_SCHEDULE=0 2 * * * # Run every day at 2 AM
+      - CUSTOM_SCHEDULE=${SCHEDULE:-0 */6 * * *}
+      - CUSTOM_EXPORT_TYPE=${EXPORT_TYPE:-all}
+      - CUSTOM_EXPORT_MODE=${EXPORT_MODE:-complete}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        /app/export-trakt --schedule "$${CUSTOM_SCHEDULE}" --export "$${CUSTOM_EXPORT_TYPE}" --mode "$${CUSTOM_EXPORT_MODE}"
+
+  # === LEGACY SCHEDULED SERVICE (for backward compatibility) ===
+
+  # Scheduled export (legacy - uses old scheduler system)
+  export-trakt-scheduled:
+    <<: *export-trakt-base
+    profiles: ["scheduled", "legacy-scheduled"]
+    container_name: export-trakt-scheduled-cron
+    restart: unless-stopped
+    volumes:
+      - ./config:/app/config
+      - ./logs:/app/logs
+      - ./exports:/app/exports
+      - ./scripts:/app/scripts
+    environment:
+      - TZ=UTC
+      - EXPORT_SCHEDULE=*/5 * * * * # Run every 5 minutes (standard cron format)
+      - EXPORT_MODE=complete
+      - EXPORT_TYPE=all
+    entrypoint: ["/app/scripts/entrypoint.sh"]
 
 # Docker Compose usage examples:
 #
+# === IMMEDIATE EXECUTION (--run flag) ===
+# Run once - watched movies:
+# docker compose --profile run-watched up
+#
+# Run once - all data (recommended):
+# docker compose --profile run-all up
+#
+# Run once - specific type:
+# docker compose --profile run-collection up
+# docker compose --profile run-ratings up
+# docker compose --profile run-watchlist up
+# docker compose --profile run-shows up
+#
+# === SCHEDULED EXECUTION (--schedule flag) ===
+# Schedule - every 6 hours (recommended for production):
+# docker compose --profile schedule-6h up -d
+#
+# Schedule - daily at 2:30 AM:
+# docker compose --profile schedule-daily up -d
+#
+# Schedule - weekly backup:
+# docker compose --profile schedule-weekly up -d
+#
+# Schedule - high frequency testing:
+# docker compose --profile schedule-15min up -d
+#
+# Schedule - custom configuration:
+# SCHEDULE="0 */4 * * *" EXPORT_TYPE="watched" EXPORT_MODE="normal" docker compose --profile schedule-custom up -d
+#
+# === TRADITIONAL/LEGACY MODES ===
 # Default export (normal mode):
 # docker compose up
 #
 # Interactive setup:
 # docker compose --profile setup up
 #
-# Complete export:
+# Complete export (legacy):
 # docker compose --profile complete up
 #
-# Initial export:
+# Initial export (legacy):
 # docker compose --profile initial up
 #
 # Validate configuration:
 # docker compose --profile validate up
 #
-# Scheduled export (runs as cron job):
+# Scheduled export (legacy cron system):
 # docker compose --profile scheduled up -d
+#
+# === QUICK COMMANDS ===
+# Test your configuration:
+# docker compose --profile run-watched up
+#
+# Start production scheduler:
+# docker compose --profile schedule-6h up -d
+#
+# Check scheduler status:
+# docker compose --profile schedule-6h logs -f
 
 volumes:
   trakt_logs:

@@ -5,6 +5,7 @@ go 1.22
 require (
 	github.com/BurntSushi/toml v1.3.2
 	github.com/nicksnyder/go-i18n/v2 v2.4.0
+	github.com/robfig/cron/v3 v3.0.1
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.7.0
 	golang.org/x/text v0.14.0

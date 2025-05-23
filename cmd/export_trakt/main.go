@@ -4,19 +4,32 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
+	"time"
 
 	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/api"
 	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/config"
 	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/export"
 	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/i18n"
 	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/logger"
+	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/scheduler"
+	"github.com/robfig/cron/v3"
 )
 
 func main() {
 	// Parse command line flags
 	configPath := flag.String("config", "config/config.toml", "Path to configuration file")
 	exportType := flag.String("export", "watched", "Type of export (watched, collection, shows, ratings, watchlist, all)")
+	exportMode := flag.String("mode", "normal", "Export mode (normal, initial, complete)")
+	runOnce := flag.Bool("run", false, "Run the script immediately once then exit")
+	scheduleFlag := flag.String("schedule", "", "Run the script according to cron schedule format (e.g., '0 */6 * * *' for every 6 hours)")
 	flag.Parse()
+
+	// Get command from args
+	command := "export" // Default command
+	if len(flag.Args()) > 0 {
+		command = flag.Args()[0]
+	}
 
 	// Initialize logger
 	log := logger.NewLogger()
@@ -48,40 +61,103 @@ func main() {
 	// Update logger to use translator
 	log.SetTranslator(translator)
 
-	log.Info("startup.starting", nil)
+	// Handle --run flag (immediate execution)
+	if *runOnce {
+		log.Info("startup.run_once_mode", map[string]interface{}{
+			"export_type": *exportType,
+			"export_mode": *exportMode,
+		})
+		runExportOnce(cfg, log, translator, *exportType, *exportMode)
+		return
+	}
+
+	// Handle --schedule flag (cron scheduling)
+	if *scheduleFlag != "" {
+		log.Info("startup.schedule_mode", map[string]interface{}{
+			"schedule":    *scheduleFlag,
+			"export_type": *exportType,
+			"export_mode": *exportMode,
+		})
+		runWithSchedule(cfg, log, translator, *scheduleFlag, *exportType, *exportMode)
+		return
+	}
+
+	log.Info("startup.starting", map[string]interface{}{
+		"command": command,
+		"mode": *exportMode, // Log the export mode
+	})
 	log.Info("startup.config_loaded", nil)
 
 	// Initialize Trakt client
 	traktClient := api.NewClient(cfg, log)
 
-	// Initialize Letterboxd exporter
-	letterboxdExporter := export.NewLetterboxdExporter(cfg, log)
+	// Process command
+	switch strings.ToLower(command) {
+	case "export":
+		// Initialize Letterboxd exporter
+		letterboxdExporter := export.NewLetterboxdExporter(cfg, log)
 
-	// Perform the export based on type
-	switch *exportType {
-	case "watched":
-		exportWatchedMovies(traktClient, letterboxdExporter, log)
-	case "collection":
-		exportCollection(traktClient, letterboxdExporter, log)
-	case "shows":
-		exportShows(traktClient, letterboxdExporter, log)
-	case "ratings":
-		exportRatings(traktClient, letterboxdExporter, log)
-	case "watchlist":
-		exportWatchlist(traktClient, letterboxdExporter, log)
-	case "all":
-		exportWatchedMovies(traktClient, letterboxdExporter, log)
-		exportCollection(traktClient, letterboxdExporter, log)
-		exportShows(traktClient, letterboxdExporter, log)
-		exportRatings(traktClient, letterboxdExporter, log)
-		exportWatchlist(traktClient, letterboxdExporter, log)
+		// Log export mode
+		log.Info("export.mode", map[string]interface{}{
+			"mode": *exportMode,
+		})
+
+		// Perform the export based on type
+		switch *exportType {
+		case "watched":
+			exportWatchedMovies(traktClient, letterboxdExporter, log)
+		case "collection":
+			exportCollection(traktClient, letterboxdExporter, log)
+		case "shows":
+			exportShows(traktClient, letterboxdExporter, log)
+		case "ratings":
+			exportRatings(traktClient, letterboxdExporter, log)
+		case "watchlist":
+			exportWatchlist(traktClient, letterboxdExporter, log)
+		case "all":
+			exportWatchedMovies(traktClient, letterboxdExporter, log)
+			exportCollection(traktClient, letterboxdExporter, log)
+			exportShows(traktClient, letterboxdExporter, log)
+			exportRatings(traktClient, letterboxdExporter, log)
+			exportWatchlist(traktClient, letterboxdExporter, log)
+		default:
+			log.Error("errors.invalid_export_type", map[string]interface{}{"type": *exportType})
+			fmt.Printf("Invalid export type: %s. Valid types are 'watched', 'collection', 'shows', 'ratings', 'watchlist', or 'all'\n", *exportType)
+			os.Exit(1)
+		}
+
+		fmt.Println(translator.Translate("app.description", nil))
+	
+	case "schedule":
+		// Initialize scheduler
+		sched := scheduler.NewScheduler(cfg, log)
+		
+		// Set export mode and type to environment variables for the scheduler
+		os.Setenv("EXPORT_MODE", *exportMode)
+		os.Setenv("EXPORT_TYPE", *exportType)
+		
+		// Start scheduler (this will block until the program is terminated)
+		if err := sched.Start(); err != nil {
+			log.Error("scheduler.start_failed", map[string]interface{}{"error": err.Error()})
+			os.Exit(1)
+		}
+		
+		// Block forever (or until SIGINT/SIGTERM)
+		select {}
+	
+	case "setup":
+		// Handle setup command - just inform for now
+		fmt.Println(translator.Translate("setup.instructions", nil))
+	
+	case "validate":
+		// Validate the configuration
+		fmt.Println(translator.Translate("validate.success", nil))
+	
 	default:
-		log.Error("errors.invalid_export_type", map[string]interface{}{"type": *exportType})
-		fmt.Printf("Invalid export type: %s. Valid types are 'watched', 'collection', 'shows', 'ratings', 'watchlist', or 'all'\n", *exportType)
+		log.Error("errors.invalid_command", map[string]interface{}{"command": command})
+		fmt.Printf("Invalid command: %s. Valid commands are 'export', 'schedule', 'setup', 'validate'\n", command)
 		os.Exit(1)
 	}
-
-	fmt.Println(translator.Translate("app.description", nil))
 }
 
 func exportWatchedMovies(client *api.Client, exporter *export.LetterboxdExporter, log logger.Logger) {
@@ -209,4 +285,119 @@ func exportWatchlist(client *api.Client, exporter *export.LetterboxdExporter, lo
 		log.Error("export.export_failed", map[string]interface{}{"error": err.Error()})
 		os.Exit(1)
 	}
+}
+
+// runExportOnce executes the export once and then exits
+func runExportOnce(cfg *config.Config, log logger.Logger, translator *i18n.Translator, exportType, exportMode string) {
+	// Initialize Trakt client
+	traktClient := api.NewClient(cfg, log)
+	
+	// Initialize Letterboxd exporter
+	letterboxdExporter := export.NewLetterboxdExporter(cfg, log)
+	
+	// Log export mode
+	log.Info("export.mode", map[string]interface{}{
+		"mode": exportMode,
+	})
+	
+	// Perform the export based on type
+	switch exportType {
+	case "watched":
+		exportWatchedMovies(traktClient, letterboxdExporter, log)
+	case "collection":
+		exportCollection(traktClient, letterboxdExporter, log)
+	case "shows":
+		exportShows(traktClient, letterboxdExporter, log)
+	case "ratings":
+		exportRatings(traktClient, letterboxdExporter, log)
+	case "watchlist":
+		exportWatchlist(traktClient, letterboxdExporter, log)
+	case "all":
+		exportWatchedMovies(traktClient, letterboxdExporter, log)
+		exportCollection(traktClient, letterboxdExporter, log)
+		exportShows(traktClient, letterboxdExporter, log)
+		exportRatings(traktClient, letterboxdExporter, log)
+		exportWatchlist(traktClient, letterboxdExporter, log)
+	default:
+		log.Error("errors.invalid_export_type", map[string]interface{}{"type": exportType})
+		fmt.Printf("Invalid export type: %s. Valid types are 'watched', 'collection', 'shows', 'ratings', 'watchlist', or 'all'\n", exportType)
+		os.Exit(1)
+	}
+	
+	log.Info("export.completed_successfully", map[string]interface{}{
+		"export_type": exportType,
+		"export_mode": exportMode,
+	})
+}
+
+// runWithSchedule sets up a cron scheduler and runs the export according to the schedule
+func runWithSchedule(cfg *config.Config, log logger.Logger, translator *i18n.Translator, schedule, exportType, exportMode string) {
+	// Validate cron expression
+	cronParser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
+	_, err := cronParser.Parse(schedule)
+	if err != nil {
+		log.Error("errors.invalid_cron_schedule", map[string]interface{}{
+			"schedule": schedule,
+			"error":    err.Error(),
+		})
+		fmt.Printf("Invalid cron schedule format: %s\nError: %s\n", schedule, err.Error())
+		fmt.Println("Example formats:")
+		fmt.Println("  '0 */6 * * *'   - Every 6 hours")
+		fmt.Println("  '0 9 * * 1'     - Every Monday at 9:00 AM")
+		fmt.Println("  '30 14 * * *'   - Every day at 2:30 PM")
+		os.Exit(1)
+	}
+
+	// Create a new cron scheduler
+	c := cron.New()
+	
+	// Add the export job to the scheduler
+	entryID, err := c.AddFunc(schedule, func() {
+		log.Info("scheduler.executing_export", map[string]interface{}{
+			"schedule":    schedule,
+			"export_type": exportType,
+			"export_mode": exportMode,
+		})
+		
+		// Run the export
+		runExportOnce(cfg, log, translator, exportType, exportMode)
+	})
+	
+	if err != nil {
+		log.Error("errors.scheduler_add_failed", map[string]interface{}{
+			"schedule": schedule,
+			"error":    err.Error(),
+		})
+		fmt.Printf("Failed to add scheduled job: %s\n", err.Error())
+		os.Exit(1)
+	}
+	
+	// Start the cron scheduler
+	c.Start()
+	
+	// Get the next run time
+	entries := c.Entries()
+	if len(entries) > 0 {
+		nextRun := entries[0].Next
+		log.Info("scheduler.started", map[string]interface{}{
+			"schedule":  schedule,
+			"entry_id":  entryID,
+			"next_run":  nextRun.Format(time.RFC3339),
+			"next_run_local": nextRun.Format("2006-01-02 15:04:05 MST"),
+		})
+		fmt.Printf("Scheduler started successfully!\n")
+		fmt.Printf("Schedule: %s\n", schedule)
+		fmt.Printf("Export Type: %s\n", exportType)
+		fmt.Printf("Export Mode: %s\n", exportMode)
+		fmt.Printf("Next run: %s\n", nextRun.Format("2006-01-02 15:04:05 MST"))
+	}
+	
+	// Keep the program running until interrupted
+	log.Info("scheduler.waiting", map[string]interface{}{
+		"message": "Scheduler is running. Press Ctrl+C to stop.",
+	})
+	fmt.Println("Scheduler is running. Press Ctrl+C to stop...")
+	
+	// Block forever (or until SIGINT/SIGTERM)
+	select {}
 } 

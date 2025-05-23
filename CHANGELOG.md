@@ -9,12 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **New execution modes**: `--run` flag for immediate one-time execution and `--schedule` flag for cron-based scheduling
+- Comprehensive cron schedule validation with helpful error messages and examples
+- Built-in scheduler with detailed logging and status reporting
+- Support for immediate execution mode for testing and CI/CD integration
+- Enhanced command-line interface with new scheduling options
 - Comprehensive test suite with unit and integration tests
 - Internationalization (i18n) support with English and French translations
 - GitHub Actions CI/CD pipeline for automated testing
 - Automated release workflow for cross-platform binary generation
 - New issue templates for bug reports, feature requests, and beta feedback
 - Enhanced documentation including contributing guide, installation instructions, and configuration guide
+- Detailed scheduling examples and best practices documentation
+
+### Changed
+
+- Improved command-line argument handling with support for multiple execution modes
+- Enhanced logging with scheduler-specific messages and status updates
+- Better error handling for invalid cron expressions with user-friendly feedback
 
 ## [2.0.0] - TBD
 

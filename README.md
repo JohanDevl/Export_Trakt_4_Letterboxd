@@ -99,6 +99,49 @@ This application is now built entirely in Go, providing:
 - Docker support
 - Complete Go implementation with improved performance and reliability
 
+## Scheduling and Automation
+
+The application supports scheduled exports using cron-like expressions through the `EXPORT_SCHEDULE` environment variable.
+
+### Cron Scheduling
+
+When running in `schedule` mode, the application will use the `EXPORT_SCHEDULE` environment variable to determine when to run exports:
+
+```bash
+# Run the scheduler with a specific schedule (every 5 minutes)
+EXPORT_SCHEDULE="*/5 * * * *" EXPORT_MODE="complete" EXPORT_TYPE="all" ./export_trakt schedule
+```
+
+### Using Docker Compose
+
+The Docker Compose file includes a pre-configured scheduled service:
+
+```bash
+# Run the scheduler in Docker
+docker compose --profile scheduled up -d
+```
+
+This will start a container that runs exports according to the schedule defined in the `EXPORT_SCHEDULE` environment variable in the docker-compose.yml file.
+
+### Customizing the Schedule
+
+You can customize the schedule by modifying the `EXPORT_SCHEDULE` variable in the docker-compose.yml file:
+
+```yaml
+environment:
+  - EXPORT_SCHEDULE=0 4 * * * # Run daily at 4 AM
+  - EXPORT_MODE=complete
+  - EXPORT_TYPE=all
+```
+
+Common cron schedule examples:
+
+- `*/5 * * * *`: Every 5 minutes
+- `0 * * * *`: Every hour
+- `0 4 * * *`: Every day at 4 AM
+- `0 4 * * 0`: Every Sunday at 4 AM
+- `0 4 1 * *`: On the 1st day of each month at 4 AM
+
 ## Project Structure
 
 The Go implementation follows a modern application structure:
