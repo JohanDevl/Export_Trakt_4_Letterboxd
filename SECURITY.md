@@ -9,7 +9,7 @@ We are committed to maintaining security across our supported versions. The foll
 | 2.x     | ✅ **Supported**   | TBD         | Current stable branch               |
 | latest  | ✅ **Supported**   | Rolling     | Latest Docker images                |
 | main    | ⚠️ **Development** | N/A         | Unstable, for development only      |
-| 1.x     | ❌ **End of Life** | 2025-01-01  | Legacy version, no longer supported |
+| 1.x     | ❌ **End of Life** | 2025-05-23  | Legacy version, no longer supported |
 
 ### Docker Images
 
