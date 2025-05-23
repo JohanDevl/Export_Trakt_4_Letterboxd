@@ -1,0 +1,134 @@
+name: ✨ Feature Request
+description: Suggest a new feature or enhancement
+title: "[Feature]: "
+labels: ["enhancement", "needs-triage"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        # ✨ Feature Request
+
+        Thank you for suggesting a new feature! Your ideas help make Export Trakt 4 Letterboxd better.
+
+        Please provide as much detail as possible to help us understand your suggestion.
+
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: Preliminary Checks
+      description: Please confirm these steps before submitting
+      options:
+        - label: I have searched existing issues and discussions to avoid duplicates
+          required: true
+        - label: I have read the [documentation](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/wiki) and [roadmap](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/projects)
+          required: true
+        - label: This feature request is related to Export Trakt 4 Letterboxd
+          required: true
+
+  - type: dropdown
+    id: type
+    attributes:
+      label: Feature Type
+      description: What type of feature is this?
+      options:
+        - New export format/destination
+        - CLI enhancement
+        - Docker/deployment improvement
+        - Configuration option
+        - Performance improvement
+        - UI/UX improvement
+        - API enhancement
+        - Documentation improvement
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement
+      description: What problem does this feature solve? What frustration or limitation are you experiencing?
+      placeholder: "I'm always frustrated when... / It would be helpful if... / Currently there's no way to..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: Describe your ideal solution. How would you like this feature to work?
+      placeholder: "I would like to see... / The feature should work by... / Users should be able to..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternative Solutions
+      description: Have you considered any alternative solutions or workarounds?
+      placeholder: "Alternatively, we could... / Another approach might be... / I've tried working around this by..."
+    validations:
+      required: false
+
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Use Case & Examples
+      description: Provide concrete examples of how this feature would be used
+      placeholder: |
+        Example use case:
+        1. User wants to...
+        2. They would...
+        3. The result would be...
+
+        This would benefit users who...
+    validations:
+      required: true
+
+  - type: textarea
+    id: requirements
+    attributes:
+      label: Detailed Requirements
+      description: List specific requirements or specifications for this feature
+      placeholder: |
+        - The feature should support...
+        - It must be compatible with...
+        - Configuration options should include...
+        - Output format should be...
+    validations:
+      required: false
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority Level
+      description: How important is this feature to you and your workflow?
+      options:
+        - Critical - Blocking my workflow
+        - High - Significantly improves my workflow
+        - Medium - Nice to have improvement
+        - Low - Minor enhancement
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: implementation
+    attributes:
+      label: Implementation Willingness
+      description: Would you be willing to help implement this feature?
+      options:
+        - label: I'm willing to submit a pull request for this feature
+        - label: I can help with testing and feedback
+        - label: I can help with documentation
+        - label: I can provide additional requirements/specifications
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Add any other context, mockups, screenshots, or references about the feature
+      placeholder: "Links to similar features in other tools, mockups, technical references, etc."
+    validations:
+      required: false

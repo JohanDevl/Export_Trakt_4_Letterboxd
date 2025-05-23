@@ -1,0 +1,123 @@
+name: ❓ Question & Support
+description: Ask a question or get help using Export Trakt 4 Letterboxd
+title: "[Question]: "
+labels: ["question", "support"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        # ❓ Question & Support
+
+        Need help or have a question? We're here to help! Please provide as much detail as possible so we can assist you effectively.
+
+        **Note**: For bugs, please use the Bug Report template instead.
+
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: Preliminary Checks
+      description: Please confirm these steps before asking your question
+      options:
+        - label: I have searched existing issues and discussions
+          required: true
+        - label: I have read the [README](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/blob/main/README.md) and [documentation](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/wiki)
+          required: true
+        - label: I have tried the troubleshooting steps in the documentation
+          required: true
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Question Category
+      description: What category does your question fall into?
+      options:
+        - Installation & Setup
+        - Configuration Help
+        - Trakt.tv API Issues
+        - Export Problems
+        - Docker Usage
+        - Command Line Usage
+        - Letterboxd Import
+        - Scheduling & Automation
+        - Performance Questions
+        - General Usage
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Your Question
+      description: What would you like to know? Be as specific as possible.
+      placeholder: "I'm trying to... but I'm having trouble with... / How do I... / Why does... / What's the difference between..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context & Details
+      description: Provide context about your situation and what you've tried
+      placeholder: |
+        - What are you trying to accomplish?
+        - What have you already tried?
+        - What's your current setup?
+        - Any specific requirements or constraints?
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version & Platform
+      description: What version and platform are you using?
+      placeholder: "e.g., v2.1.0 on Docker/macOS, latest from main branch"
+    validations:
+      required: false
+
+  - type: textarea
+    id: config
+    attributes:
+      label: Relevant Configuration
+      description: Share relevant parts of your configuration (redact sensitive information)
+      render: toml
+      placeholder: |
+        [relevant section]
+        # Paste relevant config here
+    validations:
+      required: false
+
+  - type: textarea
+    id: output
+    attributes:
+      label: Command Output or Logs
+      description: If applicable, share relevant command output or log messages
+      render: text
+      placeholder: "Paste any relevant output, error messages, or logs here"
+    validations:
+      required: false
+
+  - type: dropdown
+    id: urgency
+    attributes:
+      label: Urgency
+      description: How urgent is this question for you?
+      options:
+        - Low - Just curious
+        - Medium - Would like help when possible
+        - High - Blocking my work
+        - Critical - Production issue
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Information
+      description: Any other details that might be helpful
+      placeholder: "Screenshots, external links, related issues, etc."
+    validations:
+      required: false

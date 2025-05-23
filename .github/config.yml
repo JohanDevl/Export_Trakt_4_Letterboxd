@@ -1,26 +1,81 @@
-# Configuration for new-issue-welcome - https://github.com/behaviorbot/new-issue-welcome
+# 🤖 Community & Support Configuration
+# Configuration for GitHub bots and community automation
 
-# Comment to be posted to on first time issues
+# Welcome message for first-time issue contributors
 newIssueWelcomeComment: >
-  Thanks for opening your first issue here! Be sure to follow the issue template and provide all the requested information to help us address your issue efficiently.
+  🎉 Thanks for opening your first issue! We appreciate you taking the time to contribute to Export Trakt 4 Letterboxd.
 
-# Configuration for new-pr-welcome - https://github.com/behaviorbot/new-pr-welcome
 
-# Comment to be posted to on PRs from first time contributors
+  Please make sure you've:
+
+  ✅ Followed the issue template completely
+
+  ✅ Searched for similar existing issues
+
+  ✅ Provided all requested information
+
+
+  Our maintainers will review your issue as soon as possible. For urgent issues, please check our [troubleshooting guide](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd#-troubleshooting) first.
+
+# Welcome message for first-time pull request contributors
 newPRWelcomeComment: >
-  Thanks for opening this pull request! Please make sure you've followed our contributing guidelines and filled out the pull request template.
+  🚀 Thanks for your first pull request! We're excited to see your contribution to Export Trakt 4 Letterboxd.
 
-# Configuration for first-pr-merge - https://github.com/behaviorbot/first-pr-merge
 
-# Comment to be posted to on pull requests merged by a first time user
+  Please ensure you've:
+
+  ✅ Followed our [contributing guidelines](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/blob/main/CONTRIBUTING.md)
+
+  ✅ Completed the pull request template
+
+  ✅ Added appropriate tests for your changes
+
+  ✅ Updated documentation if needed
+
+
+  A maintainer will review your PR soon. Thank you for improving the project! 🙏
+
+# Congratulations message for first merged PR
 firstPRMergeComment: >
-  Congratulations on your first pull request being merged! Thank you for your contribution to the project!
+  🎊 Congratulations on getting your first pull request merged! 
 
-# Configuration for request-info - https://github.com/behaviorbot/request-info
 
-# *Required* Comment to reply with
+  Your contribution has made Export Trakt 4 Letterboxd better for everyone. We truly appreciate your effort and look forward to more contributions from you!
+
+
+  🌟 You're now part of our contributor community! Feel free to:
+
+  • Pick up more issues labeled [`good first issue`](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/labels/good%20first%20issue)
+
+  • Join our discussions and help other contributors
+
+  • Share your experience with the project
+
+
+  Thank you for being awesome! 🚀
+
+# Request for more information
 requestInfoReplyComment: >
-  We would appreciate it if you could provide more information about this issue/PR. Please fill out the template completely to help us address your submission more efficiently.
+  👋 Hi there! We'd love to help you, but we need a bit more information to understand your issue/request better.
 
-# *OPTIONAL* Label to be added to Issues and PRs with insufficient information
-requestInfoLabelToAdd: needs-more-info
+
+  Could you please:
+
+  📝 Fill out the template completely
+
+  🔍 Provide the requested details (version, platform, configuration, logs, etc.)
+
+  📋 Include specific steps to reproduce the issue (if applicable)
+
+
+  The more details you provide, the faster we can help you resolve the issue. Thanks for your patience! 🙏
+
+# Label to add when requesting more information
+requestInfoLabelToAdd: "needs-more-info"
+
+# Additional configuration for better community management
+closeStaleCommentMessage: >
+  This issue has been automatically closed due to inactivity. If you're still experiencing this problem, please feel free to reopen the issue with updated information.
+
+lockClosedCommentMessage: >
+  This issue has been locked to prevent further comments. If you have a related issue, please open a new issue with all the required details.
