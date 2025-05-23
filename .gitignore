@@ -37,6 +37,12 @@ creds.js
 
 # Mac/OSX
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
 
 # Cursor
 .cursor/
@@ -50,6 +56,16 @@ TEMP/
 /backup
 /backup/
 backup/
+
+# Export files (keep directory structure but ignore content)
+exports/*
+!exports/.gitkeep
+!exports/README.md
+
+# Log files (keep directory structure but ignore content)  
+logs/*
+!logs/.gitkeep
+!logs/README.md
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -189,7 +205,6 @@ dmypy.json
 # Cython debug symbols
 cython_debug/
 *.tar.gz
-/logs
 
 test_run/
 
@@ -202,4 +217,18 @@ test_prod/
 config/config.toml
 # But keep the example file
 !config/config.example.toml
+
+# Go specific ignores
 export_trakt
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Go test files
+*.test
+*.out
+
+# Go workspace file
+go.work
