@@ -351,6 +351,41 @@ func runExportOnce(cfg *config.Config, log logger.Logger, exportType, exportMode
 	})
 }
 
+// getConfiguredTimezone returns the configured timezone or UTC as fallback
+func getConfiguredTimezone(cfg *config.Config, log logger.Logger) *time.Location {
+	// Try environment variable first (Docker TZ)
+	if tz := os.Getenv("TZ"); tz != "" {
+		if loc, err := time.LoadLocation(tz); err == nil {
+			log.Info("scheduler.using_env_timezone", map[string]interface{}{
+				"timezone": tz,
+			})
+			return loc
+		}
+		log.Warn("scheduler.invalid_env_timezone", map[string]interface{}{
+			"timezone": tz,
+		})
+	}
+	
+	// Try config timezone
+	if cfg.Export.Timezone != "" {
+		if loc, err := time.LoadLocation(cfg.Export.Timezone); err == nil {
+			log.Info("scheduler.using_config_timezone", map[string]interface{}{
+				"timezone": cfg.Export.Timezone,
+			})
+			return loc
+		}
+		log.Warn("scheduler.invalid_config_timezone", map[string]interface{}{
+			"timezone": cfg.Export.Timezone,
+		})
+	}
+	
+	// Fallback to UTC
+	log.Info("scheduler.using_default_timezone", map[string]interface{}{
+		"timezone": "UTC",
+	})
+	return time.UTC
+}
+
 // runWithSchedule sets up a cron scheduler and runs the export according to the schedule
 func runWithSchedule(cfg *config.Config, log logger.Logger, schedule, exportType, exportMode string) {
 	log.Info("scheduler.initializing", map[string]interface{}{
@@ -372,6 +407,9 @@ func runWithSchedule(cfg *config.Config, log logger.Logger, schedule, exportType
 			"level": logLevel,
 		})
 	}
+
+	// Get configured timezone for display
+	configuredTZ := getConfiguredTimezone(cfg, log)
 
 	// Validate cron expression
 	cronParser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
@@ -419,7 +457,7 @@ func runWithSchedule(cfg *config.Config, log logger.Logger, schedule, exportType
 			"export_type": exportType,
 			"export_mode": exportMode,
 			"duration":    duration.String(),
-			"next_run":    c.Entries()[0].Next.Format(time.RFC3339),
+			"next_run":    c.Entries()[0].Next.In(configuredTZ).Format(time.RFC3339),
 		})
 	})
 	
@@ -441,28 +479,33 @@ func runWithSchedule(cfg *config.Config, log logger.Logger, schedule, exportType
 	c.Start()
 	log.Info("scheduler.cron_started", nil)
 	
-	// Get the next run time
+	// Get the next run time and display in configured timezone
 	entries := c.Entries()
 	if len(entries) > 0 {
 		nextRun := entries[0].Next
+		nextRunInTZ := nextRun.In(configuredTZ)
+		
 		log.Info("scheduler.started", map[string]interface{}{
-			"schedule":  schedule,
-			"entry_id":  entryID,
-			"next_run":  nextRun.Format(time.RFC3339),
-			"next_run_local": nextRun.Format("2006-01-02 15:04:05 MST"),
+			"schedule":        schedule,
+			"entry_id":        entryID,
+			"next_run":        nextRun.Format(time.RFC3339),
+			"next_run_local":  nextRunInTZ.Format("2006-01-02 15:04:05 MST"),
+			"timezone":        configuredTZ.String(),
 		})
 		fmt.Printf("Scheduler started successfully!\n")
 		fmt.Printf("Schedule: %s\n", schedule)
 		fmt.Printf("Export Type: %s\n", exportType)
 		fmt.Printf("Export Mode: %s\n", exportMode)
-		fmt.Printf("Next run: %s\n", nextRun.Format("2006-01-02 15:04:05 MST"))
+		fmt.Printf("Timezone: %s\n", configuredTZ.String())
+		fmt.Printf("Next run: %s\n", nextRunInTZ.Format("2006-01-02 15:04:05 MST"))
 		
-		// Log upcoming executions for the next hour
+		// Log upcoming executions for the next hour in configured timezone
 		now := time.Now()
 		oneHourLater := now.Add(time.Hour)
 		log.Info("scheduler.upcoming_executions_preview", map[string]interface{}{
 			"next_hour_from": now.Format(time.RFC3339),
 			"next_hour_to":   oneHourLater.Format(time.RFC3339),
+			"timezone":       configuredTZ.String(),
 		})
 		
 		count := 0
@@ -470,9 +513,11 @@ func runWithSchedule(cfg *config.Config, log logger.Logger, schedule, exportType
 			entry := entries[0]
 			nextExec := entry.Next
 			for nextExec.Before(oneHourLater) && count < 10 {
+				nextExecInTZ := nextExec.In(configuredTZ)
 				log.Info("scheduler.upcoming_execution", map[string]interface{}{
-					"execution_time": nextExec.Format("2006-01-02 15:04:05 MST"),
+					"execution_time": nextExecInTZ.Format("2006-01-02 15:04:05 MST"),
 					"in_minutes":     int(time.Until(nextExec).Minutes()),
+					"timezone":       configuredTZ.String(),
 				})
 				// Calculate next execution after this one
 				schedule, _ := cronParser.Parse(schedule)
