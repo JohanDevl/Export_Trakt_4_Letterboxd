@@ -43,7 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Documentation Links**: Fixed broken references and outdated information
 - **Template Structure**: Removed legacy markdown templates and reorganized structure
 
-## [2.0.0] - 2024-12-15
+## [2.0.0] - 2025-01-15
 
 ### Added
 
