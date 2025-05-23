@@ -250,7 +250,8 @@ jobs:
         uses: github/codeql-action/init@v3
         with:
           languages: ${{ matrix.language }}
-          queries: security-extended,security-and-quality
+          # Use built-in queries instead of extended to avoid conflicts
+          queries: +security-and-quality
 
       - name: Autobuild
         uses: github/codeql-action/autobuild@v3
@@ -258,7 +259,9 @@ jobs:
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
         with:
-          category: "/language:${{matrix.language}}"
+          # Use unique category to avoid conflicts with default setup
+          category: "codeql-advanced-${{matrix.language}}"
+          upload: true
 
   security-audit:
     name: 🔍 Security Configuration Audit
