@@ -1,207 +1,124 @@
-services:
-  # Base service configuration for PRODUCTION (pulls from registry)
-  export-trakt-base: &export-trakt-base-prod
-    image: ghcr.io/johandevl/export_trakt_4_letterboxd:latest
-    pull_policy: always
-    volumes:
-      - ./config:/app/config
-      - ./logs:/app/logs
-      - ./exports:/app/exports
-    restart: "no"
-    environment:
-      - TZ=Europe/Paris
+version: "3.8"
 
-  # Base service configuration for DEVELOPMENT/TEST (local build)
-  export-trakt-base-dev: &export-trakt-base-dev
+services:
+  # Default service - runs once and exits
+  trakt-export:
     build:
       context: .
-      dockerfile: Dockerfile
       args:
-        VERSION: local-dev
-        COMMIT_SHA: local
-        BUILD_DATE: "2025-05-23T12:30:00Z"
+        - APP_VERSION=dev
+        - BUILD_DATE=${BUILD_DATE:-unknown}
+        - VCS_REF=${VCS_REF:-unknown}
+    container_name: trakt-export
     volumes:
       - ./config:/app/config
       - ./logs:/app/logs
-      - ./exports:/app/exports
+      - ./copy:/app/copy
+      - ./backup:/app/backup
+    environment:
+      - TZ=Europe/Paris
+      # Leave CRON_SCHEDULE empty to run once and exit
+      - EXPORT_OPTION=complete
     restart: "no"
-    environment:
-      - TZ=Europe/Paris
-
-  # === PRODUCTION SERVICES (using registry image) ===
-
-  # Normal export (production)
-  export-trakt:
-    <<: *export-trakt-base-prod
-    profiles: ["default", "export", "prod"]
-    command: ["export", "--mode", "normal"]
-
-  # Production scheduler - Every 6 hours (recommended)
-  export-trakt-schedule-6h:
-    <<: *export-trakt-base-prod
-    profiles: ["schedule", "schedule-6h", "prod"]
-    container_name: export-trakt-schedule-6h
-    restart: unless-stopped
-    environment:
-      - TZ=Europe/Paris
-      - LOG_LEVEL=info
-      - EXPORT_QUIET_MODE=true
-    command:
-      ["--schedule", "0 */6 * * *", "--export", "all", "--mode", "complete"]
-
-  # Production scheduler - Daily at 2:30 AM
-  export-trakt-schedule-daily:
-    <<: *export-trakt-base-prod
-    profiles: ["schedule-daily", "prod"]
-    container_name: export-trakt-schedule-daily
-    restart: unless-stopped
-    environment:
-      - TZ=Europe/Paris
-      - LOG_LEVEL=info
-      - EXPORT_QUIET_MODE=true
-    command:
-      ["--schedule", "30 2 * * *", "--export", "all", "--mode", "complete"]
-
-  # Production run once - all data
-  export-trakt-run-all:
-    <<: *export-trakt-base-prod
-    profiles: ["run", "run-all", "prod"]
-    command: ["--run", "--export", "all", "--mode", "complete"]
-
-  # === DEVELOPMENT/TEST SERVICES (using local build) ===
-
-  # Interactive setup (dev)
-  export-trakt-setup-dev:
-    <<: *export-trakt-base-dev
-    profiles: ["setup", "dev"]
-    command: ["setup"]
-    tty: true
     stdin_open: true
+    tty: true
+    healthcheck:
+      test: ["CMD", "/app/docker-entrypoint.sh", "healthcheck"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
 
-  # Test scheduler - High frequency (every 2 minutes) for testing
-  export-trakt-schedule-test:
-    <<: *export-trakt-base-dev
-    profiles: ["schedule-test", "schedule-15min", "dev"]
-    container_name: export-trakt-schedule-test
-    restart: unless-stopped
+  # Service that runs on a schedule using cron
+  trakt-export-scheduled:
+    profiles: ["scheduled"]
+    build:
+      context: .
+      args:
+        - APP_VERSION=dev
+    container_name: trakt-export-scheduled
+    volumes:
+      - ./config:/app/config
+      - ./logs:/app/logs
+      - ./copy:/app/copy
+      - ./backup:/app/backup
     environment:
       - TZ=Europe/Paris
-      - LOG_LEVEL=info
-      - EXPORT_QUIET_MODE=true
-    command:
-      ["--schedule", "*/2 * * * *", "--export", "watched", "--mode", "normal"]
-
-  # Test run once - watched movies only (dev)
-  export-trakt-run-watched-dev:
-    <<: *export-trakt-base-dev
-    profiles: ["run-watched", "dev"]
-    command: ["--run", "--export", "watched", "--mode", "normal"]
-
-  # Test run once - all data (dev)
-  export-trakt-run-all-dev:
-    <<: *export-trakt-base-dev
-    profiles: ["run-all", "dev"]
-    command: ["--run", "--export", "all", "--mode", "complete"]
-
-  # Validate configuration (dev)
-  export-trakt-validate-dev:
-    <<: *export-trakt-base-dev
-    profiles: ["validate", "dev"]
-    command: ["validate"]
-
-  # === LEGACY SERVICES (for backward compatibility) ===
-
-  # Complete export (legacy - production)
-  export-trakt-complete:
-    <<: *export-trakt-base-prod
-    profiles: ["complete", "legacy"]
-    command: ["export", "--mode", "complete", "--export", "all"]
-
-  # Initial export (legacy - production)
-  export-trakt-initial:
-    <<: *export-trakt-base-prod
-    profiles: ["initial", "legacy"]
-    command: ["export", "--mode", "initial"]
-
-  # Custom scheduled export (production)
-  export-trakt-schedule-custom:
-    <<: *export-trakt-base-prod
-    profiles: ["schedule-custom", "prod"]
-    container_name: export-trakt-schedule-custom
+      - CRON_SCHEDULE=* * * * *
+      - EXPORT_OPTION=complete
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "/app/docker-entrypoint.sh", "healthcheck"]
+      interval: 1m
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # Service that runs on a schedule using cron
+  trakt-export-scheduled-repo:
+    #image: ghcr.io/johandevl/export_trakt_4_letterboxd:pr-29
+    build:
+      context: .
+      args:
+        - APP_VERSION=dev
+    container_name: trakt-export-scheduled-repo
+    volumes:
+      - ./config:/app/config
+      - ./logs:/app/logs
+      - ./copy:/app/copy
+      - ./backup:/app/backup
     environment:
       - TZ=Europe/Paris
-      - LOG_LEVEL=info
-      - EXPORT_QUIET_MODE=true
-      - CUSTOM_SCHEDULE=${SCHEDULE:-0 */6 * * *}
-      - CUSTOM_EXPORT_TYPE=${EXPORT_TYPE:-all}
-      - CUSTOM_EXPORT_MODE=${EXPORT_MODE:-complete}
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - |
-        /app/export-trakt --schedule "$${CUSTOM_SCHEDULE}" --export "$${CUSTOM_EXPORT_TYPE}" --mode "$${CUSTOM_EXPORT_MODE}"
+      # Run every day at 3 AM
+      - CRON_SCHEDULE=* * * * *
+      - EXPORT_OPTION=normal
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "/app/docker-entrypoint.sh", "healthcheck"]
+      interval: 1m
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
-# === USAGE EXAMPLES ===
-#
-# 🚀 PRODUCTION MODE (pulls from GitHub Container Registry):
-#
-# Run production scheduler (every 6 hours):
-# docker compose --profile schedule-6h up -d
-#
-# Run production daily scheduler (2:30 AM):
-# docker compose --profile schedule-daily up -d
-#
-# Run once - all data (production):
-# docker compose --profile run-all up
-#
-# Custom production schedule:
-# SCHEDULE="0 */4 * * *" docker compose --profile schedule-custom up -d
-#
-# 🛠️  DEVELOPMENT/TEST MODE (builds locally):
-#
-# Test scheduler (every 2 minutes):
-# docker compose --profile dev --profile schedule-test up -d --build
-#
-# Test run once - watched movies:
-# docker compose --profile dev --profile run-watched up --build
-#
-# Test run once - all data:
-# docker compose --profile dev --profile run-all up --build
-#
-# Interactive setup:
-# docker compose --profile dev --profile setup up --build
-#
-# Validate configuration:
-# docker compose --profile dev --profile validate up --build
-#
-# 🔄 SWITCHING MODES:
-#
-# Stop test scheduler and start production:
-# docker compose --profile dev --profile schedule-test down
-# docker compose --profile schedule-6h up -d
-#
-# Stop production and start development:
-# docker compose --profile schedule-6h down
-# docker compose --profile dev --profile schedule-test up -d --build
-#
-# 📊 MONITORING:
-#
-# Check production logs:
-# docker compose --profile schedule-6h logs -f
-#
-# Check development logs:
-# docker compose --profile dev --profile schedule-test logs -f
-#
-# 🎯 QUICK COMMANDS:
-#
-# Test your changes:
-# docker compose --profile dev --profile run-watched up --build
-#
-# Deploy to production:
-# docker compose --profile schedule-6h up -d
-#
-# Check status:
-# docker compose ps
+  # Example with all configuration passed via environment variables
+  trakt-export-env:
+    profiles: ["env-config"]
+    image: johandevl/export-trakt-4-letterboxd:latest
+    container_name: trakt-export-env
+    volumes:
+      - trakt_logs:/app/logs
+      - trakt_copy:/app/copy
+      - trakt_backup:/app/backup
+    environment:
+      - TZ=Europe/Paris
+      # API configuration - replace with your actual values
+      - TRAKT_API_KEY=${TRAKT_API_KEY}
+      - TRAKT_API_SECRET=${TRAKT_API_SECRET}
+      - TRAKT_ACCESS_TOKEN=${TRAKT_ACCESS_TOKEN}
+      - TRAKT_REFRESH_TOKEN=${TRAKT_REFRESH_TOKEN}
+      - TRAKT_USERNAME=${TRAKT_USERNAME}
+      # Schedule and export options
+      - CRON_SCHEDULE=0 3 * * *
+      - EXPORT_OPTION=normal
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "/app/docker-entrypoint.sh", "healthcheck"]
+      interval: 1m
+      timeout: 10s
+      retries: 3
+
+  # Setup command - use this to run the initial setup
+  trakt-setup:
+    profiles: ["setup"]
+    build: .
+    container_name: trakt-setup
+    volumes:
+      - ./config:/app/config
+    environment:
+      - TZ=Europe/Paris
+    entrypoint: ["/app/docker-entrypoint.sh", "setup"]
+    stdin_open: true # Needed for interactive prompts
+    tty: true # Needed for interactive prompts
 
 volumes:
   trakt_logs:

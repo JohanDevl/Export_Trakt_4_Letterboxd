@@ -1,0 +1,530 @@
+# Translation for Export Trakt 4 Letterboxd
+# Copyright (C) 2025 Export Trakt 4 Letterboxd
+# This file is distributed under the same license as the Export Trakt 4 Letterboxd package.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Export Trakt 4 Letterboxd 1.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-03-24 22:44+0100\n"
+"PO-Revision-Date: 2025-03-24 22:44+0100\n"
+"Last-Translator: Automatic export\n"
+"Language-Team: de\n"
+"Language: de\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: MSG_ABORT
+msgid "Abort"
+msgstr "Abbrechen"
+
+#: MSG_ACCESS_TOKEN_CHECK
+msgid "Access token check"
+msgstr ""
+
+#: MSG_ACCESS_TOKEN_FOUND
+msgid "Access token found"
+msgstr ""
+
+#: MSG_ACCESS_TOKEN_NOT_FOUND
+msgid "Access token not found"
+msgstr ""
+
+#: MSG_API_AUTH_FAILURE
+msgid "Authentication failed"
+msgstr "Authentifizierung fehlgeschlagen"
+
+#: MSG_API_AUTH_REQUIRED
+msgid "Authentication required"
+msgstr "Authentifizierung erforderlich"
+
+#: MSG_API_AUTH_SUCCESS
+msgid "Authentication successful"
+msgstr "Authentifizierung erfolgreich"
+
+#: MSG_API_ERROR
+msgid "API error"
+msgstr "API-Fehler"
+
+#: MSG_API_KEY_CHECK
+msgid "API key check"
+msgstr ""
+
+#: MSG_API_KEY_FOUND
+msgid "API key found"
+msgstr ""
+
+#: MSG_API_KEY_NOT_FOUND
+msgid "API key not found"
+msgstr ""
+
+#: MSG_API_LIMIT
+msgid "API limit reached"
+msgstr "API-Limit erreicht"
+
+#: MSG_API_REQUEST
+msgid "API request"
+msgstr "API-Anfrage"
+
+#: MSG_API_RESPONSE
+msgid "API response"
+msgstr "API-Antwort"
+
+#: MSG_API_RETRY
+msgid "Retry"
+msgstr "Wiederholung"
+
+#: MSG_API_SECRET_CHECK
+msgid "API secret check"
+msgstr ""
+
+#: MSG_API_SECRET_FOUND
+msgid "API secret found"
+msgstr ""
+
+#: MSG_API_SECRET_NOT_FOUND
+msgid "API secret not found"
+msgstr ""
+
+#: MSG_API_WAIT
+msgid "Waiting before next request"
+msgstr "Warten vor der nächsten Anfrage"
+
+#: MSG_AUTO_DETECTED
+msgid "auto-detected"
+msgstr "automatisch erkannt"
+
+#: MSG_BACKUP_DIRECTORY
+msgid "Backup directory"
+msgstr ""
+
+#: MSG_BACKUP_DIRECTORY_EXISTS
+msgid "Backup directory exists"
+msgstr ""
+
+#: MSG_BACKUP_DIRECTORY_NOT_WRITABLE
+msgid "WARNING: Backup directory is not writable. Check permissions."
+msgstr ""
+
+#: MSG_BACKUP_DIRECTORY_WRITABLE
+msgid "Backup directory is writable"
+msgstr ""
+
+#: MSG_CANCEL
+msgid "Cancel"
+msgstr "Abbrechen"
+
+#: MSG_CHECKING_DEPENDENCIES
+msgid "Checking required dependencies"
+msgstr ""
+
+#: MSG_CONFIG_CREATED
+msgid "Configuration file created"
+msgstr "Konfigurationsdatei erstellt"
+
+#: MSG_CONFIG_DEFAULT
+msgid "Default configuration"
+msgstr "Standardkonfiguration"
+
+#: MSG_CONFIG_ERROR
+msgid "Error in configuration file"
+msgstr "Fehler in der Konfigurationsdatei"
+
+#: MSG_CONFIG_LOADED
+msgid "Configuration loaded"
+msgstr "Konfiguration geladen"
+
+#: MSG_CONFIG_LOADING
+msgid "Loading configuration"
+msgstr "Konfiguration wird geladen"
+
+#: MSG_CONFIG_MISSING
+msgid "Configuration missing"
+msgstr "Konfiguration fehlt"
+
+#: MSG_CONFIG_NOT_FOUND
+msgid "Configuration file not found"
+msgstr "Konfigurationsdatei nicht gefunden"
+
+#: MSG_CONFIG_SAVED
+msgid "Configuration saved"
+msgstr "Konfiguration gespeichert"
+
+#: MSG_CONFIG_SAVING
+msgid "Saving configuration"
+msgstr "Konfiguration wird gespeichert"
+
+#: MSG_CONFIG_UPDATED
+msgid "Configuration updated"
+msgstr "Konfiguration aktualisiert"
+
+#: MSG_CONFIRM
+msgid "Confirm"
+msgstr "Bestätigen"
+
+#: MSG_CONTINUE
+msgid "Continue"
+msgstr "Fortfahren"
+
+#: MSG_COPY_DIRECTORY
+msgid "Copy directory"
+msgstr ""
+
+#: MSG_CREATED_BACKUP_DIRECTORY
+msgid "Created backup directory"
+msgstr ""
+
+#: MSG_DIRECTORY_CREATED
+msgid "Directory created"
+msgstr "Verzeichnis erstellt"
+
+#: MSG_DIRECTORY_EXISTS
+msgid "Directory exists"
+msgstr ""
+
+#: MSG_DIRECTORY_NOT_FOUND
+msgid "Directory not found"
+msgstr "Verzeichnis nicht gefunden"
+
+#: MSG_DIRECTORY_PERMISSIONS
+msgid "Directory permissions"
+msgstr ""
+
+#: MSG_DONE
+msgid "Done"
+msgstr "Erledigt"
+
+#: MSG_ENVIRONMENT_INFO
+msgid "Environment information"
+msgstr ""
+
+#: MSG_ERROR
+msgid "Error"
+msgstr "Fehler"
+
+#: MSG_ERROR_MISSING_LANG_FILE
+msgid "Error: Language file not found. Using English defaults."
+msgstr "Fehler: Sprachdatei nicht gefunden. Englische Standardwerte werden verwendet."
+
+#: MSG_EXISTING_CSV_CHECK
+msgid "Existing CSV file check"
+msgstr ""
+
+#: MSG_EXIT
+msgid "Exit"
+msgstr "Beenden"
+
+#: MSG_EXPORT_COMPLETE
+msgid "Export completed"
+msgstr "Export abgeschlossen"
+
+#: MSG_EXPORT_FAILED
+msgid "Export process failed"
+msgstr "Exportvorgang fehlgeschlagen"
+
+#: MSG_EXPORT_FILE_CREATED
+msgid "Export file created: %s"
+msgstr "Exportdatei erstellt: %s"
+
+#: MSG_EXPORT_FINISHED
+msgid "Export process completed"
+msgstr "Exportvorgang abgeschlossen"
+
+#: MSG_EXPORT_FORMATTING
+msgid "Formatting export data"
+msgstr "Exportdaten werden formatiert"
+
+#: MSG_EXPORT_GENERATING
+msgid "Generating export file"
+msgstr "Exportdatei wird generiert"
+
+#: MSG_EXPORT_NO_DATA
+msgid "No data to export"
+msgstr "Keine Daten zum Exportieren"
+
+#: MSG_EXPORT_PROCESSING
+msgid "Processing export data"
+msgstr "Exportdaten werden verarbeitet"
+
+#: MSG_EXPORT_SAVING
+msgid "Saving export file"
+msgstr "Exportdatei wird gespeichert"
+
+#: MSG_EXPORT_START
+msgid "Starting export"
+msgstr "Export wird gestartet"
+
+#: MSG_EXPORT_STARTING
+msgid "Starting export process"
+msgstr "Exportvorgang wird gestartet"
+
+#: MSG_EXPORT_SUMMARY
+msgid "Export summary"
+msgstr "Exportzusammenfassung"
+
+#: MSG_FAILED
+msgid "Failed"
+msgstr "Fehlgeschlagen"
+
+#: MSG_FILE_CREATED
+msgid "File created: %s"
+msgstr "Datei erstellt: %s"
+
+#: MSG_FILE_DELETED
+msgid "File deleted: %s"
+msgstr "Datei gelöscht: %s"
+
+#: MSG_FILE_EXISTS
+msgid "File exists"
+msgstr ""
+
+#: MSG_FILE_EXISTS_NOT
+msgid "File not found"
+msgstr ""
+
+#: MSG_FILE_HAS_CONTENT
+msgid "File has content"
+msgstr ""
+
+#: MSG_FILE_IS_READABLE
+msgid "File is readable"
+msgstr ""
+
+#: MSG_FILE_IS_WRITABLE
+msgid "File is writable"
+msgstr ""
+
+#: MSG_FILE_NOT_FOUND
+msgid "File not found: %s"
+msgstr "Datei nicht gefunden: %s"
+
+#: MSG_FILE_PERMISSION_DENIED
+msgid "Permission denied for file: %s"
+msgstr "Zugriff auf Datei verweigert: %s"
+
+#: MSG_FILE_READ_ERROR
+msgid "File read error"
+msgstr "Fehler beim Lesen der Datei"
+
+#: MSG_FILE_UPDATED
+msgid "File updated: %s"
+msgstr "Datei aktualisiert: %s"
+
+#: MSG_FILE_WRITE_ERROR
+msgid "File write error"
+msgstr "Fehler beim Schreiben der Datei"
+
+#: MSG_GOODBYE
+msgid "Goodbye"
+msgstr "Auf Wiedersehen"
+
+#: MSG_HELLO
+msgid "Hello"
+msgstr "Hallo"
+
+#: MSG_HELP
+msgid "Help"
+msgstr "Hilfe"
+
+#: MSG_INFO
+msgid "Information"
+msgstr "Information"
+
+#: MSG_INVALID_OPTION
+msgid "Invalid option"
+msgstr "Ungültige Option"
+
+#: MSG_LANGUAGE_SET
+msgid "Language set to"
+msgstr "Sprache eingestellt auf"
+
+#: MSG_LOG_DIRECTORY
+msgid "Log directory"
+msgstr ""
+
+#: MSG_MISSING_DEPENDENCIES
+msgid "Some required dependencies are missing. Please install them before continuing."
+msgstr ""
+
+#: MSG_NO
+msgid "No"
+msgstr "Nein"
+
+#: MSG_NONE
+msgid "none"
+msgstr "keine"
+
+#: MSG_NO_OPTION
+msgid "No option provided, using default"
+msgstr ""
+
+#: MSG_OS_TYPE
+msgid "OS Type"
+msgstr ""
+
+#: MSG_PLEASE_WAIT
+msgid "Please wait"
+msgstr "Bitte warten"
+
+#: MSG_PROCESSING
+msgid "Processing"
+msgstr "Verarbeitung läuft"
+
+#: MSG_REFRESH_TOKEN_CHECK
+msgid "Refresh token check"
+msgstr ""
+
+#: MSG_REFRESH_TOKEN_FOUND
+msgid "Refresh token found"
+msgstr ""
+
+#: MSG_REFRESH_TOKEN_NOT_FOUND
+msgid "Refresh token not found"
+msgstr ""
+
+#: MSG_RETRIEVING_INFO
+msgid "Retrieving information"
+msgstr ""
+
+#: MSG_RUNNING_DOCKER
+msgid "Running in Docker container"
+msgstr "Läuft in Docker-Container"
+
+#: MSG_RUNNING_IN
+msgid "running on"
+msgstr "läuft auf"
+
+#: MSG_SCRIPT_COMPLETE
+msgid "Script execution completed successfully"
+msgstr ""
+
+#: MSG_SCRIPT_DIRECTORY
+msgid "Script directory"
+msgstr ""
+
+#: MSG_SCRIPT_ERROR
+msgid "An error occurred while running the script"
+msgstr "Bei der Ausführung des Skripts ist ein Fehler aufgetreten"
+
+#: MSG_SCRIPT_EXECUTION_END
+msgid "Script execution ended"
+msgstr "Skriptausführung beendet"
+
+#: MSG_SCRIPT_EXECUTION_START
+msgid "Script execution started"
+msgstr "Skriptausführung gestartet"
+
+#: MSG_SCRIPT_FINISHED
+msgid "Export Trakt 4 Letterboxd script finished"
+msgstr "Export Trakt 4 Letterboxd Skript beendet"
+
+#: MSG_SCRIPT_INTERRUPTED
+msgid "Script interrupted by user"
+msgstr "Skript vom Benutzer unterbrochen"
+
+#: MSG_SCRIPT_OPTION
+msgid "Script option"
+msgstr "Skriptoption"
+
+#: MSG_SCRIPT_STARTING
+msgid "Starting Export Trakt 4 Letterboxd script"
+msgstr "Export Trakt 4 Letterboxd Skript wird gestartet"
+
+#: MSG_STARTING
+msgid "Starting"
+msgstr "Starten"
+
+#: MSG_SUCCESS
+msgid "Success"
+msgstr "Erfolgreich"
+
+#: MSG_TRAKT_API_ERROR
+msgid "Error connecting to Trakt API"
+msgstr "Fehler bei der Verbindung zur Trakt API"
+
+#: MSG_TRAKT_API_RATE_LIMIT
+msgid "Trakt API rate limit reached, waiting..."
+msgstr "Trakt API-Ratenlimit erreicht, warte..."
+
+#: MSG_TRAKT_AUTH_FAILED
+msgid "Trakt authentication failed"
+msgstr "Trakt-Authentifizierung fehlgeschlagen"
+
+#: MSG_TRAKT_AUTH_REQUIRED
+msgid "Trakt authentication required"
+msgstr "Trakt-Authentifizierung erforderlich"
+
+#: MSG_TRAKT_AUTH_SUCCESS
+msgid "Trakt authentication successful"
+msgstr "Trakt-Authentifizierung erfolgreich"
+
+#: MSG_TRANSLATION_ERROR
+msgid "Translation error"
+msgstr "Übersetzungsfehler"
+
+#: MSG_TRANSLATION_LOADED
+msgid "Translation loaded"
+msgstr "Übersetzung geladen"
+
+#: MSG_TRANSLATION_MISSING
+msgid "Translation missing"
+msgstr "Übersetzung fehlt"
+
+#: MSG_TRANSLATION_UPDATED
+msgid "Translation updated"
+msgstr "Übersetzung aktualisiert"
+
+#: MSG_USER
+msgid "User"
+msgstr ""
+
+#: MSG_USER_CONFIRM
+msgid "Do you want to continue? (y/N)"
+msgstr "Möchten Sie fortfahren? (j/N)"
+
+#: MSG_USER_CONFIRMATION
+msgid "User confirmation"
+msgstr "Benutzerbestätigung"
+
+#: MSG_USER_INPUT
+msgid "User input"
+msgstr "Benutzereingabe"
+
+#: MSG_USER_INPUT_REQUIRED
+msgid "Please provide input"
+msgstr "Bitte geben Sie eine Eingabe ein"
+
+#: MSG_USER_INVALID_INPUT
+msgid "Invalid input, please try again"
+msgstr "Ungültige Eingabe, bitte versuchen Sie es erneut"
+
+#: MSG_USER_PROMPT
+msgid "User prompt"
+msgstr "Benutzeraufforderung"
+
+#: MSG_USER_SELECTION
+msgid "User selection"
+msgstr "Benutzerauswahl"
+
+#: MSG_WARNING
+msgid "Warning"
+msgstr "Warnung"
+
+#: MSG_WELCOME
+msgid "Welcome to Export Trakt 4 Letterboxd"
+msgstr "Willkommen bei Export Trakt 4 Letterboxd"
+
+#: MSG_WORKING_DIRECTORY
+msgid "Working directory"
+msgstr ""
+
+#: MSG_YES
+msgid "Yes"
+msgstr "Ja"
+
+#: MSG_all_dependencies_installed
+msgid "All required dependencies are installed."
+msgstr "Alle erforderlichen Abhängigkeiten sind installiert."
+
