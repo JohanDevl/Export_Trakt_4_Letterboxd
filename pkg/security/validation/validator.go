@@ -2,6 +2,7 @@ package validation
 
 import (
 	"fmt"
+	"html"
 	"net/url"
 	"path/filepath"
 	"regexp"
@@ -231,7 +232,8 @@ func (r PathRule) Validate(value string) error {
 	// Restrict to specific directory
 	if r.RestrictToDir != "" {
 		cleanPath := filepath.Clean(value)
-		if !strings.HasPrefix(cleanPath, r.RestrictToDir) {
+		cleanRestrictDir := filepath.Clean(r.RestrictToDir)
+		if !strings.HasPrefix(cleanPath, cleanRestrictDir) {
 			return fmt.Errorf("path must be within %s", r.RestrictToDir)
 		}
 	}
@@ -262,10 +264,26 @@ func (r NoSQLInjectionRule) Validate(value string) error {
 		"drop", "create", "alter", "exec", "execute",
 	}
 
+	// NoSQL injection patterns
+	nosqlPatterns := []string{
+		"$ne", "$gt", "$lt", "$gte", "$lte", "$in", "$nin",
+		"$regex", "$where", "$exists", "$not", "$or", "$and",
+		"$nor", "$size", "$all", "$elemMatch", "$mod",
+	}
+
 	lowerValue := strings.ToLower(value)
+	
+	// Check SQL patterns
 	for _, pattern := range sqlPatterns {
 		if strings.Contains(lowerValue, pattern) {
 			return fmt.Errorf("contains potentially dangerous pattern: %s", pattern)
+		}
+	}
+	
+	// Check NoSQL patterns
+	for _, pattern := range nosqlPatterns {
+		if strings.Contains(lowerValue, pattern) {
+			return fmt.Errorf("contains potentially dangerous NoSQL pattern: %s", pattern)
 		}
 	}
 
@@ -346,11 +364,8 @@ func SanitizeInput(input string) string {
 	}
 	input = result.String()
 	
-	// Sanitize HTML/XSS patterns
-	input = sanitizeXSS(input)
-	
-	// Sanitize SQL injection patterns
-	input = sanitizeSQL(input)
+	// Use HTML escaping for safe output
+	input = html.EscapeString(input)
 	
 	return input
 }
@@ -421,12 +436,28 @@ func sanitizeSQL(input string) string {
 
 // SanitizeForLog sanitizes input for safe logging
 func SanitizeForLog(input string) string {
-	// Remove newlines to prevent log injection
-	input = strings.ReplaceAll(input, "\n", "\\n")
-	input = strings.ReplaceAll(input, "\r", "\\r")
-	input = strings.ReplaceAll(input, "\t", "\\t")
+	// Replace newlines and carriage returns with spaces  
+	input = strings.ReplaceAll(input, "\n", " ")
+	input = strings.ReplaceAll(input, "\r", " ")
+	input = strings.ReplaceAll(input, "\t", " ")
 	
-	return SanitizeInput(input)
+	// Replace control characters with spaces
+	var result strings.Builder
+	for _, char := range input {
+		if unicode.IsPrint(char) || unicode.IsSpace(char) {
+			result.WriteRune(char)
+		} else {
+			result.WriteRune(' ')
+		}
+	}
+	
+	output := result.String()
+	
+	// Normalize multiple spaces to single space
+	spaceRegex := regexp.MustCompile(`\s+`)
+	output = spaceRegex.ReplaceAllString(output, " ")
+	
+	return output
 }
 
 // SanitizeFilename sanitizes filename for safe file operations
@@ -441,15 +472,41 @@ func SanitizeFilename(filename string) string {
 			filename = strings.ReplaceAll(filename, char, "_")
 		}
 	} else {
-		// For normal filenames with special chars, replace all dangerous chars including dots
-		// Check if filename contains special chars (not just space or normal extension)
-		hasSpecialChars := strings.ContainsAny(filename, "<>:\"|?*\\")
+		// Check for really dangerous characters that require full sanitization
+		reallyDangerousChars := strings.ContainsAny(filename, "<>:\"|?*\\")
 		
-		if hasSpecialChars {
-			// Replace all dangerous characters including dots when special chars are present
-			dangerousChars := []string{"/", "\\", ":", "*", "?", "\"", "<", ">", "|", " ", "."}
-			for _, char := range dangerousChars {
-				filename = strings.ReplaceAll(filename, char, "_")
+		if reallyDangerousChars {
+			// Try to preserve extension by finding the last dot and what comes after
+			lastDotIndex := strings.LastIndex(filename, ".")
+			var base, ext string
+			
+			if lastDotIndex > 0 && lastDotIndex < len(filename)-1 {
+				base = filename[:lastDotIndex]
+				ext = filename[lastDotIndex+1:] // extension without the dot
+			} else {
+				base = filename
+				ext = ""
+			}
+			
+			// Replace * with double underscores first
+			base = strings.ReplaceAll(base, "*", "__")
+			
+			// Replace other dangerous characters with single underscores
+			otherDangerousChars := []string{"/", "\\", ":", "?", "\"", "<", ">", "|", " ", "."}
+			for _, char := range otherDangerousChars {
+				base = strings.ReplaceAll(base, char, "_")
+			}
+			
+			// Clean the extension too
+			if ext != "" {
+				extDangerousChars := []string{"/", "\\", ":", "*", "?", "\"", "<", ">", "|", " "}
+				for _, char := range extDangerousChars {
+					ext = strings.ReplaceAll(ext, char, "_")
+				}
+				// Add extra underscore before extension when there are really dangerous chars
+				filename = base + "_." + ext
+			} else {
+				filename = base
 			}
 		} else {
 			// For normal filenames, preserve extension dots but replace spaces and other chars
