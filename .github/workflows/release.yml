@@ -1,0 +1,216 @@
+name: Create Release
+
+permissions:
+  contents: write
+  packages: write
+  actions: read
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build-and-release:
+    name: Build and Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: "1.21"
+          cache: true
+
+      - name: Install dependencies
+        run: go mod download
+
+      - name: Set up asset names
+        id: assets
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "linux_amd64=export_trakt_${VERSION}_linux_amd64" >> $GITHUB_OUTPUT
+          echo "linux_arm64=export_trakt_${VERSION}_linux_arm64" >> $GITHUB_OUTPUT
+          echo "linux_arm=export_trakt_${VERSION}_linux_arm" >> $GITHUB_OUTPUT
+          echo "darwin_amd64=export_trakt_${VERSION}_darwin_amd64" >> $GITHUB_OUTPUT
+          echo "darwin_arm64=export_trakt_${VERSION}_darwin_arm64" >> $GITHUB_OUTPUT
+          echo "windows_amd64=export_trakt_${VERSION}_windows_amd64.exe" >> $GITHUB_OUTPUT
+
+      - name: Build for Linux (amd64)
+        run: GOOS=linux GOARCH=amd64 go build -o "${{ steps.assets.outputs.linux_amd64 }}" -v ./cmd/export_trakt
+
+      - name: Build for Linux (arm64)
+        run: GOOS=linux GOARCH=arm64 go build -o "${{ steps.assets.outputs.linux_arm64 }}" -v ./cmd/export_trakt
+
+      - name: Build for Linux (arm)
+        run: GOOS=linux GOARCH=arm go build -o "${{ steps.assets.outputs.linux_arm }}" -v ./cmd/export_trakt
+
+      - name: Build for macOS (amd64)
+        run: GOOS=darwin GOARCH=amd64 go build -o "${{ steps.assets.outputs.darwin_amd64 }}" -v ./cmd/export_trakt
+
+      - name: Build for macOS (arm64)
+        run: GOOS=darwin GOARCH=arm64 go build -o "${{ steps.assets.outputs.darwin_arm64 }}" -v ./cmd/export_trakt
+
+      - name: Build for Windows (amd64)
+        run: GOOS=windows GOARCH=amd64 go build -o "${{ steps.assets.outputs.windows_amd64 }}" -v ./cmd/export_trakt
+
+      - name: Generate checksums
+        run: |
+          sha256sum ${{ steps.assets.outputs.linux_amd64 }} > ${{ steps.assets.outputs.linux_amd64 }}.sha256
+          sha256sum ${{ steps.assets.outputs.linux_arm64 }} > ${{ steps.assets.outputs.linux_arm64 }}.sha256
+          sha256sum ${{ steps.assets.outputs.linux_arm }} > ${{ steps.assets.outputs.linux_arm }}.sha256
+          sha256sum ${{ steps.assets.outputs.darwin_amd64 }} > ${{ steps.assets.outputs.darwin_amd64 }}.sha256
+          sha256sum ${{ steps.assets.outputs.darwin_arm64 }} > ${{ steps.assets.outputs.darwin_arm64 }}.sha256
+          sha256sum ${{ steps.assets.outputs.windows_amd64 }} > ${{ steps.assets.outputs.windows_amd64 }}.sha256
+
+      - name: Prepare assets
+        run: |
+          mkdir -p releases
+          cp ${{ steps.assets.outputs.linux_amd64 }} releases/
+          cp ${{ steps.assets.outputs.linux_amd64 }}.sha256 releases/
+          cp ${{ steps.assets.outputs.linux_arm64 }} releases/
+          cp ${{ steps.assets.outputs.linux_arm64 }}.sha256 releases/
+          cp ${{ steps.assets.outputs.linux_arm }} releases/
+          cp ${{ steps.assets.outputs.linux_arm }}.sha256 releases/
+          cp ${{ steps.assets.outputs.darwin_amd64 }} releases/
+          cp ${{ steps.assets.outputs.darwin_amd64 }}.sha256 releases/
+          cp ${{ steps.assets.outputs.darwin_arm64 }} releases/
+          cp ${{ steps.assets.outputs.darwin_arm64 }}.sha256 releases/
+          cp ${{ steps.assets.outputs.windows_amd64 }} releases/
+          cp ${{ steps.assets.outputs.windows_amd64 }}.sha256 releases/
+          cp README.md releases/
+          cp LICENSE releases/
+          cp -R locales releases/
+          cp config/config.example.toml releases/config.toml
+
+          cd releases
+          zip -r export_trakt_${{ steps.assets.outputs.version }}_linux_amd64.zip ${{ steps.assets.outputs.linux_amd64 }} ${{ steps.assets.outputs.linux_amd64 }}.sha256 README.md LICENSE locales config.toml
+          zip -r export_trakt_${{ steps.assets.outputs.version }}_linux_arm64.zip ${{ steps.assets.outputs.linux_arm64 }} ${{ steps.assets.outputs.linux_arm64 }}.sha256 README.md LICENSE locales config.toml
+          zip -r export_trakt_${{ steps.assets.outputs.version }}_linux_arm.zip ${{ steps.assets.outputs.linux_arm }} ${{ steps.assets.outputs.linux_arm }}.sha256 README.md LICENSE locales config.toml
+          zip -r export_trakt_${{ steps.assets.outputs.version }}_darwin_amd64.zip ${{ steps.assets.outputs.darwin_amd64 }} ${{ steps.assets.outputs.darwin_amd64 }}.sha256 README.md LICENSE locales config.toml
+          zip -r export_trakt_${{ steps.assets.outputs.version }}_darwin_arm64.zip ${{ steps.assets.outputs.darwin_arm64 }} ${{ steps.assets.outputs.darwin_arm64 }}.sha256 README.md LICENSE locales config.toml
+          zip -r export_trakt_${{ steps.assets.outputs.version }}_windows_amd64.zip ${{ steps.assets.outputs.windows_amd64 }} ${{ steps.assets.outputs.windows_amd64 }}.sha256 README.md LICENSE locales config.toml
+
+      - name: Generate Release Notes
+        id: release_notes
+        run: |
+          echo "Generating release notes for ${{ steps.assets.outputs.version }}"
+          VERSION_TAG="${{ steps.assets.outputs.version }}"
+          PREV_TAG=$(git describe --tags --abbrev=0 ${VERSION_TAG}^ 2>/dev/null || echo "")
+
+          if [ -z "$PREV_TAG" ]; then
+            # If there's no previous tag, use all commits
+            COMMITS=$(git log --pretty=format:"* %s (%h)" ${VERSION_TAG})
+          else
+            # Otherwise use commits between the previous tag and this one
+            COMMITS=$(git log --pretty=format:"* %s (%h)" ${PREV_TAG}..${VERSION_TAG})
+          fi
+
+          cat > release_notes.md << EOF
+          # Export_Trakt_4_Letterboxd ${{ steps.assets.outputs.version }}
+
+          ## Changes
+
+          ${COMMITS}
+
+          ## Installation
+
+          ### Linux (amd64)
+          \`\`\`bash
+          curl -LO https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/releases/download/${{ steps.assets.outputs.version }}/export_trakt_${{ steps.assets.outputs.version }}_linux_amd64.zip
+          unzip export_trakt_${{ steps.assets.outputs.version }}_linux_amd64.zip
+          chmod +x export_trakt_${{ steps.assets.outputs.version }}_linux_amd64
+          ./export_trakt_${{ steps.assets.outputs.version }}_linux_amd64 --config config.toml
+          \`\`\`
+
+          ### Docker
+          \`\`\`bash
+          docker pull ghcr.io/johandevl/export_trakt_4_letterboxd:${{ steps.assets.outputs.version }}
+          docker run -v $(pwd)/config:/app/config -v $(pwd)/logs:/app/logs -v $(pwd)/exports:/app/exports ghcr.io/johandevl/export_trakt_4_letterboxd:${{ steps.assets.outputs.version }}
+          \`\`\`
+
+          For more information, see the [documentation](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/blob/main/README.md).
+          EOF
+
+          cat release_notes.md
+
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.assets.outputs.version }}
+          name: Export_Trakt_4_Letterboxd ${{ steps.assets.outputs.version }}
+          body_path: release_notes.md
+          draft: false
+          prerelease: ${{ contains(steps.assets.outputs.version, 'beta') || contains(steps.assets.outputs.version, 'rc') }}
+          files: |
+            releases/export_trakt_${{ steps.assets.outputs.version }}_linux_amd64.zip
+            releases/export_trakt_${{ steps.assets.outputs.version }}_linux_arm64.zip
+            releases/export_trakt_${{ steps.assets.outputs.version }}_linux_arm.zip
+            releases/export_trakt_${{ steps.assets.outputs.version }}_darwin_amd64.zip
+            releases/export_trakt_${{ steps.assets.outputs.version }}_darwin_arm64.zip
+            releases/export_trakt_${{ steps.assets.outputs.version }}_windows_amd64.zip
+            releases/${{ steps.assets.outputs.linux_amd64 }}
+            releases/${{ steps.assets.outputs.linux_arm64 }}
+            releases/${{ steps.assets.outputs.linux_arm }}
+            releases/${{ steps.assets.outputs.darwin_amd64 }}
+            releases/${{ steps.assets.outputs.darwin_arm64 }}
+            releases/${{ steps.assets.outputs.windows_amd64 }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  docker:
+    name: Docker Release Image
+    needs: build-and-release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Extract repository info
+        id: repo
+        run: |
+          REPO_OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          echo "repo_owner=${REPO_OWNER}" >> $GITHUB_OUTPUT
+          echo "Repository owner (lowercase): ${REPO_OWNER}"
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ steps.repo.outputs.repo_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract tag version
+        id: tag
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Extracted version: ${VERSION}"
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ steps.repo.outputs.repo_owner }}/export_trakt_4_letterboxd:${{ steps.tag.outputs.version }}
+            ${{ !contains(steps.tag.outputs.version, 'beta') && !contains(steps.tag.outputs.version, 'rc') && format('ghcr.io/{0}/export_trakt_4_letterboxd:latest', steps.repo.outputs.repo_owner) || '' }}
+          platforms: linux/amd64,linux/arm64,linux/arm/v7
+          labels: |
+            org.opencontainers.image.title=Export_Trakt_4_Letterboxd
+            org.opencontainers.image.description=Export your Trakt.tv history to Letterboxd format
+            org.opencontainers.image.url=https://github.com/JohanDevl/Export_Trakt_4_Letterboxd
+            org.opencontainers.image.source=https://github.com/JohanDevl/Export_Trakt_4_Letterboxd
+            org.opencontainers.image.version=${{ steps.tag.outputs.version }}
+            org.opencontainers.image.created=${{ github.event.repository.pushed_at }}
+            org.opencontainers.image.licenses=MIT
