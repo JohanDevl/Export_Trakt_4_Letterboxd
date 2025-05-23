@@ -1,0 +1,155 @@
+name: 🐛 Bug Report
+description: Report a bug to help us improve Export Trakt 4 Letterboxd
+title: "[Bug]: "
+labels: ["bug", "needs-triage"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        # 🐛 Bug Report
+
+        Thank you for taking the time to report a bug! This helps us improve the project for everyone.
+
+        Please fill out this form as completely as possible to help us understand and fix the issue.
+
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: Preliminary Checks
+      description: Please confirm these steps before submitting
+      options:
+        - label: I have searched existing issues to avoid duplicates
+          required: true
+        - label: I have read the [documentation](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/wiki)
+          required: true
+        - label: I have tried the troubleshooting steps in the README
+          required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: What version of the application are you using?
+      placeholder: "e.g., v2.1.0, latest Docker image, commit SHA"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      description: What platform are you running on?
+      options:
+        - Docker (Linux container)
+        - macOS (Intel/x64)
+        - macOS (Apple Silicon/ARM64)
+        - Linux (x64)
+        - Linux (ARM64)
+        - Windows (x64)
+        - Other (please specify in description)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: installation
+    attributes:
+      label: Installation Method
+      description: How did you install the application?
+      options:
+        - Docker Compose
+        - Docker run command
+        - GitHub Container Registry
+        - Docker Hub
+        - Built from source
+        - Downloaded binary
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: A clear and concise description of what the bug is
+      placeholder: "Describe the bug in detail..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: Detailed steps to reproduce the behavior
+      placeholder: |
+        1. Go to '...'
+        2. Run command '...'
+        3. Set configuration '...'
+        4. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What you expected to happen
+      placeholder: "What should have happened instead?"
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behavior
+      description: What actually happened
+      placeholder: "What actually happened? Include any error messages."
+    validations:
+      required: true
+
+  - type: textarea
+    id: config
+    attributes:
+      label: Configuration
+      description: Your config.toml file (please redact sensitive information like API keys)
+      render: toml
+      placeholder: |
+        [trakt]
+        client_id = "REDACTED"
+        client_secret = "REDACTED"
+        access_token = "REDACTED"
+        # ... rest of your config
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant Logs
+      description: Please include relevant log output
+      render: text
+      placeholder: "Paste your logs here. Set log level to 'debug' for more detailed output."
+    validations:
+      required: false
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment Details
+      description: Additional environment information
+      placeholder: |
+        - Docker version (if applicable):
+        - Go version (if built from source):
+        - Shell:
+        - Any relevant environment variables:
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Add any other context, screenshots, or information about the problem
+      placeholder: "Any additional information that might help us understand the issue"
+    validations:
+      required: false
