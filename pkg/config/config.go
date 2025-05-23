@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/BurntSushi/toml"
+	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/security"
 )
 
 // Config holds all configuration settings
@@ -13,6 +14,7 @@ type Config struct {
 	Export    ExportConfig    `toml:"export"`
 	Logging   LoggingConfig   `toml:"logging"`
 	I18n      I18nConfig      `toml:"i18n"`
+	Security  security.Config `toml:"security"`
 }
 
 // TraktConfig holds Trakt.tv API configuration
@@ -89,6 +91,10 @@ func (c *Config) Validate() error {
 
 	if err := c.I18n.Validate(); err != nil {
 		return fmt.Errorf("i18n config: %w", err)
+	}
+
+	if err := c.Security.Validate(); err != nil {
+		return fmt.Errorf("security config: %w", err)
 	}
 
 	return nil
