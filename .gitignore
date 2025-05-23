@@ -230,5 +230,10 @@ export_trakt
 *.test
 *.out
 
+# Go coverage files
+coverage.html
+coverage.out
+coverage.txt
+
 # Go workspace file
 go.work
