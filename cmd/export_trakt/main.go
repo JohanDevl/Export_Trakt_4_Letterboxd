@@ -69,7 +69,7 @@ func main() {
 			"export_type": *exportType,
 			"export_mode": *exportMode,
 		})
-		runExportOnce(cfg, log, translator, *exportType, *exportMode)
+		runExportOnce(cfg, log, *exportType, *exportMode)
 		return
 	}
 
@@ -80,7 +80,7 @@ func main() {
 			"export_type": *exportType,
 			"export_mode": *exportMode,
 		})
-		runWithSchedule(cfg, log, translator, *scheduleFlag, *exportType, *exportMode)
+		runWithSchedule(cfg, log, *scheduleFlag, *exportType, *exportMode)
 		return
 	}
 
@@ -290,7 +290,7 @@ func exportWatchlist(client *api.Client, exporter *export.LetterboxdExporter, lo
 }
 
 // runExportOnce executes the export once and then exits
-func runExportOnce(cfg *config.Config, log logger.Logger, translator *i18n.Translator, exportType, exportMode string) {
+func runExportOnce(cfg *config.Config, log logger.Logger, exportType, exportMode string) {
 	log.Info("export.starting_execution", map[string]interface{}{
 		"export_type": exportType,
 		"export_mode": exportMode,
@@ -352,7 +352,7 @@ func runExportOnce(cfg *config.Config, log logger.Logger, translator *i18n.Trans
 }
 
 // runWithSchedule sets up a cron scheduler and runs the export according to the schedule
-func runWithSchedule(cfg *config.Config, log logger.Logger, translator *i18n.Translator, schedule, exportType, exportMode string) {
+func runWithSchedule(cfg *config.Config, log logger.Logger, schedule, exportType, exportMode string) {
 	log.Info("scheduler.initializing", map[string]interface{}{
 		"schedule":    schedule,
 		"export_type": exportType,
@@ -412,7 +412,7 @@ func runWithSchedule(cfg *config.Config, log logger.Logger, translator *i18n.Tra
 		})
 		
 		startTime := time.Now()
-		runExportOnce(cfg, log, translator, exportType, exportMode)
+		runExportOnce(cfg, log, exportType, exportMode)
 		duration := time.Since(startTime)
 		
 		log.Info("scheduler.export_execution_completed", map[string]interface{}{
