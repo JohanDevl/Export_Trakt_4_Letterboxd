@@ -1,6 +1,8 @@
 MIT License
 
-Copyright (c) 2025 Thierry Beugnet (u2pitchjami) and contributors
+Copyright (c) 2022-2024 Thierry Beugnet (u2pitchjami) - Original concept and implementation
+Copyright (c) 2024-2025 Johan Devlaminck (JohanDevl) - v2.0 rewrite and modernization
+Copyright (c) 2025 Export Trakt 4 Letterboxd contributors
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -19,3 +21,15 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+---
+
+## Attribution
+
+This project builds upon the original work by Thierry Beugnet (u2pitchjami)
+and has been significantly enhanced and modernized by Johan Devlaminck (JohanDevl).
+
+Original repository: https://github.com/u2pitchjami/Export_Trakt_4_Letterboxd
+Current repository: https://github.com/JohanDevl/Export_Trakt_4_Letterboxd
+
+Both original and derivative works are licensed under the MIT License.
