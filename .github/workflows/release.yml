@@ -81,7 +81,7 @@ jobs:
           cp README.md releases/
           cp LICENSE releases/
           cp -R locales releases/
-          cp config/config.toml releases/
+          cp config/config.example.toml releases/config.toml
 
           cd releases
           zip -r export_trakt_${{ steps.assets.outputs.version }}_linux_amd64.zip ${{ steps.assets.outputs.linux_amd64 }} ${{ steps.assets.outputs.linux_amd64 }}.sha256 README.md LICENSE locales config.toml
