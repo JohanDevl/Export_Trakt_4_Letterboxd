@@ -1,134 +1,138 @@
 services:
-  # Base service configuration (not started directly)
-  export-trakt-base: &export-trakt-base
-    image: export-trakt-letterboxd:latest
+  # Base service configuration for PRODUCTION (pulls from registry)
+  export-trakt-base: &export-trakt-base-prod
+    image: ghcr.io/johandevl/export_trakt_4_letterboxd:latest
+    pull_policy: always
     volumes:
       - ./config:/app/config
       - ./logs:/app/logs
       - ./exports:/app/exports
     restart: "no"
     environment:
-      - TZ=UTC
+      - TZ=Europe/Paris
 
-  # === LEGACY SERVICES (Traditional command-based approach) ===
+  # Base service configuration for DEVELOPMENT/TEST (local build)
+  export-trakt-base-dev: &export-trakt-base-dev
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VERSION: local-dev
+        COMMIT_SHA: local
+        BUILD_DATE: "2025-05-23T12:30:00Z"
+    volumes:
+      - ./config:/app/config
+      - ./logs:/app/logs
+      - ./exports:/app/exports
+    restart: "no"
+    environment:
+      - TZ=Europe/Paris
 
-  # Normal export (default - legacy)
+  # === PRODUCTION SERVICES (using registry image) ===
+
+  # Normal export (production)
   export-trakt:
-    <<: *export-trakt-base
-    profiles: ["default", "export", "legacy"]
+    <<: *export-trakt-base-prod
+    profiles: ["default", "export", "prod"]
     command: ["export", "--mode", "normal"]
 
-  # Interactive setup
-  export-trakt-setup:
-    <<: *export-trakt-base
-    profiles: ["setup"]
-    command: ["setup"]
-    # Interactive TTY for setup process
-    tty: true
-    stdin_open: true
-
-  # Complete export (legacy)
-  export-trakt-complete:
-    <<: *export-trakt-base
-    profiles: ["complete", "legacy"]
-    command: ["export", "--mode", "complete", "--export", "all"]
-
-  # Initial export (legacy)
-  export-trakt-initial:
-    <<: *export-trakt-base
-    profiles: ["initial", "legacy"]
-    command: ["export", "--mode", "initial"]
-
-  # Validate configuration
-  export-trakt-validate:
-    <<: *export-trakt-base
-    profiles: ["validate"]
-    command: ["validate"]
-
-  # === NEW IMMEDIATE EXECUTION SERVICES (--run flag) ===
-
-  # Run once - watched movies only
-  export-trakt-run-watched:
-    <<: *export-trakt-base
-    profiles: ["run", "run-watched"]
-    command: ["--run", "--export", "watched", "--mode", "normal"]
-
-  # Run once - all data (recommended)
-  export-trakt-run-all:
-    <<: *export-trakt-base
-    profiles: ["run", "run-all"]
-    command: ["--run", "--export", "all", "--mode", "complete"]
-
-  # Run once - collection only
-  export-trakt-run-collection:
-    <<: *export-trakt-base
-    profiles: ["run-collection"]
-    command: ["--run", "--export", "collection", "--mode", "normal"]
-
-  # Run once - ratings only
-  export-trakt-run-ratings:
-    <<: *export-trakt-base
-    profiles: ["run-ratings"]
-    command: ["--run", "--export", "ratings", "--mode", "complete"]
-
-  # Run once - watchlist only
-  export-trakt-run-watchlist:
-    <<: *export-trakt-base
-    profiles: ["run-watchlist"]
-    command: ["--run", "--export", "watchlist", "--mode", "normal"]
-
-  # Run once - shows only
-  export-trakt-run-shows:
-    <<: *export-trakt-base
-    profiles: ["run-shows"]
-    command: ["--run", "--export", "shows", "--mode", "complete"]
-
-  # === NEW SCHEDULED SERVICES (--schedule flag) ===
-
-  # Scheduled export - Every 6 hours (recommended for production)
+  # Production scheduler - Every 6 hours (recommended)
   export-trakt-schedule-6h:
-    <<: *export-trakt-base
-    profiles: ["schedule", "schedule-6h"]
+    <<: *export-trakt-base-prod
+    profiles: ["schedule", "schedule-6h", "prod"]
     container_name: export-trakt-schedule-6h
     restart: unless-stopped
+    environment:
+      - TZ=Europe/Paris
+      - LOG_LEVEL=info
+      - EXPORT_QUIET_MODE=true
     command:
       ["--schedule", "0 */6 * * *", "--export", "all", "--mode", "complete"]
 
-  # Scheduled export - Daily at 2:30 AM
+  # Production scheduler - Daily at 2:30 AM
   export-trakt-schedule-daily:
-    <<: *export-trakt-base
-    profiles: ["schedule-daily"]
+    <<: *export-trakt-base-prod
+    profiles: ["schedule-daily", "prod"]
     container_name: export-trakt-schedule-daily
     restart: unless-stopped
+    environment:
+      - TZ=Europe/Paris
+      - LOG_LEVEL=info
+      - EXPORT_QUIET_MODE=true
     command:
       ["--schedule", "30 2 * * *", "--export", "all", "--mode", "complete"]
 
-  # Scheduled export - Weekly (Sundays at 3 AM)
-  export-trakt-schedule-weekly:
-    <<: *export-trakt-base
-    profiles: ["schedule-weekly"]
-    container_name: export-trakt-schedule-weekly
-    restart: unless-stopped
-    command:
-      ["--schedule", "0 3 * * 0", "--export", "all", "--mode", "complete"]
+  # Production run once - all data
+  export-trakt-run-all:
+    <<: *export-trakt-base-prod
+    profiles: ["run", "run-all", "prod"]
+    command: ["--run", "--export", "all", "--mode", "complete"]
 
-  # Scheduled export - High frequency (every 15 minutes) for testing
-  export-trakt-schedule-15min:
-    <<: *export-trakt-base
-    profiles: ["schedule-test", "schedule-15min"]
-    container_name: export-trakt-schedule-15min
-    restart: unless-stopped
-    command:
-      ["--schedule", "*/15 * * * *", "--export", "watched", "--mode", "normal"]
+  # === DEVELOPMENT/TEST SERVICES (using local build) ===
 
-  # Custom scheduled export (use environment variables to configure)
+  # Interactive setup (dev)
+  export-trakt-setup-dev:
+    <<: *export-trakt-base-dev
+    profiles: ["setup", "dev"]
+    command: ["setup"]
+    tty: true
+    stdin_open: true
+
+  # Test scheduler - High frequency (every 2 minutes) for testing
+  export-trakt-schedule-test:
+    <<: *export-trakt-base-dev
+    profiles: ["schedule-test", "schedule-15min", "dev"]
+    container_name: export-trakt-schedule-test
+    restart: unless-stopped
+    environment:
+      - TZ=Europe/Paris
+      - LOG_LEVEL=info
+      - EXPORT_QUIET_MODE=true
+    command:
+      ["--schedule", "*/2 * * * *", "--export", "watched", "--mode", "normal"]
+
+  # Test run once - watched movies only (dev)
+  export-trakt-run-watched-dev:
+    <<: *export-trakt-base-dev
+    profiles: ["run-watched", "dev"]
+    command: ["--run", "--export", "watched", "--mode", "normal"]
+
+  # Test run once - all data (dev)
+  export-trakt-run-all-dev:
+    <<: *export-trakt-base-dev
+    profiles: ["run-all", "dev"]
+    command: ["--run", "--export", "all", "--mode", "complete"]
+
+  # Validate configuration (dev)
+  export-trakt-validate-dev:
+    <<: *export-trakt-base-dev
+    profiles: ["validate", "dev"]
+    command: ["validate"]
+
+  # === LEGACY SERVICES (for backward compatibility) ===
+
+  # Complete export (legacy - production)
+  export-trakt-complete:
+    <<: *export-trakt-base-prod
+    profiles: ["complete", "legacy"]
+    command: ["export", "--mode", "complete", "--export", "all"]
+
+  # Initial export (legacy - production)
+  export-trakt-initial:
+    <<: *export-trakt-base-prod
+    profiles: ["initial", "legacy"]
+    command: ["export", "--mode", "initial"]
+
+  # Custom scheduled export (production)
   export-trakt-schedule-custom:
-    <<: *export-trakt-base
-    profiles: ["schedule-custom"]
+    <<: *export-trakt-base-prod
+    profiles: ["schedule-custom", "prod"]
     container_name: export-trakt-schedule-custom
     restart: unless-stopped
     environment:
-      - TZ=UTC
+      - TZ=Europe/Paris
+      - LOG_LEVEL=info
+      - EXPORT_QUIET_MODE=true
       - CUSTOM_SCHEDULE=${SCHEDULE:-0 */6 * * *}
       - CUSTOM_EXPORT_TYPE=${EXPORT_TYPE:-all}
       - CUSTOM_EXPORT_MODE=${EXPORT_MODE:-complete}
@@ -137,85 +141,67 @@ services:
       - |
         /app/export-trakt --schedule "$${CUSTOM_SCHEDULE}" --export "$${CUSTOM_EXPORT_TYPE}" --mode "$${CUSTOM_EXPORT_MODE}"
 
-  # === LEGACY SCHEDULED SERVICE (for backward compatibility) ===
-
-  # Scheduled export (legacy - uses old scheduler system)
-  export-trakt-scheduled:
-    <<: *export-trakt-base
-    profiles: ["scheduled", "legacy-scheduled"]
-    container_name: export-trakt-scheduled-cron
-    restart: unless-stopped
-    volumes:
-      - ./config:/app/config
-      - ./logs:/app/logs
-      - ./exports:/app/exports
-      - ./scripts:/app/scripts
-    environment:
-      - TZ=UTC
-      - EXPORT_SCHEDULE=*/5 * * * * # Run every 5 minutes (standard cron format)
-      - EXPORT_MODE=complete
-      - EXPORT_TYPE=all
-    entrypoint: ["/app/scripts/entrypoint.sh"]
-
-# Docker Compose usage examples:
+# === USAGE EXAMPLES ===
 #
-# === IMMEDIATE EXECUTION (--run flag) ===
-# Run once - watched movies:
-# docker compose --profile run-watched up
+# 🚀 PRODUCTION MODE (pulls from GitHub Container Registry):
 #
-# Run once - all data (recommended):
-# docker compose --profile run-all up
-#
-# Run once - specific type:
-# docker compose --profile run-collection up
-# docker compose --profile run-ratings up
-# docker compose --profile run-watchlist up
-# docker compose --profile run-shows up
-#
-# === SCHEDULED EXECUTION (--schedule flag) ===
-# Schedule - every 6 hours (recommended for production):
+# Run production scheduler (every 6 hours):
 # docker compose --profile schedule-6h up -d
 #
-# Schedule - daily at 2:30 AM:
+# Run production daily scheduler (2:30 AM):
 # docker compose --profile schedule-daily up -d
 #
-# Schedule - weekly backup:
-# docker compose --profile schedule-weekly up -d
+# Run once - all data (production):
+# docker compose --profile run-all up
 #
-# Schedule - high frequency testing:
-# docker compose --profile schedule-15min up -d
+# Custom production schedule:
+# SCHEDULE="0 */4 * * *" docker compose --profile schedule-custom up -d
 #
-# Schedule - custom configuration:
-# SCHEDULE="0 */4 * * *" EXPORT_TYPE="watched" EXPORT_MODE="normal" docker compose --profile schedule-custom up -d
+# 🛠️  DEVELOPMENT/TEST MODE (builds locally):
 #
-# === TRADITIONAL/LEGACY MODES ===
-# Default export (normal mode):
-# docker compose up
+# Test scheduler (every 2 minutes):
+# docker compose --profile dev --profile schedule-test up -d --build
+#
+# Test run once - watched movies:
+# docker compose --profile dev --profile run-watched up --build
+#
+# Test run once - all data:
+# docker compose --profile dev --profile run-all up --build
 #
 # Interactive setup:
-# docker compose --profile setup up
-#
-# Complete export (legacy):
-# docker compose --profile complete up
-#
-# Initial export (legacy):
-# docker compose --profile initial up
+# docker compose --profile dev --profile setup up --build
 #
 # Validate configuration:
-# docker compose --profile validate up
+# docker compose --profile dev --profile validate up --build
 #
-# Scheduled export (legacy cron system):
-# docker compose --profile scheduled up -d
+# 🔄 SWITCHING MODES:
 #
-# === QUICK COMMANDS ===
-# Test your configuration:
-# docker compose --profile run-watched up
-#
-# Start production scheduler:
+# Stop test scheduler and start production:
+# docker compose --profile dev --profile schedule-test down
 # docker compose --profile schedule-6h up -d
 #
-# Check scheduler status:
+# Stop production and start development:
+# docker compose --profile schedule-6h down
+# docker compose --profile dev --profile schedule-test up -d --build
+#
+# 📊 MONITORING:
+#
+# Check production logs:
 # docker compose --profile schedule-6h logs -f
+#
+# Check development logs:
+# docker compose --profile dev --profile schedule-test logs -f
+#
+# 🎯 QUICK COMMANDS:
+#
+# Test your changes:
+# docker compose --profile dev --profile run-watched up --build
+#
+# Deploy to production:
+# docker compose --profile schedule-6h up -d
+#
+# Check status:
+# docker compose ps
 
 volumes:
   trakt_logs:

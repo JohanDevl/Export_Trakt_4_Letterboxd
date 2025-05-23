@@ -19,6 +19,14 @@ import (
 )
 
 func main() {
+	// Add panic recovery to catch unhandled errors
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Printf("PANIC: %v\n", r)
+			os.Exit(1)
+		}
+	}()
+
 	// Parse command line flags
 	configPath := flag.String("config", "config/config.toml", "Path to configuration file")
 	exportType := flag.String("export", "watched", "Type of export (watched, collection, shows, ratings, watchlist, all)")
@@ -46,7 +54,7 @@ func main() {
 
 	// Configure logger based on config
 	log.SetLogLevel(cfg.Logging.Level)
-	if cfg.Logging.File != "" {
+	if cfg.Logging.File != "" && os.Getenv("DISABLE_LOG_FILE") == "" {
 		if err := log.SetLogFile(cfg.Logging.File); err != nil {
 			log.Error("errors.log_file_failed", map[string]interface{}{"error": err.Error()})
 			os.Exit(1)
@@ -105,6 +113,10 @@ func main() {
 		})
 
 		// Perform the export based on type
+		log.Info("export.starting_data_retrieval", map[string]interface{}{
+			"export_type": *exportType,
+		})
+
 		switch *exportType {
 		case "watched":
 			exportWatchedMovies(traktClient, letterboxdExporter, log)
@@ -304,7 +316,7 @@ func runExportOnce(cfg *config.Config, log logger.Logger, exportType, exportMode
 	// Initialize Letterboxd exporter
 	log.Info("export.initializing_letterboxd_exporter", nil)
 	letterboxdExporter := export.NewLetterboxdExporter(cfg, log)
-	
+
 	// Log export mode
 	log.Info("export.mode", map[string]interface{}{
 		"mode": exportMode,
@@ -453,12 +465,26 @@ func runWithSchedule(cfg *config.Config, log logger.Logger, schedule, exportType
 		runExportOnce(cfg, log, exportType, exportMode)
 		duration := time.Since(startTime)
 		
+		// Get next run time for display
+		entries := c.Entries()
+		var nextRunDisplay string
+		if len(entries) > 0 {
+			nextRun := entries[0].Next.In(configuredTZ)
+			nextRunDisplay = nextRun.Format("2006-01-02 15:04:05 MST")
+		}
+		
 		log.Info("scheduler.export_execution_completed", map[string]interface{}{
 			"export_type": exportType,
 			"export_mode": exportMode,
 			"duration":    duration.String(),
-			"next_run":    c.Entries()[0].Next.In(configuredTZ).Format(time.RFC3339),
+			"next_run":    nextRunDisplay,
 		})
+		
+		// Display visual completion message with next run
+		fmt.Printf("\n✅ === EXPORT COMPLETED ===\n")
+		fmt.Printf("⏱️  Duration: %s\n", duration.String())
+		fmt.Printf("▶️  Next run: %s\n", nextRunDisplay)
+		fmt.Printf("============================\n\n")
 	})
 	
 	if err != nil {
@@ -492,12 +518,13 @@ func runWithSchedule(cfg *config.Config, log logger.Logger, schedule, exportType
 			"next_run_local":  nextRunInTZ.Format("2006-01-02 15:04:05 MST"),
 			"timezone":        configuredTZ.String(),
 		})
-		fmt.Printf("Scheduler started successfully!\n")
-		fmt.Printf("Schedule: %s\n", schedule)
-		fmt.Printf("Export Type: %s\n", exportType)
-		fmt.Printf("Export Mode: %s\n", exportMode)
-		fmt.Printf("Timezone: %s\n", configuredTZ.String())
-		fmt.Printf("Next run: %s\n", nextRunInTZ.Format("2006-01-02 15:04:05 MST"))
+		fmt.Printf("\n🎯 === EXPORT SCHEDULER STARTED ===\n")
+		fmt.Printf("⏰ Schedule: %s\n", schedule)
+		fmt.Printf("📺 Export Type: %s\n", exportType)
+		fmt.Printf("🔧 Export Mode: %s\n", exportMode)
+		fmt.Printf("🌍 Timezone: %s\n", configuredTZ.String())
+		fmt.Printf("▶️  Next run: %s\n", nextRunInTZ.Format("2006-01-02 15:04:05 MST"))
+		fmt.Printf("=====================================\n\n")
 		
 		// Log upcoming executions for the next hour in configured timezone
 		now := time.Now()
