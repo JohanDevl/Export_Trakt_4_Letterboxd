@@ -1,0 +1,126 @@
+# 🔒 Secure Multi-stage Dockerfile for Export Trakt 4 Letterboxd
+# This Dockerfile implements security best practices as specified in Issue #18
+
+# Build stage with security hardening
+FROM golang:1.23-alpine AS builder
+
+# Security: Install only necessary build dependencies
+RUN apk add --no-cache \
+    git \
+    gcc \
+    musl-dev \
+    ca-certificates \
+    && update-ca-certificates
+
+# Security: Create non-root user for build process
+RUN addgroup -g 1001 buildgroup && \
+    adduser -D -u 1001 -G buildgroup builduser
+
+# Set build arguments with security metadata
+ARG VERSION=dev
+ARG COMMIT_SHA=unknown
+ARG BUILD_DATE=unknown
+
+# Set working directory with secure permissions
+WORKDIR /app
+RUN chown builduser:buildgroup /app
+
+# Switch to non-root user for build
+USER builduser
+
+# Copy go module files and download dependencies
+COPY --chown=builduser:buildgroup go.mod go.sum ./
+RUN go mod download && go mod verify
+
+# Copy source code with proper ownership
+COPY --chown=builduser:buildgroup . .
+
+# Security: Build with security flags and minimal binary
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+    -a -installsuffix cgo \
+    -ldflags "-s -w -extldflags '-static' \
+    -X github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/version.Version=${VERSION} \
+    -X github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/version.CommitSHA=${COMMIT_SHA} \
+    -X github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/version.BuildDate=${BUILD_DATE}" \
+    -trimpath \
+    -buildmode=exe \
+    -o export-trakt ./cmd/export_trakt
+
+# Verify the binary
+RUN file export-trakt && ldd export-trakt || true
+
+# Create directory structure in builder stage
+USER root
+RUN mkdir -p /app/runtime/config /app/runtime/logs /app/runtime/exports /app/runtime/tmp && \
+    chown -R 65532:65532 /app/runtime && \
+    chmod 755 /app/runtime && \
+    chmod 700 /app/runtime/config /app/runtime/logs && \
+    chmod 755 /app/runtime/exports && \
+    chmod 700 /app/runtime/tmp
+
+# 🛡️ Runtime stage - Distroless for maximum security
+FROM gcr.io/distroless/static-debian11:nonroot
+
+# Security: Set secure working directory
+WORKDIR /app
+
+# Copy pre-created directory structure with correct ownership
+COPY --from=builder --chown=65532:65532 /app/runtime /app
+
+# Copy binary with secure permissions
+COPY --from=builder --chown=65532:65532 /app/export-trakt /app/export-trakt
+
+# Copy locales with secure permissions
+COPY --from=builder --chown=65532:65532 /app/locales /app/locales
+
+# Copy security configuration template
+COPY --from=builder --chown=65532:65532 /app/config/config.example.toml /app/config/
+
+# Security: User is already set to 65532:65532 in the distroless base image
+
+# Security: Set secure environment variables
+ENV EXPORT_TRAKT_EXPORT_OUTPUT_DIR=/app/exports \
+    EXPORT_TRAKT_LOGGING_FILE=/app/logs/export.log \
+    EXPORT_TRAKT_CONFIG_FILE=/app/config/config.toml \
+    EXPORT_TRAKT_SECURITY_ENABLED=true \
+    EXPORT_TRAKT_SECURITY_KEYRING_BACKEND=env \
+    EXPORT_TRAKT_SECURITY_AUDIT_LOGGING=true \
+    EXPORT_TRAKT_SECURITY_REQUIRE_HTTPS=true \
+    TMPDIR=/app/tmp
+
+# Security: Create secure volumes for persistent data
+VOLUME ["/app/config", "/app/logs", "/app/exports"]
+
+# Security: Use exact path to avoid PATH injection
+ENTRYPOINT ["/app/export-trakt"]
+
+# Default secure command
+CMD ["--help"]
+
+# 🏷️ Enhanced security metadata
+LABEL org.opencontainers.image.title="Export Trakt for Letterboxd (Secure)" \
+      org.opencontainers.image.description="Secure tool to export Trakt.tv data for Letterboxd import with enhanced security features" \
+      org.opencontainers.image.authors="JohanDevl" \
+      org.opencontainers.image.url="https://github.com/JohanDevl/Export_Trakt_4_Letterboxd" \
+      org.opencontainers.image.source="https://github.com/JohanDevl/Export_Trakt_4_Letterboxd" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.created="${BUILD_DATE}" \
+      org.opencontainers.image.revision="${COMMIT_SHA}" \
+      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.vendor="JohanDevl" \
+      security.features="non-root,distroless,encrypted-credentials,audit-logging" \
+      security.scan.policy="required" \
+      security.compliance="enhanced"
+
+# 🔒 Security Hardening Summary:
+# ✅ Multi-stage build to minimize attack surface
+# ✅ Distroless base image (no shell, minimal packages)
+# ✅ Non-root user (UID 65532)
+# ✅ Minimal file permissions (700/755)
+# ✅ Static binary with security flags
+# ✅ Environment-based credential management
+# ✅ Audit logging enabled by default
+# ✅ HTTPS enforcement
+# ✅ Secure temporary directory
+# ✅ Volume security for persistent data
+# ✅ Comprehensive security metadata 

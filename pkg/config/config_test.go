@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/security"
 )
 
 func TestLoadConfig(t *testing.T) {
@@ -45,6 +47,15 @@ file = "logs/export.log"
 default_language = "en"
 language = "en"
 locales_dir = "locales"
+
+[security]
+keyring_backend = "system"
+
+[security.audit]
+log_level = "info"
+retention_days = 90
+include_sensitive = false
+output_format = "json"
 `,
 			expectError: false,
 			validate: func(t *testing.T, cfg *Config) {
@@ -163,6 +174,7 @@ func TestConfigValidation(t *testing.T) {
 					Language:       "en",
 					LocalesDir:    "locales",
 				},
+				Security: security.DefaultSecurityConfig(),
 			},
 			expectError: true,
 			errorMsg:    "trakt config: api_base_url is required",
@@ -188,6 +200,7 @@ func TestConfigValidation(t *testing.T) {
 					Language:       "en",
 					LocalesDir:    "locales",
 				},
+				Security: security.DefaultSecurityConfig(),
 			},
 			expectError: true,
 			errorMsg:    "logging config: invalid log level: invalid",
@@ -212,6 +225,7 @@ func TestConfigValidation(t *testing.T) {
 					DefaultLanguage: "en",
 					LocalesDir:    "locales",
 				},
+				Security: security.DefaultSecurityConfig(),
 			},
 			expectError: true,
 			errorMsg:    "i18n config: language is required",
@@ -237,6 +251,7 @@ func TestConfigValidation(t *testing.T) {
 					Language:       "en",
 					LocalesDir:    "locales",
 				},
+				Security: security.DefaultSecurityConfig(),
 			},
 			expectError: false,
 		},
