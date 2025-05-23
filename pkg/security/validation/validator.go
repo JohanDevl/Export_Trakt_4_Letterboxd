@@ -431,14 +431,28 @@ func SanitizeForLog(input string) string {
 
 // SanitizeFilename sanitizes filename for safe file operations
 func SanitizeFilename(filename string) string {
-	// Remove dangerous characters
-	dangerousChars := []string{"/", "\\", ":", "*", "?", "\"", "<", ">", "|"}
-	for _, char := range dangerousChars {
-		filename = strings.ReplaceAll(filename, char, "_")
+	// Check if this looks like a directory traversal pattern
+	if strings.Contains(filename, "..") {
+		// For directory traversal patterns, replace all dangerous chars including dots
+		dangerousChars := []string{"/", "\\", ":", "*", "?", "\"", "<", ">", "|", " ", "."}
+		for _, char := range dangerousChars {
+			filename = strings.ReplaceAll(filename, char, "_")
+		}
+	} else {
+		// For normal filenames, preserve extension dots but replace other dangerous chars
+		// First handle non-dot dangerous characters
+		dangerousChars := []string{"/", "\\", ":", "*", "?", "\"", "<", ">", "|", " "}
+		for _, char := range dangerousChars {
+			filename = strings.ReplaceAll(filename, char, "_")
+		}
+		
+		// Handle dots: only replace if they're at the beginning or if there are multiple consecutive dots
+		if strings.HasPrefix(filename, ".") {
+			filename = "_" + filename[1:]
+		}
+		// Replace multiple consecutive dots (potential traversal)
+		filename = strings.ReplaceAll(filename, "..", "__")
 	}
-	
-	// Remove leading/trailing dots and spaces
-	filename = strings.Trim(filename, ". ")
 	
 	// Ensure not empty
 	if filename == "" {
@@ -454,12 +468,12 @@ func ValidateCredentials(clientID, clientSecret string) error {
 	
 	// Add rules for client ID
 	validator.AddRule("client_id", RequiredRule{})
-	validator.AddRule("client_id", LengthRule{Min: 1, Max: 256})
+	validator.AddRule("client_id", LengthRule{Min: 3, Max: 256})
 	validator.AddRule("client_id", AlphanumericRule{AllowHyphens: true, AllowUnderscores: true})
 	
 	// Add rules for client secret
 	validator.AddRule("client_secret", RequiredRule{})
-	validator.AddRule("client_secret", LengthRule{Min: 1, Max: 512})
+	validator.AddRule("client_secret", LengthRule{Min: 3, Max: 512})
 	
 	// Validate
 	data := map[string]string{
@@ -481,7 +495,7 @@ func ValidateExportPath(path string) error {
 	
 	validator.AddRule("export_path", RequiredRule{})
 	validator.AddRule("export_path", PathRule{
-		AllowAbsolute:  true,
+		AllowAbsolute:  false,
 		AllowParentDir: false,
 	})
 	
@@ -496,13 +510,13 @@ func ValidateConfigValue(key, value string) error {
 	case "trakt.api_base_url":
 		validator.AddRule(key, RequiredRule{})
 		validator.AddRule(key, URLRule{RequireHTTPS: true})
-	case "logging.level":
+	case "log_level":
 		validator.AddRule(key, RequiredRule{})
 		validator.AddRule(key, WhitelistRule{
 			AllowedValues: []string{"debug", "info", "warn", "error"},
 			CaseSensitive: false,
 		})
-	case "export.format":
+	case "output_format":
 		validator.AddRule(key, RequiredRule{})
 		validator.AddRule(key, WhitelistRule{
 			AllowedValues: []string{"csv", "json"},
