@@ -431,27 +431,38 @@ func SanitizeForLog(input string) string {
 
 // SanitizeFilename sanitizes filename for safe file operations
 func SanitizeFilename(filename string) string {
-	// Check if this looks like a directory traversal pattern
-	if strings.Contains(filename, "..") {
-		// For directory traversal patterns, replace all dangerous chars including dots
+	// Handle specific pattern for directory traversal
+	if strings.Contains(filename, "../") {
+		// Replace each "../" sequence with "__" 
+		filename = strings.ReplaceAll(filename, "../", "__")
+		// Then replace any remaining dangerous characters
 		dangerousChars := []string{"/", "\\", ":", "*", "?", "\"", "<", ">", "|", " ", "."}
 		for _, char := range dangerousChars {
 			filename = strings.ReplaceAll(filename, char, "_")
 		}
 	} else {
-		// For normal filenames, preserve extension dots but replace other dangerous chars
-		// First handle non-dot dangerous characters
-		dangerousChars := []string{"/", "\\", ":", "*", "?", "\"", "<", ">", "|", " "}
-		for _, char := range dangerousChars {
-			filename = strings.ReplaceAll(filename, char, "_")
-		}
+		// For normal filenames with special chars, replace all dangerous chars including dots
+		// Check if filename contains special chars (not just space or normal extension)
+		hasSpecialChars := strings.ContainsAny(filename, "<>:\"|?*\\")
 		
-		// Handle dots: only replace if they're at the beginning or if there are multiple consecutive dots
-		if strings.HasPrefix(filename, ".") {
-			filename = "_" + filename[1:]
+		if hasSpecialChars {
+			// Replace all dangerous characters including dots when special chars are present
+			dangerousChars := []string{"/", "\\", ":", "*", "?", "\"", "<", ">", "|", " ", "."}
+			for _, char := range dangerousChars {
+				filename = strings.ReplaceAll(filename, char, "_")
+			}
+		} else {
+			// For normal filenames, preserve extension dots but replace spaces and other chars
+			dangerousChars := []string{"/", "\\", ":", "*", "?", "\"", "<", ">", "|", " "}
+			for _, char := range dangerousChars {
+				filename = strings.ReplaceAll(filename, char, "_")
+			}
+			
+			// Handle leading dots
+			if strings.HasPrefix(filename, ".") {
+				filename = "_" + filename[1:]
+			}
 		}
-		// Replace multiple consecutive dots (potential traversal)
-		filename = strings.ReplaceAll(filename, "..", "__")
 	}
 	
 	// Ensure not empty
