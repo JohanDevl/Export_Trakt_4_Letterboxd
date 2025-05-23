@@ -71,10 +71,45 @@ timezone = "UTC"
 # └─────────────────────────────────────────────────────────────────────────────┘
 [logging]
 # Application logging configuration
-level = "info"
+level = "info"                    # debug, info, warn, error, fatal
+format = "visual"                 # visual, json, text
+output = "stdout"                 # stdout, stderr, file
+rotation_enabled = false          # Enable log rotation
+max_age_days = 30                # Maximum age of log files in days
+max_size_mb = 100                # Maximum size of log files in MB
+max_backups = 3                  # Maximum number of backup files
+correlation_id = true            # Enable correlation IDs for request tracing
 
-# 📄 Log file location
+# 📄 Log file location (when output = "file")
 file = "./logs/app.log"
+
+# ┌─────────────────────────────────────────────────────────────────────────────┐
+# │                        📊 MONITORING AND OBSERVABILITY                     │
+# └─────────────────────────────────────────────────────────────────────────────┘
+[monitoring]
+# Enable monitoring and observability features
+enabled = true
+metrics_enabled = true            # Enable Prometheus metrics
+tracing_enabled = true            # Enable OpenTelemetry tracing
+health_checks_enabled = true      # Enable health check endpoints
+metrics_port = 9090              # Port for metrics and health endpoints
+metrics_path = "/metrics"        # Path for Prometheus metrics
+
+# Tracing configuration (OpenTelemetry)
+[tracing]
+enabled = true
+service_name = "export-trakt-letterboxd"
+service_version = "1.0.0"
+environment = "production"       # production, staging, development
+jaeger_endpoint = "http://localhost:14268/api/traces"  # Optional Jaeger endpoint
+sampling_rate = 0.1             # Sampling rate (0.0 to 1.0, 0.1 = 10% of traces)
+
+# Alerting configuration
+[alerts]
+webhook_url = ""                 # Optional webhook URL for alerts
+email_enabled = false            # Enable email alerts
+slack_enabled = false            # Enable Slack alerts
+rate_limit_minutes = 5          # Rate limit for alerts (prevent spam)
 
 # ┌─────────────────────────────────────────────────────────────────────────────┐
 # │                      🌐 INTERNATIONALIZATION SETTINGS                     │
