@@ -1,0 +1,37 @@
+# Test Dockerfile for Enhanced Error Handling System
+FROM golang:1.22-alpine AS builder
+
+# Install build dependencies
+RUN apk add --no-cache git gcc musl-dev
+
+# Set working directory
+WORKDIR /app
+
+# Copy go module files
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy source code
+COPY . .
+
+# Build test binary
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo \
+    -o test-errors ./cmd/test_errors
+
+# Runtime stage
+FROM alpine:3.19
+
+# Install CA certificates and basic tools
+RUN apk add --no-cache ca-certificates
+
+# Set working directory
+WORKDIR /app
+
+# Copy test binary from builder stage
+COPY --from=builder /app/test-errors /app/test-errors
+
+# Create temporary directory for checkpoints
+RUN mkdir -p /tmp/test_checkpoints
+
+# Run the test
+ENTRYPOINT ["/app/test-errors"] 
