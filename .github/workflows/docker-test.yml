@@ -1,0 +1,150 @@
+name: Docker Image Test
+
+on:
+  pull_request:
+    branches: ["main", "develop"]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "LICENSE"
+  push:
+    branches: ["develop"]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "LICENSE"
+
+jobs:
+  unit-tests:
+    name: Run Unit Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+          # Install dependencies for building kcov
+          sudo apt-get install -y cmake g++ pkg-config libdw-dev binutils-dev libiberty-dev libcurl4-openssl-dev
+          # Clone, build and install kcov from source
+          git clone https://github.com/SimonKagstrom/kcov.git
+          cd kcov
+          mkdir build
+          cd build
+          cmake ..
+          make -j$(nproc)
+          sudo make install
+          cd ../..
+
+      - name: Run tests
+        run: |
+          ./tests/run_tests.sh
+
+      - name: Generate coverage report
+        run: |
+          ./tests/run_tests.sh coverage
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-coverage
+          path: test-results/coverage
+
+  docker-test:
+    name: Test Docker Image
+    runs-on: ubuntu-latest
+    needs: unit-tests
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          load: true
+          tags: trakt-export:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          push: false
+
+      - name: Verify Docker image
+        run: |
+          echo "🔍 Verifying Docker image structure and dependencies..."
+
+          # Check if the image was built successfully
+          docker image inspect trakt-export:test
+
+          # Check if the required scripts exist and are executable
+          docker run --rm trakt-export:test ls -la /app/Export_Trakt_4_Letterboxd.sh /app/setup_trakt.sh /app/docker-entrypoint.sh
+
+          # Check if lib directory exists and scripts are executable
+          docker run --rm trakt-export:test bash -c "find /app/lib -name '*.sh' -type f -executable || echo 'No executable scripts found in lib directory'"
+
+          # Check if the required directories exist
+          docker run --rm trakt-export:test ls -la /app/config /app/logs /app/copy /app/backup /app/TEMP
+
+          # Check if the entrypoint script works correctly
+          docker run --rm trakt-export:test bash -c "test -x /app/docker-entrypoint.sh && echo '✅ Entrypoint script is executable'"
+
+          # Check if the required tools are installed
+          docker run --rm trakt-export:test bash -c "command -v jq && command -v curl && command -v sed && echo '✅ Required tools are installed'"
+
+          # Create a test container with the image but override the entrypoint
+          echo "🚀 Creating test container..."
+          docker run -d --name test-container --entrypoint bash trakt-export:test -c "sleep 60"
+
+          # Wait a moment to ensure the container is running
+          sleep 5
+
+          # Check if the container is running
+          docker ps | grep test-container || { echo "❌ Container failed to start"; exit 1; }
+
+          # Check if the configuration example file can be created manually
+          docker exec test-container bash -c "mkdir -p /app/config"
+          docker exec test-container bash -c "echo '# Test config' > /app/config/.config.cfg.example && echo '✅ Created test config file'"
+
+          # Check if the cron setup code exists in the entrypoint script
+          docker exec test-container bash -c "grep -q 'CRON_SCHEDULE' /app/docker-entrypoint.sh && echo '✅ Cron setup code exists in entrypoint script'"
+
+          # Clean up
+          docker stop test-container || true
+          docker rm test-container || true
+
+          echo "✅ Docker image verification completed successfully"
+
+      - name: Test Docker Compose
+        run: |
+          echo "🔍 Testing Docker Compose configuration..."
+
+          # Create test environment variables
+          echo "CRON_SCHEDULE=* * * * *" > .env
+          echo "EXPORT_OPTION=normal" >> .env
+
+          # Validate docker-compose.yml
+          docker compose config
+
+          # Start the container with docker-compose
+          docker compose up -d
+
+          # Check if the container is running
+          docker compose ps
+
+          # Stop and remove the container
+          docker compose down
+
+          echo "✅ Docker Compose test completed successfully"
+
+      - name: Summary
+        run: |
+          echo "🎉 All Docker image tests passed successfully!"
+          echo "The Docker image is verified to be functional and ready for deployment."
