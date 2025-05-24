@@ -179,46 +179,49 @@ func (l *Logger) LogEvent(event AuditEvent) {
 		"action":           event.Action,
 		"result":           event.Result,
 	}
+	
+	// Override the timestamp with our event timestamp
+	entry := l.logger.WithFields(fields).WithTime(event.Timestamp)
 
-	// Add optional fields
+	// Add optional fields to the entry
 	if event.UserID != "" {
-		fields["user_id"] = event.UserID
+		entry = entry.WithField("user_id", event.UserID)
 	}
 	if event.Target != "" {
-		fields["target"] = event.Target
+		entry = entry.WithField("target", event.Target)
 	}
 	if event.RemoteAddr != "" {
-		fields["remote_addr"] = event.RemoteAddr
+		entry = entry.WithField("remote_addr", event.RemoteAddr)
 	}
 	if event.UserAgent != "" {
-		fields["user_agent"] = event.UserAgent
+		entry = entry.WithField("user_agent", event.UserAgent)
 	}
 	if event.SessionID != "" {
-		fields["session_id"] = event.SessionID
+		entry = entry.WithField("session_id", event.SessionID)
 	}
 	if event.RequestID != "" {
-		fields["request_id"] = event.RequestID
+		entry = entry.WithField("request_id", event.RequestID)
 	}
 
 	// Add details if present
 	if event.Details != nil {
 		for key, value := range event.Details {
-			fields["detail_"+key] = value
+			entry = entry.WithField("detail_"+key, value)
 		}
 	}
 
 	// Log based on severity
 	switch event.Severity {
 	case SeverityCritical:
-		l.logger.WithFields(fields).Error(event.Message)
+		entry.Error(event.Message)
 	case SeverityHigh:
-		l.logger.WithFields(fields).Warn(event.Message)
+		entry.Warn(event.Message)
 	case SeverityMedium:
-		l.logger.WithFields(fields).Info(event.Message)
+		entry.Info(event.Message)
 	case SeverityLow:
-		l.logger.WithFields(fields).Debug(event.Message)
+		entry.Debug(event.Message)
 	default:
-		l.logger.WithFields(fields).Info(event.Message)
+		entry.Info(event.Message)
 	}
 }
 
@@ -256,11 +259,41 @@ func (l *Logger) sanitizeString(s string) string {
 	}
 
 	result := s
+	lower := strings.ToLower(result)
+	
 	for _, pattern := range sensitivePatterns {
-		if strings.Contains(strings.ToLower(result), pattern) {
-			// Mask the value after the pattern
-			result = strings.ReplaceAll(result, pattern+"=*", pattern+"=[REDACTED]")
-			result = strings.ReplaceAll(result, pattern+": *", pattern+": [REDACTED]")
+		if strings.Contains(lower, pattern) {
+			// Look for patterns like "password=value", "token: value", etc.
+			// Replace everything after the = or : with [REDACTED]
+			if idx := strings.Index(lower, pattern+"="); idx != -1 {
+				start := idx + len(pattern) + 1
+				end := len(result)
+				// Find end of value (space or end of string)
+				for i := start; i < len(result); i++ {
+					if result[i] == ' ' || result[i] == '\n' || result[i] == '\t' {
+						end = i
+						break
+					}
+				}
+				result = result[:start] + "[REDACTED]" + result[end:]
+				lower = strings.ToLower(result) // Update lower case version
+			} else if idx := strings.Index(lower, pattern+":"); idx != -1 {
+				start := idx + len(pattern) + 1
+				// Skip any spaces after the colon
+				for start < len(result) && result[start] == ' ' {
+					start++
+				}
+				end := len(result)
+				// Find end of value (space or end of string)
+				for i := start; i < len(result); i++ {
+					if result[i] == ' ' || result[i] == '\n' || result[i] == '\t' {
+						end = i
+						break
+					}
+				}
+				result = result[:start] + "[REDACTED]" + result[end:]
+				lower = strings.ToLower(result) // Update lower case version
+			}
 		}
 	}
 
@@ -430,7 +463,9 @@ func (l *Logger) CleanupOldLogs() error {
 // Close closes the audit logger and any open files
 func (l *Logger) Close() error {
 	if l.logFile != nil {
-		return l.logFile.Close()
+		err := l.logFile.Close()
+		l.logFile = nil
+		return err
 	}
 	return nil
 }

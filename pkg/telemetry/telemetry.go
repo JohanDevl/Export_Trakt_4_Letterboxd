@@ -381,6 +381,11 @@ func (tm *TelemetryManager) TraceAPICall(ctx context.Context, service, endpoint,
 
 // alertHistoryHandler handles alert history HTTP requests
 func (tm *TelemetryManager) alertHistoryHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
 	if tm.alertManager == nil {
 		http.Error(w, "Alert manager not available", http.StatusServiceUnavailable)
 		return
@@ -424,6 +429,7 @@ func (tm *TelemetryManager) GetTelemetryStatus() map[string]interface{} {
 	status := make(map[string]interface{})
 	
 	status["running"] = tm.IsRunning()
+	status["monitoring_enabled"] = tm.config.Monitoring.Enabled
 	status["metrics_enabled"] = tm.metrics != nil
 	status["tracing_enabled"] = tm.tracer != nil
 	status["health_checks_enabled"] = tm.healthChecker != nil
