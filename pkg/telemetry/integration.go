@@ -3,6 +3,7 @@ package telemetry
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/config"
@@ -62,8 +63,9 @@ func InitializeTelemetryFromConfig(appConfig *config.Config, version string) (*T
 
 // getEnvOrDefault gets environment variable or returns default
 func getEnvOrDefault(key, defaultValue string) string {
-	// In a real implementation, you'd use os.Getenv
-	// For now, just return the default
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
 	return defaultValue
 }
 

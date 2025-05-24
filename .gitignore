@@ -220,6 +220,7 @@ config/config.toml
 
 # Go specific ignores
 export_trakt
+export-trakt
 *.exe
 *.exe~
 *.dll
