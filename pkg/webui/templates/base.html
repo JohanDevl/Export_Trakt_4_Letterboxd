@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}}</title>
+    <link href="/static/css/style.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <h2><i class="fas fa-film"></i> Export Trakt</h2>
+                <p class="version">v{{.Version}}</p>
+            </div>
+            <ul class="sidebar-menu">
+                <li class="{{if eq .Section "dashboard"}}active{{end}}">
+                    <a href="/"><i class="fas fa-tachometer-alt"></i> Dashboard</a>
+                </li>
+                <li class="{{if eq .Section "config"}}active{{end}}">
+                    <a href="/config"><i class="fas fa-cog"></i> Configuration</a>
+                </li>
+                <li class="{{if eq .Section "exports"}}active{{end}}">
+                    <a href="/exports"><i class="fas fa-download"></i> Exports</a>
+                </li>
+                <li class="{{if eq .Section "monitoring"}}active{{end}}">
+                    <a href="/monitoring"><i class="fas fa-chart-line"></i> Monitoring</a>
+                </li>
+                <li class="{{if eq .Section "logs"}}active{{end}}">
+                    <a href="/logs"><i class="fas fa-file-alt"></i> Logs</a>
+                </li>
+            </ul>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="header">
+                <h1>{{block "header" .}}{{end}}</h1>
+                <div class="header-actions">
+                    <button class="btn btn-primary" id="refresh-btn">
+                        <i class="fas fa-sync-alt"></i> Refresh
+                    </button>
+                </div>
+            </header>
+
+            <div class="content">
+                {{block "content" .}}{{end}}
+            </div>
+        </main>
+    </div>
+
+    <!-- Toast notifications -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <script src="/static/js/app.js"></script>
+    {{block "scripts" .}}{{end}}
+</body>
+</html> 

@@ -1,0 +1,279 @@
+{{template "base.html" .}} {{define "header"}}Configuration{{end}} {{define
+"content"}}
+<div class="config">
+  <div class="section">
+    <h2>Trakt.tv Configuration</h2>
+    <div class="card">
+      <form id="trakt-config-form">
+        <div class="form-group">
+          <label for="client-id">Client ID</label>
+          <input
+            type="text"
+            id="client-id"
+            class="form-control"
+            placeholder="Enter your Trakt.tv Client ID"
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="api-base-url">API Base URL</label>
+          <input
+            type="url"
+            id="api-base-url"
+            class="form-control"
+            value="https://api.trakt.tv"
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="extended-info">Extended Info</label>
+          <select id="extended-info" class="form-control">
+            <option value="min">Minimal</option>
+            <option value="full">Full</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="rate-limit">Rate Limit (requests per minute)</label>
+          <input
+            type="number"
+            id="rate-limit"
+            class="form-control"
+            value="60"
+            min="1"
+            max="1000"
+          />
+        </div>
+
+        <div class="form-group">
+          <button
+            type="button"
+            class="btn btn-secondary"
+            onclick="testTraktConnection()"
+          >
+            <i class="fas fa-satellite-dish"></i> Test Connection
+          </button>
+          <button
+            type="button"
+            class="btn btn-primary"
+            onclick="authenticateTrakt()"
+          >
+            <i class="fas fa-key"></i> Authenticate with Trakt
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Export Configuration</h2>
+    <div class="card">
+      <form id="export-config-form">
+        <div class="form-group">
+          <label for="output-dir">Output Directory</label>
+          <input
+            type="text"
+            id="output-dir"
+            class="form-control"
+            placeholder="./exports"
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="format">Export Format</label>
+          <select id="format" class="form-control">
+            <option value="csv">CSV</option>
+            <option value="json">JSON</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="timezone">Timezone</label>
+          <input
+            type="text"
+            id="timezone"
+            class="form-control"
+            placeholder="UTC"
+          />
+        </div>
+
+        <div class="form-group">
+          <label>
+            <input type="checkbox" id="include-shows" /> Include TV Shows
+          </label>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Logging Configuration</h2>
+    <div class="card">
+      <form id="logging-config-form">
+        <div class="form-group">
+          <label for="log-level">Log Level</label>
+          <select id="log-level" class="form-control">
+            <option value="debug">Debug</option>
+            <option value="info">Info</option>
+            <option value="warn">Warning</option>
+            <option value="error">Error</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="log-format">Log Format</label>
+          <select id="log-format" class="form-control">
+            <option value="visual">Visual</option>
+            <option value="json">JSON</option>
+          </select>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="header-actions">
+      <button
+        type="button"
+        class="btn btn-success"
+        onclick="saveConfiguration()"
+      >
+        <i class="fas fa-save"></i> Save Configuration
+      </button>
+      <button
+        type="button"
+        class="btn btn-secondary"
+        onclick="loadConfiguration()"
+      >
+        <i class="fas fa-sync-alt"></i> Reload Configuration
+      </button>
+    </div>
+  </div>
+</div>
+{{end}} {{define "scripts"}}
+<script>
+  let currentConfig = {};
+
+  // Load configuration on page load
+  document.addEventListener("DOMContentLoaded", function () {
+    loadConfiguration();
+  });
+
+  function loadConfiguration() {
+    fetch("/api/v1/config")
+      .then((response) => response.json())
+      .then((data) => {
+        currentConfig = data;
+        populateForm(data);
+        showToast("Configuration loaded", "success");
+      })
+      .catch((error) => {
+        console.error("Failed to load configuration:", error);
+        showToast("Failed to load configuration", "error");
+      });
+  }
+
+  function populateForm(config) {
+    // Trakt configuration
+    document.getElementById("client-id").value = config.trakt.client_id || "";
+    document.getElementById("api-base-url").value =
+      config.trakt.api_base_url || "https://api.trakt.tv";
+    document.getElementById("extended-info").value =
+      config.trakt.extended_info || "min";
+    document.getElementById("rate-limit").value = config.trakt.rate_limit || 60;
+
+    // Export configuration
+    document.getElementById("output-dir").value =
+      config.export.output_dir || "./exports";
+    document.getElementById("format").value = config.export.format || "csv";
+    document.getElementById("timezone").value = config.export.timezone || "UTC";
+    document.getElementById("include-shows").checked =
+      config.export.include_shows || false;
+
+    // Logging configuration
+    document.getElementById("log-level").value = config.logging.level || "info";
+    document.getElementById("log-format").value =
+      config.logging.format || "visual";
+  }
+
+  function saveConfiguration() {
+    const config = {
+      trakt: {
+        client_id: document.getElementById("client-id").value,
+        api_base_url: document.getElementById("api-base-url").value,
+        extended_info: document.getElementById("extended-info").value,
+        rate_limit: parseInt(document.getElementById("rate-limit").value),
+      },
+      export: {
+        output_dir: document.getElementById("output-dir").value,
+        format: document.getElementById("format").value,
+        timezone: document.getElementById("timezone").value,
+        include_shows: document.getElementById("include-shows").checked,
+      },
+      logging: {
+        level: document.getElementById("log-level").value,
+        format: document.getElementById("log-format").value,
+      },
+      monitoring: currentConfig.monitoring || {},
+    };
+
+    fetch("/api/v1/config", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(config),
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        currentConfig = data;
+        showToast("Configuration saved successfully", "success");
+      })
+      .catch((error) => {
+        console.error("Failed to save configuration:", error);
+        showToast("Failed to save configuration", "error");
+      });
+  }
+
+  function testTraktConnection() {
+    fetch("/api/v1/config/test", {
+      method: "POST",
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        showToast(data.message, data.success ? "success" : "error");
+      })
+      .catch((error) => {
+        console.error("Connection test failed:", error);
+        showToast("Connection test failed", "error");
+      });
+  }
+
+  function authenticateTrakt() {
+    const clientId = document.getElementById("client-id").value;
+    if (!clientId) {
+      showToast("Please enter a Client ID first", "warning");
+      return;
+    }
+
+    // Open Trakt authentication in new window
+    const authUrl = `https://trakt.tv/oauth/authorize?response_type=code&client_id=${clientId}&redirect_uri=urn:ietf:wg:oauth:2.0:oob`;
+    const authWindow = window.open(
+      authUrl,
+      "traktAuth",
+      "width=600,height=700"
+    );
+
+    showToast("Please complete authentication in the popup window", "info");
+
+    // TODO: Handle the auth code return
+    // For now, just show a message
+    setTimeout(() => {
+      showToast(
+        "Authentication flow opened. Please copy the code and enter it manually.",
+        "info"
+      );
+    }, 2000);
+  }
+</script>
+{{end}}

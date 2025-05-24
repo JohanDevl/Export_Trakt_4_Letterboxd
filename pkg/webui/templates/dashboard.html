@@ -1,0 +1,251 @@
+{{template "base.html" .}} {{define "header"}}Dashboard{{end}} {{define
+"content"}}
+<div class="dashboard">
+  <!-- Status Cards -->
+  <div class="cards-grid">
+    <div class="card status-card">
+      <div class="card-icon healthy">
+        <i class="fas fa-heart"></i>
+      </div>
+      <div class="card-content">
+        <h3>System Health</h3>
+        <p class="status" id="system-status">Checking...</p>
+      </div>
+    </div>
+
+    <div class="card status-card">
+      <div class="card-icon">
+        <i class="fas fa-cloud"></i>
+      </div>
+      <div class="card-content">
+        <h3>Trakt Connection</h3>
+        <p class="status" id="trakt-status">Checking...</p>
+      </div>
+    </div>
+
+    <div class="card status-card">
+      <div class="card-icon">
+        <i class="fas fa-download"></i>
+      </div>
+      <div class="card-content">
+        <h3>Last Export</h3>
+        <p class="status" id="last-export">Loading...</p>
+      </div>
+    </div>
+
+    <div class="card status-card">
+      <div class="card-icon">
+        <i class="fas fa-clock"></i>
+      </div>
+      <div class="card-content">
+        <h3>Uptime</h3>
+        <p class="status" id="uptime">Loading...</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Quick Actions -->
+  <div class="section">
+    <h2>Quick Actions</h2>
+    <div class="actions-grid">
+      <button class="action-card" onclick="startExport()">
+        <i class="fas fa-play"></i>
+        <span>Start Export</span>
+      </button>
+      <button class="action-card" onclick="window.location.href='/config'">
+        <i class="fas fa-cog"></i>
+        <span>Configure</span>
+      </button>
+      <button class="action-card" onclick="window.location.href='/exports'">
+        <i class="fas fa-history"></i>
+        <span>View Exports</span>
+      </button>
+      <button class="action-card" onclick="testConnection()">
+        <i class="fas fa-satellite-dish"></i>
+        <span>Test API</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Recent Activity -->
+  <div class="section">
+    <h2>Recent Activity</h2>
+    <div class="activity-list" id="activity-list">
+      <div class="activity-item">
+        <i class="fas fa-info-circle"></i>
+        <span>Loading recent activity...</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- System Metrics -->
+  <div class="section">
+    <h2>System Metrics</h2>
+    <div class="metrics-grid">
+      <div class="metric-card">
+        <h4>Memory Usage</h4>
+        <div class="metric-value" id="memory-usage">--</div>
+        <div class="metric-bar">
+          <div class="metric-progress" id="memory-progress"></div>
+        </div>
+      </div>
+      <div class="metric-card">
+        <h4>Goroutines</h4>
+        <div class="metric-value" id="goroutines">--</div>
+      </div>
+      <div class="metric-card">
+        <h4>API Calls</h4>
+        <div class="metric-value" id="api-calls">--</div>
+      </div>
+    </div>
+  </div>
+</div>
+{{end}} {{define "scripts"}}
+<script>
+  let ws;
+
+  // Initialize dashboard
+  document.addEventListener("DOMContentLoaded", function () {
+    loadDashboardData();
+    connectWebSocket();
+
+    // Refresh every 30 seconds
+    setInterval(loadDashboardData, 30000);
+  });
+
+  function loadDashboardData() {
+    // Load health status
+    fetch("/api/v1/health")
+      .then((response) => response.json())
+      .then((data) => {
+        document.getElementById("system-status").textContent = data.status;
+        document.getElementById("uptime").textContent = data.uptime;
+
+        const statusEl = document.getElementById("system-status");
+        statusEl.className = "status " + data.status;
+      })
+      .catch((error) => {
+        document.getElementById("system-status").textContent = "Error";
+        console.error("Health check failed:", error);
+      });
+
+    // Load metrics
+    fetch("/api/v1/metrics")
+      .then((response) => response.json())
+      .then((data) => {
+        const memUsed = Math.round(data.runtime.heap_alloc / 1024 / 1024);
+        const memTotal = Math.round(data.runtime.heap_sys / 1024 / 1024);
+        const memPercent = Math.round(
+          (data.runtime.heap_alloc / data.runtime.heap_sys) * 100
+        );
+
+        document.getElementById(
+          "memory-usage"
+        ).textContent = `${memUsed}MB / ${memTotal}MB`;
+        document.getElementById(
+          "memory-progress"
+        ).style.width = `${memPercent}%`;
+        document.getElementById("goroutines").textContent =
+          data.runtime.goroutines;
+      })
+      .catch((error) => console.error("Metrics failed:", error));
+
+    // Load exports
+    fetch("/api/v1/exports")
+      .then((response) => response.json())
+      .then((data) => {
+        if (data.length > 0) {
+          const lastExport = data[0];
+          document.getElementById("last-export").textContent = new Date(
+            lastExport.created_at
+          ).toLocaleString();
+        } else {
+          document.getElementById("last-export").textContent = "No exports yet";
+        }
+      })
+      .catch((error) => console.error("Exports failed:", error));
+
+    // Load logs for recent activity
+    fetch("/api/v1/logs")
+      .then((response) => response.json())
+      .then((data) => {
+        const activityList = document.getElementById("activity-list");
+        activityList.innerHTML = "";
+
+        data.slice(0, 5).forEach((log) => {
+          const item = document.createElement("div");
+          item.className = "activity-item";
+          item.innerHTML = `
+                    <i class="fas fa-${getLogIcon(log.level)}"></i>
+                    <span>${log.message}</span>
+                    <time>${new Date(log.timestamp).toLocaleTimeString()}</time>
+                `;
+          activityList.appendChild(item);
+        });
+      })
+      .catch((error) => console.error("Logs failed:", error));
+  }
+
+  function connectWebSocket() {
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    ws = new WebSocket(`${protocol}//${window.location.host}/api/v1/ws`);
+
+    ws.onmessage = function (event) {
+      // Handle real-time updates
+      console.log("WebSocket message:", event.data);
+    };
+
+    ws.onclose = function () {
+      // Reconnect after 5 seconds
+      setTimeout(connectWebSocket, 5000);
+    };
+  }
+
+  function startExport() {
+    fetch("/api/v1/exports", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        showToast(data.message, "success");
+        loadDashboardData();
+      })
+      .catch((error) => {
+        showToast("Failed to start export", "error");
+        console.error("Export failed:", error);
+      });
+  }
+
+  function testConnection() {
+    fetch("/api/v1/config/test", {
+      method: "POST",
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        showToast(data.message, data.success ? "success" : "error");
+      })
+      .catch((error) => {
+        showToast("Connection test failed", "error");
+        console.error("Connection test failed:", error);
+      });
+  }
+
+  function getLogIcon(level) {
+    switch (level) {
+      case "error":
+        return "exclamation-triangle";
+      case "warn":
+        return "exclamation-circle";
+      case "info":
+        return "info-circle";
+      case "debug":
+        return "bug";
+      default:
+        return "circle";
+    }
+  }
+</script>
+{{end}}
