@@ -1,0 +1,275 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+#                            EXPORT TRAKT FOR LETTERBOXD
+#                           Performance Configuration
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# 🚀 Performance Optimization Settings
+#    This file contains all performance improvements implemented for optimal
+#    processing speed, memory usage, and system resource management.
+#
+# 💡 Tips:
+#   - Adjust worker_pool_size based on your CPU cores (0 = auto-detect)
+#   - Enable caching for faster repeated operations
+#   - Monitor memory usage and adjust limits accordingly
+#   - Use streaming for large datasets to reduce memory footprint
+#
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# ┌─────────────────────────────────────────────────────────────────────────────┐
+# │                        🚀 GENERAL PERFORMANCE SETTINGS                     │
+# └─────────────────────────────────────────────────────────────────────────────┘
+[performance]
+# Enable performance optimizations globally
+enabled = true
+
+# 👷 Worker pool size for concurrent processing
+# Set to 0 for auto-detection based on CPU cores
+# Recommended: Number of CPU cores or slightly higher
+worker_pool_size = 10
+
+# 🌐 API rate limiting (requests per second)
+# Prevents overwhelming external APIs while maintaining speed
+api_rate_limit = 100
+
+# 📊 Streaming processing threshold (items count)
+# Switch to streaming mode when processing more than this number of items
+# Helps reduce memory usage for large datasets
+streaming_threshold = 1000
+
+# 📈 Enable profiling and monitoring
+# Useful for development and debugging performance issues
+enable_profiling = false
+
+# 💾 Memory limit enforcement (MB)
+# Hard limit to prevent excessive memory usage
+memory_limit_mb = 512
+
+# ┌─────────────────────────────────────────────────────────────────────────────┐
+# │                           🗄️  CACHING CONFIGURATION                        │
+# └─────────────────────────────────────────────────────────────────────────────┘
+[cache]
+# Enable intelligent caching system
+enabled = true
+
+# ⏰ Cache Time-To-Live in hours
+# How long cached data remains valid
+ttl_hours = 24
+
+# 📚 Maximum cache entries
+# Prevents unlimited cache growth
+max_entries = 10000
+
+# 💽 Cache size limit in MB
+# Total memory allocated for caching
+size_mb = 256
+
+# 🔄 Persist cache to disk
+# Maintains cache between application restarts
+persist_to_disk = true
+
+# 🧹 Cache cleanup interval in minutes
+# Regular cleanup to remove expired entries
+cleanup_interval_minutes = 30
+
+# ┌─────────────────────────────────────────────────────────────────────────────┐
+# │                        ⚡ CONCURRENCY OPTIMIZATION                         │
+# └─────────────────────────────────────────────────────────────────────────────┘
+[concurrency]
+# 🔗 Maximum concurrent API calls
+# Balance between speed and server load
+max_concurrent_api_calls = 20
+
+# 🌐 HTTP connection pool size
+# Reuse connections for better performance
+http_connection_pool = 20
+
+# ⏱️  HTTP request timeout in seconds
+# Prevents hanging requests
+http_timeout_seconds = 30
+
+# 🚄 Enable HTTP/2 protocol
+# Modern protocol for better performance
+enable_http2 = true
+
+# 📦 Enable response compression
+# Reduces bandwidth usage and transfer time
+enable_compression = true
+
+# ┌─────────────────────────────────────────────────────────────────────────────┐
+# │                         🧠 MEMORY OPTIMIZATION                             │
+# └─────────────────────────────────────────────────────────────────────────────┘
+[memory]
+# 🎯 Enable memory optimization techniques
+optimize_memory = true
+
+# 🏊 Use memory pooling
+# Reuse memory allocations to reduce garbage collection
+use_memory_pools = true
+
+# 🗑️  Garbage collection tuning
+# Target percentage for GC trigger (100 = default Go behavior)
+gc_target_percentage = 100
+
+# 🌊 Enable streaming for large datasets
+# Process data in chunks to reduce memory footprint
+enable_streaming = true
+
+# 📊 I/O buffer size in KB
+# Size of buffers for file and network operations
+io_buffer_size_kb = 64
+
+# ┌─────────────────────────────────────────────────────────────────────────────┐
+# │                      📊 MONITORING AND METRICS                             │
+# └─────────────────────────────────────────────────────────────────────────────┘
+[monitoring]
+# 👀 Enable performance monitoring
+enabled = true
+
+# 📈 Metrics collection interval in seconds
+# How often to collect performance metrics
+metrics_interval_seconds = 30
+
+# 🔧 Profiling HTTP server port (0 = disabled)
+# Access profiling data via http://localhost:6060/debug/pprof/
+profiling_port = 6060
+
+# 🧠 Enable memory monitoring
+# Track memory usage patterns and alerts
+memory_monitoring = true
+
+# ⏱️  Memory check interval in seconds
+# How often to check memory usage
+memory_check_interval_seconds = 30
+
+# 🚨 Alert thresholds
+# Percentage of memory limit that triggers alerts
+memory_warning_threshold_percentage = 80   # Yellow alert
+memory_critical_threshold_percentage = 90  # Red alert
+
+# ┌─────────────────────────────────────────────────────────────────────────────┐
+# │                        📊 PROGRESS REPORTING                               │
+# └─────────────────────────────────────────────────────────────────────────────┘
+[progress]
+# 📋 Enable progress reporting
+enabled = true
+
+# ⚡ Progress update interval in milliseconds
+# How often to update progress indicators
+update_interval_ms = 1000
+
+# 🔴 Enable real-time progress updates
+# Live updates in terminal/UI
+real_time_updates = true
+
+# ┌─────────────────────────────────────────────────────────────────────────────┐
+# │                      ⚙️  PROCESSING OPTIMIZATION                          │
+# └─────────────────────────────────────────────────────────────────────────────┘
+[optimization]
+# 📦 Batch size for processing operations
+# Process items in batches for better efficiency
+batch_size = 100
+
+# 🔄 Enable incremental processing
+# Only process new or changed data
+incremental_processing = true
+
+# 🎯 Enable deduplication
+# Remove duplicate entries to save processing time
+enable_deduplication = true
+
+# 🏗️  Use efficient data structures
+# Optimize internal data structures for performance
+use_efficient_structures = true
+
+# 🔄 Enable background processing
+# Perform non-critical tasks in background
+background_processing = true
+
+# ┌─────────────────────────────────────────────────────────────────────────────┐
+# │                        🗃️  DATABASE CONFIGURATION                         │
+# └─────────────────────────────────────────────────────────────────────────────┘
+[database]
+# 🏊 Database connection pool size
+# Number of concurrent database connections (if using database features)
+connection_pool_size = 10
+
+# ⏱️  Connection timeout in seconds
+# Time to wait for database connection
+connection_timeout_seconds = 30
+
+# 🔍 Query timeout in seconds
+# Maximum time for database queries
+query_timeout_seconds = 60
+
+# 📝 Enable prepared statements
+# Optimize repeated queries for better performance
+use_prepared_statements = true
+
+# ┌─────────────────────────────────────────────────────────────────────────────┐
+# │                         📤 EXPORT OPTIMIZATION                             │
+# └─────────────────────────────────────────────────────────────────────────────┘
+[export]
+# 📊 Export buffer size (items)
+# Number of items to buffer before writing to file
+buffer_size = 1000
+
+# ⚡ Enable parallel exports
+# Export multiple files simultaneously
+parallel_exports = true
+
+# 🗜️  Export file compression
+# Compress export files to save disk space
+enable_file_compression = false
+
+# 🧹 Temporary file cleanup
+# Automatically remove temporary files after export
+cleanup_temp_files = true
+
+# 💾 Write buffer size in KB
+# Size of buffer for file write operations
+write_buffer_size_kb = 256
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#                                📚 PERFORMANCE NOTES
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# 🎯 Tuning Guidelines:
+#
+# 1. CPU Optimization:
+#    - Set worker_pool_size to match your CPU cores
+#    - Enable background_processing for non-critical tasks
+#    - Use efficient_structures for better CPU cache usage
+#
+# 2. Memory Management:
+#    - Adjust memory_limit_mb based on available system RAM
+#    - Enable streaming for large datasets (>1000 items)
+#    - Use memory pools to reduce garbage collection pressure
+#
+# 3. Network Performance:
+#    - Tune max_concurrent_api_calls based on API limits
+#    - Enable HTTP/2 and compression for better throughput
+#    - Adjust timeouts based on network conditions
+#
+# 4. Disk I/O:
+#    - Increase buffer sizes for better I/O performance
+#    - Enable parallel exports for multiple files
+#    - Consider file compression for storage savings
+#
+# 5. Monitoring:
+#    - Enable profiling during development/debugging
+#    - Monitor memory thresholds to prevent OOM conditions
+#    - Use metrics to identify performance bottlenecks
+#
+# 🚀 Performance Tips:
+#    - Start with default values and adjust based on monitoring
+#    - Test different configurations with your specific data size
+#    - Monitor system resources during processing
+#    - Enable caching for repeated operations
+#
+# 📊 Troubleshooting:
+#    - High memory usage: Reduce buffer sizes and enable streaming
+#    - Slow processing: Increase worker pool and concurrent API calls
+#    - API timeouts: Reduce rate limits and concurrent calls
+#    - Disk full: Enable compression and cleanup temporary files
+#
+# ═══════════════════════════════════════════════════════════════════════════════ 

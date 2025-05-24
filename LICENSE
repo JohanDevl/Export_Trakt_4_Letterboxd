@@ -19,15 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
----
-
-## Attribution
-
-This project builds upon the original work by Thierry Beugnet (u2pitchjami)
-and has been significantly enhanced and modernized by Johan Devlaminck (JohanDevl).
-
-Original repository: https://github.com/u2pitchjami/Export_Trakt_4_Letterboxd
-Current repository: https://github.com/JohanDevl/Export_Trakt_4_Letterboxd
-
-Both original and derivative works are licensed under the MIT License.
