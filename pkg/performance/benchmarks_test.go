@@ -139,15 +139,16 @@ func BenchmarkMemoryAllocation(b *testing.B) {
 	b.Run("WithPool", func(b *testing.B) {
 		pool := &sync.Pool{
 			New: func() interface{} {
-				return make([]byte, 1024)
+				data := make([]byte, 1024)
+				return &data
 			},
 		}
 		
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			data := pool.Get().([]byte)
+			data := pool.Get().(*[]byte)
 			// Simulate work
-			_ = data
+			_ = *data
 			pool.Put(data)
 		}
 	})
