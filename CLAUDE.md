@@ -52,6 +52,12 @@ docker compose --profile dev --profile schedule-test up -d --build  # Test sched
 
 ### Application Usage
 ```bash
+# OAuth Authentication (required for first use)
+./export_trakt auth
+
+# Check token status
+./export_trakt token-status
+
 # One-time export
 ./export_trakt --run --export all --mode complete
 
@@ -70,6 +76,7 @@ docker compose --profile dev --profile schedule-test up -d --build  # Test sched
 ### Core Packages Structure
 - **cmd/export_trakt/** - Main application entry point with CLI handling
 - **pkg/api/** - Trakt.tv API client with optimized HTTP client and retry logic
+- **pkg/auth/** - OAuth 2.0 authentication and token management
 - **pkg/config/** - Configuration management with TOML support
 - **pkg/export/** - CSV export functionality for Letterboxd format
 - **pkg/scheduler/** - Cron-based scheduling system
@@ -88,7 +95,8 @@ docker compose --profile dev --profile schedule-test up -d --build  # Test sched
 3. **Streaming Processor** (`pkg/streaming/`) - Memory-efficient processing of large datasets
 
 **Security Layer**: Enterprise-grade security with:
-- **Keyring Integration** (`pkg/security/keyring/`) - Secure credential storage
+- **OAuth 2.0 Authentication** (`pkg/auth/`) - Modern OAuth 2.0 authentication with automatic token refresh
+- **Keyring Integration** (`pkg/security/keyring/`) - Secure credential storage across multiple backends
 - **Encryption** (`pkg/security/encryption/`) - AES encryption for sensitive data
 - **Audit Logging** (`pkg/security/audit/`) - Comprehensive security event logging
 - **Rate Limiting** (`pkg/security/ratelimit.go`) - API rate limiting protection
@@ -119,7 +127,9 @@ Key configuration files:
 ## Security Considerations
 
 The application implements multiple security layers:
+- **OAuth 2.0 Authentication**: Modern authentication flow with PKCE and automatic token refresh
 - **Credential Management**: Uses system keyring, environment variables, or encrypted files
+- **Multi-Backend Token Storage**: Supports system keyring, file encryption, and environment variables
 - **HTTPS Enforcement**: Configurable requirement for HTTPS-only communications
 - **Input Validation**: Comprehensive sanitization and validation
 - **Audit Logging**: Detailed security event logging with configurable retention

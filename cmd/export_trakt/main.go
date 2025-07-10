@@ -124,7 +124,18 @@ func main() {
 	case "env":
 		keyringMgr, err = keyring.NewManager(keyring.EnvBackend)
 	case "file":
-		keyringMgr, err = keyring.NewManager(keyring.FileBackend)
+		// For file backend, we need to provide options
+		var options []keyring.Option
+		if cfg.Security.EncryptionEnabled {
+			// Generate a simple encryption key for demo purposes
+			key := make([]byte, 32) // AES-256 key
+			for i := range key {
+				key[i] = byte(i % 256) // Simple pattern for demo
+			}
+			options = append(options, keyring.WithEncryptionKey(key))
+		}
+		options = append(options, keyring.WithFilePath("./config/credentials.enc"))
+		keyringMgr, err = keyring.NewManager(keyring.FileBackend, options...)
 	default:
 		keyringMgr, err = keyring.NewManager(keyring.SystemBackend)
 	}
@@ -384,9 +395,52 @@ func runExportOnce(cfg *config.Config, log logger.Logger, exportType, exportMode
 		"timestamp":   time.Now().Format(time.RFC3339),
 	})
 
-	// Initialize Trakt client
+	// Initialize security manager and keyring
+	securityManager, err := security.NewManager(cfg.Security)
+	if err != nil {
+		log.Error("errors.security_manager_failed", map[string]interface{}{"error": err.Error()})
+		os.Exit(1)
+	}
+	defer securityManager.Close()
+
+	var keyringMgr *keyring.Manager
+	switch cfg.Security.KeyringBackend {
+	case "system":
+		keyringMgr, err = keyring.NewManager(keyring.SystemBackend)
+	case "env":
+		keyringMgr, err = keyring.NewManager(keyring.EnvBackend)
+	case "file":
+		// For file backend, we need to provide options
+		var options []keyring.Option
+		if cfg.Security.EncryptionEnabled {
+			// Generate a simple encryption key for demo purposes
+			key := make([]byte, 32) // AES-256 key
+			for i := range key {
+				key[i] = byte(i % 256) // Simple pattern for demo
+			}
+			options = append(options, keyring.WithEncryptionKey(key))
+		}
+		options = append(options, keyring.WithFilePath("./config/credentials.enc"))
+		keyringMgr, err = keyring.NewManager(keyring.FileBackend, options...)
+	default:
+		keyringMgr, err = keyring.NewManager(keyring.SystemBackend)
+	}
+	if err != nil {
+		log.Error("errors.keyring_manager_failed", map[string]interface{}{"error": err.Error()})
+		os.Exit(1)
+	}
+
+	// Initialize token manager
+	tokenManager := auth.NewTokenManager(cfg, log, keyringMgr)
+
+	// Initialize Trakt client with token management
 	log.Info("export.initializing_trakt_client", nil)
-	traktClient := api.NewClient(cfg, log)
+	var traktClient *api.Client
+	if cfg.Auth.UseOAuth {
+		traktClient = api.NewClientWithTokenManager(cfg, log, tokenManager)
+	} else {
+		traktClient = api.NewClient(cfg, log)
+	}
 	
 	// Initialize Letterboxd exporter
 	log.Info("export.initializing_letterboxd_exporter", nil)
