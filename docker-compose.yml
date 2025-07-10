@@ -41,6 +41,8 @@ services:
     environment:
       - TZ=Europe/Paris
       - LOG_LEVEL=info
+      - TRAKT_CLIENT_ID=c479b2e7dc4fbec157d89cd4cba9cf88fc614de7ec17813fc9f5bac92e1c8786
+      - TRAKT_CLIENT_SECRET=dc25b9c7cbe7346b9ff65d545ddbc8d1fe645268d42b6a105b3da249dc73fb2a
     command: ["server"]
 
   # Normal export (production)

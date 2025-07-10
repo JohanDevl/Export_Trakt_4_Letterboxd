@@ -1,31 +1,28 @@
 # ═══════════════════════════════════════════════════════════════════════════════
 #                            EXPORT TRAKT FOR LETTERBOXD
-#                              Configuration Template
+#                              Active Configuration
 # ═══════════════════════════════════════════════════════════════════════════════
 #
-# 📋 Instructions:
-#   1. Copy this file to 'config.toml'
-#   2. Replace placeholder values with your actual credentials
-#   3. Customize settings according to your preferences
+#  This file contains your real API credentials - NEVER commit to version control
+#  For template/example, see: config.example.toml
 #
-# 🔗 Get API credentials: https://trakt.tv/oauth/applications
-# 📖 Documentation: https://github.com/JohanDevl/Export_Trakt_4_Letterboxd
+#  API credentials from: https://trakt.tv/oauth/applications
+#  Documentation: https://github.com/JohanDevl/Export_Trakt_4_Letterboxd
 #
 # ═══════════════════════════════════════════════════════════════════════════════
-
-# Export Trakt 4 Letterboxd Configuration File
-# This is an example configuration file with enhanced security features
 
 # ┌─────────────────────────────────────────────────────────────────────────────┐
 # │                           🔑 TRAKT.TV API SETTINGS                         │
 # └─────────────────────────────────────────────────────────────────────────────┘
 [trakt]
-# Trakt.tv API configuration
-# Note: With OAuth enabled, only client_id and client_secret are required
-client_id = "your_trakt_client_id"           # Required for OAuth flow
-client_secret = "your_trakt_client_secret"   # Required for OAuth flow
-access_token = ""                            # Legacy: Optional, will be obtained automatically via OAuth
-api_base_url = "https://api.trakt.tv"        # HTTPS enforced when security.require_https = true
+#  Your Trakt.tv application credentials
+# ✅ CONFIGURED: Real credentials in use
+client_id = "c479b2e7dc4fbec157d89cd4cba9cf88fc614de7ec17813fc9f5bac92e1c8786"
+client_secret = "dc25b9c7cbe7346b9ff65d545ddbc8d1fe645268d42b6a105b3da249dc73fb2a"
+access_token = ""
+
+#  API endpoint (don't change unless you know what you're doing)
+api_base_url = "https://api.trakt.tv"
 
 # 📊 Data detail level for exports
 # Options: "min" | "full" | "metadata" | "letterboxd"
@@ -36,8 +33,10 @@ extended_info = "full"
 # │                        📽️  LETTERBOXD EXPORT SETTINGS                     │
 # └─────────────────────────────────────────────────────────────────────────────┘
 [letterboxd]
+#  Directory where export files will be saved
+export_dir = "exports"
+
 # Letterboxd export configuration
-export_dir = "./exports"
 watched_filename = "watched.csv"
 collection_filename = "watchlist.csv"
 shows_filename = "shows.csv"
@@ -54,7 +53,7 @@ letterboxd_import_filename = "letterboxd_import.csv"
 # │                          ⚙️  GENERAL EXPORT SETTINGS                      │
 # └─────────────────────────────────────────────────────────────────────────────┘
 [export]
-# Export format settings
+#  Export file format
 format = "csv"
 
 # 📅 Date format in exports (Go time layout)
@@ -64,14 +63,15 @@ date_format = "2006-01-02"
 # 🌍 Timezone for export timestamps
 # Examples: "Europe/Paris", "America/New_York", "Asia/Tokyo"
 # 💡 Leave empty "" to use UTC
-timezone = "UTC"
+#  CONFIGURED: Using Paris timezone
+timezone = "Europe/Paris"
 
 # ┌─────────────────────────────────────────────────────────────────────────────┐
 # │                            📝 LOGGING CONFIGURATION                        │
 # └─────────────────────────────────────────────────────────────────────────────┘
 [logging]
 # Application logging configuration
-level = "info"                    # debug, info, warn, error, fatal
+level = "debug"                   # debug, info, warn, error, fatal - DEVELOPMENT MODE
 format = "visual"                 # visual, json, text
 output = "stdout"                 # stdout, stderr, file
 rotation_enabled = false          # Enable log rotation
@@ -81,30 +81,30 @@ max_backups = 3                  # Maximum number of backup files
 correlation_id = true            # Enable correlation IDs for request tracing
 
 # 📄 Log file location (when output = "file")
-file = "./logs/app.log"
+file = "logs/export.log"
 
 # ┌─────────────────────────────────────────────────────────────────────────────┐
 # │                        📊 MONITORING AND OBSERVABILITY                     │
 # └─────────────────────────────────────────────────────────────────────────────┘
 [monitoring]
-# Enable monitoring and observability features
-enabled = true
-metrics_enabled = true            # Enable Prometheus metrics
-tracing_enabled = true            # Enable OpenTelemetry tracing
-health_checks_enabled = true      # Enable health check endpoints
+# Enable monitoring and observability features - DISABLED FOR DEVELOPMENT
+enabled = false
+metrics_enabled = false           # Enable Prometheus metrics
+tracing_enabled = false           # Enable OpenTelemetry tracing
+health_checks_enabled = false     # Enable health check endpoints
 metrics_port = 9090              # Port for metrics and health endpoints
 metrics_path = "/metrics"        # Path for Prometheus metrics
 
-# Tracing configuration (OpenTelemetry)
+# Tracing configuration (OpenTelemetry) - DISABLED FOR DEVELOPMENT
 [tracing]
-enabled = true
+enabled = false
 service_name = "export-trakt-letterboxd"
 service_version = "1.0.0"
-environment = "production"       # production, staging, development
+environment = "development"       # production, staging, development
 jaeger_endpoint = "http://localhost:14268/api/traces"  # Optional Jaeger endpoint
 sampling_rate = 0.1             # Sampling rate (0.0 to 1.0, 0.1 = 10% of traces)
 
-# Alerting configuration
+# Alerting configuration - DISABLED FOR DEVELOPMENT
 [alerts]
 webhook_url = ""                 # Optional webhook URL for alerts
 email_enabled = false            # Enable email alerts
@@ -115,7 +115,7 @@ rate_limit_minutes = 5          # Rate limit for alerts (prevent spam)
 # │                      🌐 INTERNATIONALIZATION SETTINGS                     │
 # └─────────────────────────────────────────────────────────────────────────────┘
 [i18n]
-# Internationalization settings
+# ️ Default language for the application
 default_language = "en"
 
 # 🌏 Current language setting
@@ -123,25 +123,27 @@ default_language = "en"
 language = "en"
 
 # 📁 Directory containing translation files
-locales_dir = "./locales"
+locales_dir = "locales"
 
-# 🔒 Enhanced Security Configuration
+# ┌─────────────────────────────────────────────────────────────────────────────┐
+# │                           🔒 ENHANCED SECURITY CONFIGURATION               │
+# └─────────────────────────────────────────────────────────────────────────────┘
 [security]
-# Enable encryption for sensitive data storage
+# Enable encryption for sensitive data storage - SIMPLIFIED FOR DEVELOPMENT
 encryption_enabled = true
 
 # Keyring backend for credential storage
 # Options: "system" (OS keychain), "env" (environment variables), "file" (encrypted file)
-keyring_backend = "system"
+keyring_backend = "env"
 
-# Enable comprehensive audit logging
-audit_logging = true
+# Enable comprehensive audit logging - DISABLED FOR DEVELOPMENT
+audit_logging = false
 
-# Enable rate limiting for API calls
-rate_limit_enabled = true
+# Enable rate limiting for API calls - DISABLED FOR DEVELOPMENT
+rate_limit_enabled = false
 
-# Require HTTPS for all external communications
-require_https = true
+# Require HTTPS for all external communications - DISABLED FOR DEVELOPMENT
+require_https = false
 
 # Audit logging configuration
 [security.audit]
@@ -157,7 +159,58 @@ include_sensitive = false
 # Audit log output format: json, text
 output_format = "json"
 
-# 📝 Security Configuration Guidelines
+# ┌─────────────────────────────────────────────────────────────────────────────┐
+# │                           🌐 WEB SERVER CONFIGURATION                      │
+# └─────────────────────────────────────────────────────────────────────────────┘
+[webserver]
+# Web server host and port configuration - DEVELOPMENT SETTINGS
+host = "localhost"               # Server host (use 0.0.0.0 for all interfaces)
+port = 8080                     # Server port - STANDARD PORT
+
+# TLS/HTTPS configuration (optional) - DISABLED FOR DEVELOPMENT
+tls_cert = ""                   # Path to TLS certificate file (leave empty for HTTP)
+tls_key = ""                    # Path to TLS private key file (leave empty for HTTP)
+
+# JWT secret for authentication - DEVELOPMENT SECRET
+jwt_secret = "development-jwt-secret-key-for-testing-only"
+
+# Debug mode (enables additional logging and development features) - ENABLED FOR DEVELOPMENT
+debug = true                    # Set to true for development
+
+# ┌─────────────────────────────────────────────────────────────────────────────┐
+# │                        🔐 OAUTH AUTHENTICATION SETTINGS                   │
+# └─────────────────────────────────────────────────────────────────────────────┘
+[auth]
+# OAuth 2.0 authentication configuration
+use_oauth = true                              # Enable OAuth authentication (recommended)
+auto_refresh = true                           # Automatically refresh expired tokens
+
+# OAuth callback configuration
+# For development: using localhost
+redirect_uri = "http://localhost:8089/callback"  # Must match your Trakt.tv app settings
+callback_port = 8089                             # Port for local callback server
+
+# Alternative configurations:
+# For production Docker machine: "http://192.168.1.24:8089/callback"
+# For different port: change both redirect_uri and callback_port to match
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#                                    📚 NOTES
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# 🔐 Security: This file contains real credentials - keep it private!
+# 📖 For more options, check the project documentation
+# 🐛 Issues? Report them at: https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/issues
+#
+# 📝 Development Configuration
+# This configuration is optimized for development and testing:
+# - Debug mode enabled
+# - Monitoring/tracing disabled
+# - Security features simplified
+# - Port 808 for development
+# - Real Trakt.tv credentials for testing
+#
+# 🔐 Security Configuration Guidelines
 #
 # 1. Credential Management:
 #    - Use "system" keyring backend for maximum security on desktop systems
@@ -199,37 +252,5 @@ output_format = "json"
 # TRAKT_CLIENT_ID=your_client_id_here
 # TRAKT_CLIENT_SECRET=your_client_secret_here
 # ENCRYPTION_KEY=base64_encoded_32_byte_key_here
-
-# ┌─────────────────────────────────────────────────────────────────────────────┐
-# │                        🔐 OAUTH AUTHENTICATION SETTINGS                   │
-# └─────────────────────────────────────────────────────────────────────────────┘
-[auth]
-# OAuth 2.0 authentication configuration
-use_oauth = true                              # Enable OAuth authentication (recommended)
-auto_refresh = true                           # Automatically refresh expired tokens
-
-# OAuth callback configuration
-redirect_uri = "http://localhost:8080/callback"  # Must match your Trakt.tv app settings
-callback_port = 8080                             # Port for local callback server
-
-# 🚀 Quick Start with OAuth:
-# 1. Configure your Trakt.tv app with the redirect_uri above
-# 2. Run: docker exec -it <container> /app/export-trakt auth
-# 3. Follow the interactive authentication flow
-# 4. Tokens will be automatically managed and refreshed
-
-# 💡 OAuth Commands:
-# - auth            : Interactive OAuth authentication
-# - token-status    : Check current token status
-# - token-refresh   : Manually refresh access token
-# - token-clear     : Clear all stored tokens
-
-# ═══════════════════════════════════════════════════════════════════════════════
-#                                    📚 NOTES
-# ═══════════════════════════════════════════════════════════════════════════════
-#
-# 🔐 Security: Never commit config.toml with real credentials to version control
-# 📖 For more options, check the project documentation
-# 🐛 Issues? Report them at: https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/issues
 #
 # ═══════════════════════════════════════════════════════════════════════════════ 
