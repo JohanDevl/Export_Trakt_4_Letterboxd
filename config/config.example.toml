@@ -21,10 +21,10 @@
 # └─────────────────────────────────────────────────────────────────────────────┘
 [trakt]
 # Trakt.tv API configuration
-# Note: With enhanced security, credentials should be stored securely using keyring
-client_id = "your_trakt_client_id"           # Will be stored in keyring if security is enabled
-client_secret = "your_trakt_client_secret"   # Will be stored in keyring if security is enabled
-access_token = ""                            # Optional, will be obtained during OAuth flow
+# Note: With OAuth enabled, only client_id and client_secret are required
+client_id = "your_trakt_client_id"           # Required for OAuth flow
+client_secret = "your_trakt_client_secret"   # Required for OAuth flow
+access_token = ""                            # Legacy: Optional, will be obtained automatically via OAuth
 api_base_url = "https://api.trakt.tv"        # HTTPS enforced when security.require_https = true
 
 # 📊 Data detail level for exports
@@ -199,6 +199,30 @@ output_format = "json"
 # TRAKT_CLIENT_ID=your_client_id_here
 # TRAKT_CLIENT_SECRET=your_client_secret_here
 # ENCRYPTION_KEY=base64_encoded_32_byte_key_here
+
+# ┌─────────────────────────────────────────────────────────────────────────────┐
+# │                        🔐 OAUTH AUTHENTICATION SETTINGS                   │
+# └─────────────────────────────────────────────────────────────────────────────┘
+[auth]
+# OAuth 2.0 authentication configuration
+use_oauth = true                              # Enable OAuth authentication (recommended)
+auto_refresh = true                           # Automatically refresh expired tokens
+
+# OAuth callback configuration
+redirect_uri = "http://localhost:8080/callback"  # Must match your Trakt.tv app settings
+callback_port = 8080                             # Port for local callback server
+
+# 🚀 Quick Start with OAuth:
+# 1. Configure your Trakt.tv app with the redirect_uri above
+# 2. Run: docker exec -it <container> /app/export-trakt auth
+# 3. Follow the interactive authentication flow
+# 4. Tokens will be automatically managed and refreshed
+
+# 💡 OAuth Commands:
+# - auth            : Interactive OAuth authentication
+# - token-status    : Check current token status
+# - token-refresh   : Manually refresh access token
+# - token-clear     : Clear all stored tokens
 
 # ═══════════════════════════════════════════════════════════════════════════════
 #                                    📚 NOTES

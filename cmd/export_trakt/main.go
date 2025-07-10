@@ -10,12 +10,14 @@ import (
 	"time"
 
 	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/api"
+	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/auth"
 	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/config"
 	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/export"
 	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/i18n"
 	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/logger"
 	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/scheduler"
 	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/security"
+	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/security/keyring"
 	"github.com/robfig/cron/v3"
 )
 
@@ -107,8 +109,40 @@ func main() {
 	})
 	log.Info("startup.config_loaded", nil)
 
-	// Initialize Trakt client
-	traktClient := api.NewClient(cfg, log)
+	// Initialize security manager and keyring
+	securityManager, err := security.NewManager(cfg.Security)
+	if err != nil {
+		log.Error("errors.security_manager_failed", map[string]interface{}{"error": err.Error()})
+		os.Exit(1)
+	}
+	defer securityManager.Close()
+
+	var keyringMgr *keyring.Manager
+	switch cfg.Security.KeyringBackend {
+	case "system":
+		keyringMgr, err = keyring.NewManager(keyring.SystemBackend)
+	case "env":
+		keyringMgr, err = keyring.NewManager(keyring.EnvBackend)
+	case "file":
+		keyringMgr, err = keyring.NewManager(keyring.FileBackend)
+	default:
+		keyringMgr, err = keyring.NewManager(keyring.SystemBackend)
+	}
+	if err != nil {
+		log.Error("errors.keyring_manager_failed", map[string]interface{}{"error": err.Error()})
+		os.Exit(1)
+	}
+
+	// Initialize token manager
+	tokenManager := auth.NewTokenManager(cfg, log, keyringMgr)
+
+	// Initialize Trakt client with token management
+	var traktClient *api.Client
+	if cfg.Auth.UseOAuth {
+		traktClient = api.NewClientWithTokenManager(cfg, log, tokenManager)
+	} else {
+		traktClient = api.NewClient(cfg, log)
+	}
 
 	// Process command
 	switch strings.ToLower(command) {
@@ -175,10 +209,42 @@ func main() {
 	case "validate":
 		// Validate the configuration
 		fmt.Println(translator.Translate("validate.success", nil))
+
+	case "auth":
+		// Interactive OAuth authentication
+		if err := runInteractiveAuth(cfg, log, tokenManager); err != nil {
+			log.Error("auth.interactive_failed", map[string]interface{}{"error": err.Error()})
+			fmt.Printf("❌ Authentication failed: %s\n", err.Error())
+			os.Exit(1)
+		}
+
+	case "token-status":
+		// Check token status
+		if err := showTokenStatus(tokenManager); err != nil {
+			log.Error("auth.status_failed", map[string]interface{}{"error": err.Error()})
+			fmt.Printf("❌ Failed to check token status: %s\n", err.Error())
+			os.Exit(1)
+		}
+
+	case "token-refresh":
+		// Manual token refresh
+		if err := refreshToken(tokenManager, log); err != nil {
+			log.Error("auth.refresh_failed", map[string]interface{}{"error": err.Error()})
+			fmt.Printf("❌ Token refresh failed: %s\n", err.Error())
+			os.Exit(1)
+		}
+
+	case "token-clear":
+		// Clear stored tokens
+		if err := clearTokens(tokenManager, log); err != nil {
+			log.Error("auth.clear_failed", map[string]interface{}{"error": err.Error()})
+			fmt.Printf("❌ Failed to clear tokens: %s\n", err.Error())
+			os.Exit(1)
+		}
 	
 	default:
 		log.Error("errors.invalid_command", map[string]interface{}{"command": command})
-		fmt.Printf("Invalid command: %s. Valid commands are 'export', 'schedule', 'setup', 'validate'\n", command)
+		fmt.Printf("Invalid command: %s. Valid commands are 'export', 'schedule', 'setup', 'validate', 'auth', 'token-status', 'token-refresh', 'token-clear'\n", command)
 		os.Exit(1)
 	}
 }
@@ -777,4 +843,157 @@ func validateSecurityConfiguration(cfg *config.Config, log logger.Logger) int {
 	
 	fmt.Println("⚠️  Security validation completed with warnings. Review recommendations above.")
 	return 0
+}
+
+// runInteractiveAuth performs interactive OAuth authentication
+func runInteractiveAuth(cfg *config.Config, log logger.Logger, tokenManager *auth.TokenManager) error {
+	oauthMgr := auth.NewOAuthManager(cfg, log)
+	
+	fmt.Println("🔑 Starting Interactive OAuth Authentication")
+	fmt.Println("==========================================")
+	
+	// Check if credentials are configured
+	if cfg.Trakt.ClientID == "" || cfg.Trakt.ClientSecret == "" {
+		fmt.Println("❌ Missing Trakt.tv API credentials")
+		fmt.Println("\nPlease configure your Trakt.tv API credentials:")
+		fmt.Println("1. Go to https://trakt.tv/oauth/applications")
+		fmt.Println("2. Create a new application or modify existing one")
+		fmt.Println("3. Set client_id and client_secret in your config file")
+		fmt.Printf("4. Set redirect_uri to: %s\n", cfg.Auth.RedirectURI)
+		return fmt.Errorf("missing API credentials")
+	}
+	
+	fmt.Printf("📱 Client ID: %s\n", cfg.Trakt.ClientID)
+	fmt.Printf("🔗 Redirect URI: %s\n", cfg.Auth.RedirectURI)
+	
+	// Start local callback server
+	callbackURL, codeChan, errChan, err := oauthMgr.StartLocalCallbackServer()
+	if err != nil {
+		return fmt.Errorf("failed to start callback server: %w", err)
+	}
+	
+	fmt.Printf("🌐 Local callback server started at: %s\n", callbackURL)
+	
+	// Generate authorization URL
+	authURL, state, err := oauthMgr.GenerateAuthURL()
+	if err != nil {
+		return fmt.Errorf("failed to generate auth URL: %w", err)
+	}
+	
+	fmt.Println("\n📋 NEXT STEPS:")
+	fmt.Println("1. Open the following URL in your browser:")
+	fmt.Printf("   %s\n\n", authURL)
+	fmt.Println("2. Authorize the application on Trakt.tv")
+	fmt.Println("3. You will be redirected back automatically")
+	fmt.Println("\nWaiting for authorization...")
+	
+	// Wait for authorization code or error
+	select {
+	case code := <-codeChan:
+		fmt.Println("✅ Authorization code received!")
+		
+		// Exchange code for token
+		token, err := oauthMgr.ExchangeCodeForToken(code, state, state)
+		if err != nil {
+			return fmt.Errorf("failed to exchange code for token: %w", err)
+		}
+		
+		// Store token
+		if err := tokenManager.StoreToken(token); err != nil {
+			return fmt.Errorf("failed to store token: %w", err)
+		}
+		
+		fmt.Println("🎉 Authentication successful!")
+		fmt.Printf("📅 Token expires: %s\n", oauthMgr.GetTokenExpiryTime(token).Format("2006-01-02 15:04:05"))
+		fmt.Println("🔄 Automatic refresh is enabled")
+		
+		return nil
+		
+	case err := <-errChan:
+		return fmt.Errorf("authentication error: %w", err)
+		
+	case <-time.After(5 * time.Minute):
+		return fmt.Errorf("authentication timeout after 5 minutes")
+	}
+}
+
+// showTokenStatus displays the current token status
+func showTokenStatus(tokenManager *auth.TokenManager) error {
+	fmt.Println("🔍 Token Status Check")
+	fmt.Println("=====================")
+	
+	status, err := tokenManager.GetTokenStatus()
+	if err != nil {
+		return fmt.Errorf("failed to get token status: %w", err)
+	}
+	
+	fmt.Println(status.String())
+	
+	if status.Error != "" {
+		fmt.Printf("\n❌ Error: %s\n", status.Error)
+	}
+	
+	if status.Message != "" {
+		fmt.Printf("\n💡 Info: %s\n", status.Message)
+	}
+	
+	if !status.HasToken {
+		fmt.Println("\n🆘 No token found. Run 'auth' command to authenticate:")
+		fmt.Println("   docker exec -it <container> /app/export-trakt auth")
+	}
+	
+	return nil
+}
+
+// refreshToken manually refreshes the access token
+func refreshToken(tokenManager *auth.TokenManager, log logger.Logger) error {
+	fmt.Println("🔄 Refreshing Access Token")
+	fmt.Println("===========================")
+	
+	// Check current status first
+	status, err := tokenManager.GetTokenStatus()
+	if err != nil {
+		return fmt.Errorf("failed to get token status: %w", err)
+	}
+	
+	if !status.HasToken {
+		fmt.Println("❌ No token to refresh. Run 'auth' command first.")
+		return fmt.Errorf("no token available")
+	}
+	
+	if !status.HasRefreshToken {
+		fmt.Println("❌ No refresh token available. Re-authentication required.")
+		fmt.Println("Run: auth")
+		return fmt.Errorf("no refresh token available")
+	}
+	
+	if err := tokenManager.RefreshToken(); err != nil {
+		return fmt.Errorf("token refresh failed: %w", err)
+	}
+	
+	// Show new status
+	newStatus, err := tokenManager.GetTokenStatus()
+	if err != nil {
+		return fmt.Errorf("failed to get new token status: %w", err)
+	}
+	
+	fmt.Println("✅ Token refreshed successfully!")
+	fmt.Printf("📅 New expiry: %s\n", newStatus.ExpiresAt.Format("2006-01-02 15:04:05"))
+	
+	return nil
+}
+
+// clearTokens removes all stored tokens
+func clearTokens(tokenManager *auth.TokenManager, log logger.Logger) error {
+	fmt.Println("🗑️  Clearing Stored Tokens")
+	fmt.Println("===========================")
+	
+	if err := tokenManager.ClearToken(); err != nil {
+		return fmt.Errorf("failed to clear tokens: %w", err)
+	}
+	
+	fmt.Println("✅ All tokens cleared successfully!")
+	fmt.Println("💡 Run 'auth' command to re-authenticate when needed.")
+	
+	return nil
 } 
