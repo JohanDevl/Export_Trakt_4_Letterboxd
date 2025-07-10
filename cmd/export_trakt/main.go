@@ -1246,15 +1246,29 @@ func startPersistentServer(cfg *config.Config, log logger.Logger, tokenManager *
 	fmt.Printf("🔗 Redirect URI: %s\n", cfg.Auth.RedirectURI)
 	fmt.Printf("🌐 Server running on: http://0.0.0.0:%d\n", port)
 	
-	// Generate and display auth URL
-	authURL, state, err := oauthMgr.GenerateAuthURL()
-	if err != nil {
+	// Global state management for OAuth
+	var currentState string
+	var currentAuthURL string
+	
+	// Function to generate fresh auth URL and state
+	generateFreshAuth := func() error {
+		authURL, state, err := oauthMgr.GenerateAuthURL()
+		if err != nil {
+			return err
+		}
+		currentAuthURL = authURL
+		currentState = state
+		return nil
+	}
+	
+	// Generate initial auth URL
+	if err := generateFreshAuth(); err != nil {
 		return fmt.Errorf("failed to generate auth URL: %w", err)
 	}
 	
 	fmt.Println("\n🔗 OAUTH AUTHENTICATION:")
 	fmt.Println("Open this URL in your browser to authenticate:")
-	fmt.Printf("   %s\n", authURL)
+	fmt.Printf("   %s\n", currentAuthURL)
 	fmt.Println("\nAfter authentication, you can:")
 	fmt.Printf("   • Visit http://192.168.1.24:%d/status for token status\n", port)
 	fmt.Printf("   • Visit http://192.168.1.24:%d/export/watched for exports\n", port)
@@ -1309,7 +1323,7 @@ func startPersistentServer(cfg *config.Config, log logger.Logger, tokenManager *
 		}
 
 		// Exchange code for token
-		token, err := oauthMgr.ExchangeCodeForToken(code, state, receivedState)
+		token, err := oauthMgr.ExchangeCodeForToken(code, currentState, receivedState)
 		if err != nil {
 			log.Error("server.token_exchange_failed", map[string]interface{}{
 				"error": err.Error(),
@@ -1389,7 +1403,7 @@ setTimeout(function() {
 			return
 		}
 
-		w.Header().Set("Content-Type", "text/html")
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		if status.HasToken && status.IsValid {
 			fmt.Fprintf(w, `
 <!DOCTYPE html>
@@ -1426,13 +1440,13 @@ setTimeout(function() {
 
 	// Auth URL endpoint
 	http.HandleFunc("/auth-url", func(w http.ResponseWriter, r *http.Request) {
-		authURL, _, err := oauthMgr.GenerateAuthURL()
-		if err != nil {
+		// Generate fresh auth URL and update current state
+		if err := generateFreshAuth(); err != nil {
 			http.Error(w, fmt.Sprintf("Error generating auth URL: %s", err.Error()), http.StatusInternalServerError)
 			return
 		}
 
-		w.Header().Set("Content-Type", "text/html")
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		fmt.Fprintf(w, `
 <!DOCTYPE html>
 <html>
@@ -1443,7 +1457,7 @@ setTimeout(function() {
 <p><a href="%s" target="_blank" style="background: #e74c3c; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Authenticate with Trakt.tv</a></p>
 <p><small>After authentication, you'll be redirected back to this server automatically.</small></p>
 </body>
-</html>`, authURL)
+</html>`, currentAuthURL)
 	})
 
 	// Export endpoints
@@ -1456,7 +1470,7 @@ setTimeout(function() {
 		// Check authentication
 		status, err := tokenManager.GetTokenStatus()
 		if err != nil || !status.HasToken || !status.IsValid {
-			w.Header().Set("Content-Type", "text/html")
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			fmt.Fprint(w, `
 <!DOCTYPE html>
 <html>
@@ -1470,7 +1484,7 @@ setTimeout(function() {
 			return
 		}
 
-		w.Header().Set("Content-Type", "text/html")
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		fmt.Fprintf(w, `
 <!DOCTYPE html>
 <html>
@@ -1508,7 +1522,7 @@ setTimeout(function() {
 			return
 		}
 
-		w.Header().Set("Content-Type", "text/html")
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		fmt.Fprintf(w, `
 <!DOCTYPE html>
 <html>
@@ -1531,7 +1545,7 @@ setTimeout(function() {
 <h3>📱 Quick Authentication:</h3>
 <p>Open this URL to authenticate: <br><a href="%s">%s</a></p>
 </body>
-</html>`, authURL, authURL)
+</html>`, currentAuthURL, currentAuthURL)
 	})
 
 	// Start server
@@ -1542,7 +1556,7 @@ setTimeout(function() {
 
 	log.Info("server.starting", map[string]interface{}{
 		"port": port,
-		"auth_url": authURL,
+		"auth_url": currentAuthURL,
 	})
 
 	// Handle graceful shutdown

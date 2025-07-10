@@ -427,8 +427,8 @@ func (m *Manager) checkFilePermissions() error {
 	// Check if we're likely in a container environment
 	if isDockerEnvironment() {
 		// In Docker, be more lenient with file permissions
-		// Just ensure the file is not world-readable (no other permissions)
-		if mode&0044 != 0 { // Check if others have read permission
+		// Just ensure the file is not world-writable (no write permissions for others)
+		if mode&0002 != 0 { // Check if others have write permission
 			return ErrPermissionDenied
 		}
 		return nil
