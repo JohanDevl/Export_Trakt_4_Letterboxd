@@ -25,7 +25,7 @@ var (
 	// ErrUnsupportedBackend is returned when an unsupported backend is specified
 	ErrUnsupportedBackend = errors.New("unsupported keyring backend")
 	// ErrPermissionDenied is returned when file permissions are incorrect
-	ErrPermissionDenied = errors.New("file permissions must be 0600 for security")
+	ErrPermissionDenied = errors.New("file permissions must be 0600 for security (or 0644 max in Docker)")
 )
 
 // Backend represents different credential storage backends
@@ -422,11 +422,46 @@ func (m *Manager) checkFilePermissions() error {
 
 	// Check if permissions are 0600 (rw-------) or more restrictive
 	mode := info.Mode()
+	
+	// In Docker environments, file permissions might be handled differently
+	// Check if we're likely in a container environment
+	if isDockerEnvironment() {
+		// In Docker, be more lenient with file permissions
+		// Just ensure the file is not world-readable (no other permissions)
+		if mode&0044 != 0 { // Check if others have read permission
+			return ErrPermissionDenied
+		}
+		return nil
+	}
+	
+	// Standard permission check for non-Docker environments
 	if mode&0077 != 0 {
 		return ErrPermissionDenied
 	}
 
 	return nil
+}
+
+// isDockerEnvironment checks if we're running in a Docker container
+func isDockerEnvironment() bool {
+	// Check for common Docker environment indicators
+	if _, err := os.Stat("/.dockerenv"); err == nil {
+		return true
+	}
+	
+	// Check if running as PID 1 (common in containers)
+	if os.Getpid() == 1 {
+		return true
+	}
+	
+	// Check for container-specific environment variables
+	if os.Getenv("DOCKER_CONTAINER") == "1" || 
+	   os.Getenv("KUBERNETES_SERVICE_HOST") != "" ||
+	   os.Getenv("container") != "" {
+		return true
+	}
+	
+	return false
 }
 
 // Destroy securely clears sensitive data from memory

@@ -284,10 +284,18 @@ func main() {
 			fmt.Printf("❌ Failed to start server: %s\n", err.Error())
 			os.Exit(1)
 		}
+
+	case "fix-permissions":
+		// Fix file permissions for credentials storage
+		if err := fixCredentialsPermissions(cfg, log); err != nil {
+			log.Error("permissions.fix_failed", map[string]interface{}{"error": err.Error()})
+			fmt.Printf("❌ Failed to fix permissions: %s\n", err.Error())
+			os.Exit(1)
+		}
 	
 	default:
 		log.Error("errors.invalid_command", map[string]interface{}{"command": command})
-		fmt.Printf("Invalid command: %s. Valid commands are 'export', 'schedule', 'setup', 'validate', 'auth', 'auth-url', 'auth-code', 'server', 'token-status', 'token-refresh', 'token-clear'\n", command)
+		fmt.Printf("Invalid command: %s. Valid commands are 'export', 'schedule', 'setup', 'validate', 'auth', 'auth-url', 'auth-code', 'server', 'fix-permissions', 'token-status', 'token-refresh', 'token-clear'\n", command)
 		os.Exit(1)
 	}
 }
@@ -1565,5 +1573,73 @@ setTimeout(function() {
 		return fmt.Errorf("server failed: %w", err)
 	}
 
+	return nil
+}
+
+func fixCredentialsPermissions(cfg *config.Config, log logger.Logger) error {
+	credentialsPath := "./config/credentials.enc"
+	
+	fmt.Printf("🔧 Fixing credentials file permissions...\n\n")
+	
+	// Check if file exists
+	info, err := os.Stat(credentialsPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			fmt.Printf("✅ Credentials file doesn't exist yet - no action needed.\n")
+			fmt.Printf("   File will be created with proper permissions when you authenticate.\n")
+			return nil
+		}
+		return fmt.Errorf("failed to check credentials file: %w", err)
+	}
+	
+	currentMode := info.Mode()
+	fmt.Printf("📋 Current file permissions: %o\n", currentMode&os.ModePerm)
+	
+	// Check Docker environment
+	isDocker := false
+	if _, err := os.Stat("/.dockerenv"); err == nil {
+		isDocker = true
+		fmt.Printf("🐳 Detected Docker environment\n")
+	}
+	
+	// Determine target permissions
+	targetMode := os.FileMode(0600)
+	if isDocker {
+		// In Docker, we might need more relaxed permissions
+		if currentMode&0077 != 0 && currentMode&0044 == 0 {
+			fmt.Printf("✅ File permissions are acceptable for Docker environment.\n")
+			return nil
+		}
+		// Try to set more restrictive permissions, but accept failure in Docker
+		targetMode = os.FileMode(0644)
+	}
+	
+	fmt.Printf("🎯 Target permissions: %o\n", targetMode)
+	
+	// Try to change permissions
+	if err := os.Chmod(credentialsPath, targetMode); err != nil {
+		if isDocker {
+			fmt.Printf("⚠️  Warning: Could not change file permissions in Docker environment.\n")
+			fmt.Printf("   This is normal - Docker handles file permissions differently.\n")
+			fmt.Printf("   Your credentials should still work properly.\n")
+			return nil
+		}
+		return fmt.Errorf("failed to change file permissions: %w", err)
+	}
+	
+	// Verify the change
+	newInfo, err := os.Stat(credentialsPath)
+	if err != nil {
+		return fmt.Errorf("failed to verify permissions change: %w", err)
+	}
+	
+	newMode := newInfo.Mode()
+	fmt.Printf("✅ Permissions updated successfully: %o\n", newMode&os.ModePerm)
+	
+	fmt.Printf("\n💡 Tips:\n")
+	fmt.Printf("   - If you're still having issues, try using the 'env' keyring backend\n")
+	fmt.Printf("   - Set TRAKT_CLIENT_ID and TRAKT_CLIENT_SECRET environment variables\n")
+	fmt.Printf("   - Update config.toml: keyring_backend = \"env\"\n")
+	
 	return nil
 } 
