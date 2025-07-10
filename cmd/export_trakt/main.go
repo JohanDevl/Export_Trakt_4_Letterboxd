@@ -252,10 +252,18 @@ func main() {
 			fmt.Printf("❌ Failed to clear tokens: %s\n", err.Error())
 			os.Exit(1)
 		}
+
+	case "auth-url":
+		// Generate and display authentication URL
+		if err := showAuthURL(cfg, log); err != nil {
+			log.Error("auth.url_generation_failed", map[string]interface{}{"error": err.Error()})
+			fmt.Printf("❌ Failed to generate auth URL: %s\n", err.Error())
+			os.Exit(1)
+		}
 	
 	default:
 		log.Error("errors.invalid_command", map[string]interface{}{"command": command})
-		fmt.Printf("Invalid command: %s. Valid commands are 'export', 'schedule', 'setup', 'validate', 'auth', 'token-status', 'token-refresh', 'token-clear'\n", command)
+		fmt.Printf("Invalid command: %s. Valid commands are 'export', 'schedule', 'setup', 'validate', 'auth', 'auth-url', 'token-status', 'token-refresh', 'token-clear'\n", command)
 		os.Exit(1)
 	}
 }
@@ -432,6 +440,52 @@ func runExportOnce(cfg *config.Config, log logger.Logger, exportType, exportMode
 
 	// Initialize token manager
 	tokenManager := auth.NewTokenManager(cfg, log, keyringMgr)
+
+	// Check if authentication is required before proceeding
+	if cfg.Auth.UseOAuth {
+		log.Info("export.checking_authentication", nil)
+		status, err := tokenManager.GetTokenStatus()
+		if err != nil || !status.HasToken {
+			log.Error("auth.token_missing", map[string]interface{}{
+				"error": "No valid OAuth token found",
+			})
+			
+			// Generate auth URL for display
+			oauthMgr := auth.NewOAuthManager(cfg, log)
+			authURL, _, urlErr := oauthMgr.GenerateAuthURL()
+			
+			fmt.Println("\n🔐 AUTHENTICATION REQUIRED")
+			fmt.Println("==========================================")
+			fmt.Printf("📱 Client ID: %s\n", cfg.Trakt.ClientID)
+			fmt.Printf("🔗 Redirect URI: %s\n", cfg.Auth.RedirectURI)
+			
+			if urlErr == nil {
+				fmt.Println("\n🚀 QUICK AUTHENTICATION:")
+				fmt.Println("1. Open this URL in your browser:")
+				fmt.Printf("   %s\n", authURL)
+				fmt.Println("\n2. Authorize the application on Trakt.tv")
+				fmt.Printf("3. Run this command to complete authentication:\n")
+				fmt.Printf("   docker run --rm -v \"$(pwd)/config:/app/config\" -p %d:%d trakt-exporter auth\n", cfg.Auth.CallbackPort, cfg.Auth.CallbackPort)
+			} else {
+				fmt.Println("\n📋 TO AUTHENTICATE:")
+				fmt.Println("1. Run the following command in a separate terminal:")
+				fmt.Printf("   docker run --rm -v \"$(pwd)/config:/app/config\" -p %d:%d trakt-exporter auth\n", cfg.Auth.CallbackPort, cfg.Auth.CallbackPort)
+				fmt.Println("\n2. Follow the OAuth authentication flow in your browser")
+			}
+			
+			fmt.Println("\n4. Once authenticated, re-run this export command")
+			fmt.Println("\n💡 Authentication only needs to be done once.")
+			fmt.Println("   Tokens will be automatically refreshed afterwards.")
+			fmt.Println("==========================================")
+			os.Exit(1)
+		}
+
+		if !status.IsValid {
+			log.Warn("auth.token_expired_will_refresh", map[string]interface{}{
+				"expires_at": status.ExpiresAt,
+			})
+		}
+	}
 
 	// Initialize Trakt client with token management
 	log.Info("export.initializing_trakt_client", nil)
@@ -1048,6 +1102,47 @@ func clearTokens(tokenManager *auth.TokenManager, log logger.Logger) error {
 	
 	fmt.Println("✅ All tokens cleared successfully!")
 	fmt.Println("💡 Run 'auth' command to re-authenticate when needed.")
+	
+	return nil
+}
+
+// showAuthURL generates and displays the OAuth authentication URL
+func showAuthURL(cfg *config.Config, log logger.Logger) error {
+	oauthMgr := auth.NewOAuthManager(cfg, log)
+	
+	fmt.Println("🔗 OAuth Authentication URL Generator")
+	fmt.Println("=====================================")
+	
+	// Check if credentials are configured
+	if cfg.Trakt.ClientID == "" || cfg.Trakt.ClientSecret == "" {
+		fmt.Println("❌ Missing Trakt.tv API credentials")
+		fmt.Println("\nPlease configure your Trakt.tv API credentials:")
+		fmt.Println("1. Go to https://trakt.tv/oauth/applications")
+		fmt.Println("2. Create a new application or modify existing one")
+		fmt.Println("3. Set client_id and client_secret in your config file")
+		fmt.Printf("4. Set redirect_uri to: %s\n", cfg.Auth.RedirectURI)
+		return fmt.Errorf("missing API credentials")
+	}
+	
+	fmt.Printf("📱 Client ID: %s\n", cfg.Trakt.ClientID)
+	fmt.Printf("🔗 Redirect URI: %s\n", cfg.Auth.RedirectURI)
+	
+	// Generate authorization URL
+	authURL, state, err := oauthMgr.GenerateAuthURL()
+	if err != nil {
+		return fmt.Errorf("failed to generate auth URL: %w", err)
+	}
+	
+	fmt.Println("\n🚀 AUTHENTICATION STEPS:")
+	fmt.Println("1. Copy and open this URL in your browser:")
+	fmt.Printf("   %s\n\n", authURL)
+	fmt.Println("2. Authorize the application on Trakt.tv")
+	fmt.Println("3. You will be redirected to localhost - this is normal")
+	fmt.Println("4. Copy the 'code' parameter from the URL")
+	fmt.Println("5. Run the interactive auth command:")
+	fmt.Printf("   docker run --rm -v \"$(pwd)/config:/app/config\" -p %d:%d trakt-exporter auth\n", cfg.Auth.CallbackPort, cfg.Auth.CallbackPort)
+	fmt.Println("\n💾 State (for security):", state)
+	fmt.Println("\n💡 This URL is valid for 10 minutes.")
 	
 	return nil
 } 
