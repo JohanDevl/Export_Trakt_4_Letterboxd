@@ -38,6 +38,8 @@ const (
 	EnvBackend Backend = "env"
 	// FileBackend uses encrypted file storage
 	FileBackend Backend = "file"
+	// MemoryBackend uses in-memory storage (ephemeral, lost on restart)
+	MemoryBackend Backend = "memory"
 )
 
 // Credential represents a stored credential
@@ -51,12 +53,18 @@ type Manager struct {
 	backend       Backend
 	encryptionKey []byte
 	filePath      string
+	memoryStore   map[string]string // For memory backend
 }
 
 // NewManager creates a new credential manager with the specified backend
 func NewManager(backend Backend, options ...Option) (*Manager, error) {
 	m := &Manager{
 		backend: backend,
+	}
+	
+	// Initialize memory store for memory backend
+	if backend == MemoryBackend {
+		m.memoryStore = make(map[string]string)
 	}
 
 	// Apply options
@@ -114,6 +122,9 @@ func (m *Manager) validateBackend() error {
 			return errors.New("file backend requires file path")
 		}
 		return nil
+	case MemoryBackend:
+		// Memory backend requires no additional configuration
+		return nil
 	default:
 		return ErrUnsupportedBackend
 	}
@@ -128,6 +139,8 @@ func (m *Manager) Store(key, value string) error {
 		return m.storeEnv(key, value)
 	case FileBackend:
 		return m.storeFile(key, value)
+	case MemoryBackend:
+		return m.storeMemory(key, value)
 	default:
 		return ErrUnsupportedBackend
 	}
@@ -142,6 +155,8 @@ func (m *Manager) Retrieve(key string) (string, error) {
 		return m.retrieveEnv(key)
 	case FileBackend:
 		return m.retrieveFile(key)
+	case MemoryBackend:
+		return m.retrieveMemory(key)
 	default:
 		return "", ErrUnsupportedBackend
 	}
@@ -156,6 +171,8 @@ func (m *Manager) Delete(key string) error {
 		return m.deleteEnv(key)
 	case FileBackend:
 		return m.deleteFile(key)
+	case MemoryBackend:
+		return m.deleteMemory(key)
 	default:
 		return ErrUnsupportedBackend
 	}
@@ -170,6 +187,8 @@ func (m *Manager) List() ([]string, error) {
 		return m.listEnv()
 	case FileBackend:
 		return m.listFile()
+	case MemoryBackend:
+		return m.listMemory()
 	default:
 		return nil, ErrUnsupportedBackend
 	}
@@ -464,6 +483,54 @@ func isDockerEnvironment() bool {
 	return false
 }
 
+// Memory backend implementations
+func (m *Manager) storeMemory(key, value string) error {
+	if m.memoryStore == nil {
+		m.memoryStore = make(map[string]string)
+	}
+	m.memoryStore[key] = value
+	return nil
+}
+
+func (m *Manager) retrieveMemory(key string) (string, error) {
+	if m.memoryStore == nil {
+		return "", ErrCredentialNotFound
+	}
+	
+	value, exists := m.memoryStore[key]
+	if !exists {
+		return "", ErrCredentialNotFound
+	}
+	
+	return value, nil
+}
+
+func (m *Manager) deleteMemory(key string) error {
+	if m.memoryStore == nil {
+		return ErrCredentialNotFound
+	}
+	
+	if _, exists := m.memoryStore[key]; !exists {
+		return ErrCredentialNotFound
+	}
+	
+	delete(m.memoryStore, key)
+	return nil
+}
+
+func (m *Manager) listMemory() ([]string, error) {
+	if m.memoryStore == nil {
+		return []string{}, nil
+	}
+	
+	keys := make([]string, 0, len(m.memoryStore))
+	for key := range m.memoryStore {
+		keys = append(keys, key)
+	}
+	
+	return keys, nil
+}
+
 // Destroy securely clears sensitive data from memory
 func (m *Manager) Destroy() {
 	if m.encryptionKey != nil {
@@ -471,5 +538,13 @@ func (m *Manager) Destroy() {
 			m.encryptionKey[i] = 0
 		}
 		m.encryptionKey = nil
+	}
+	
+	// Clear memory store
+	if m.memoryStore != nil {
+		for key := range m.memoryStore {
+			delete(m.memoryStore, key)
+		}
+		m.memoryStore = nil
 	}
 } 

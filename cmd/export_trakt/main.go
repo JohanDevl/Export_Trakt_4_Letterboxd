@@ -137,6 +137,8 @@ func main() {
 		}
 		options = append(options, keyring.WithFilePath("./config/credentials.enc"))
 		keyringMgr, err = keyring.NewManager(keyring.FileBackend, options...)
+	case "memory":
+		keyringMgr, err = keyring.NewManager(keyring.MemoryBackend)
 	default:
 		keyringMgr, err = keyring.NewManager(keyring.SystemBackend)
 	}
@@ -462,6 +464,8 @@ func runExportOnce(cfg *config.Config, log logger.Logger, exportType, exportMode
 		}
 		options = append(options, keyring.WithFilePath("./config/credentials.enc"))
 		keyringMgr, err = keyring.NewManager(keyring.FileBackend, options...)
+	case "memory":
+		keyringMgr, err = keyring.NewManager(keyring.MemoryBackend)
 	default:
 		keyringMgr, err = keyring.NewManager(keyring.SystemBackend)
 	}
