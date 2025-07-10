@@ -1,0 +1,39 @@
+[trakt]
+client_id = "c479b2e7dc4fbec157d89cd4cba9cf88fc614de7ec17813fc9f5bac92e1c8786"
+client_secret = "dc25b9c7cbe7346b9ff65d545ddbc8d1fe645268d42b6a105b3da249dc73fb2a"
+api_base_url = "https://api.trakt.tv"
+extended_info = "full"
+
+[letterboxd]
+export_dir = "exports"
+watched_filename = "watched.csv"
+collection_filename = "watchlist.csv"
+shows_filename = "shows.csv"
+ratings_filename = "ratings.csv"
+watchlist_filename = "watchlist.csv"
+letterboxd_import_filename = "letterboxd_import.csv"
+
+[export]
+format = "csv"
+date_format = "2006-01-02"
+timezone = "Europe/Paris"
+
+[logging]
+level = "debug"
+format = "visual"
+output = "stdout"
+
+[i18n]
+default_language = "en"
+language = "en"
+locales_dir = "locales"
+
+[security]
+encryption_enabled = true
+keyring_backend = "memory"
+
+[auth]
+use_oauth = true
+auto_refresh = true
+redirect_uri = "http://localhost:8089/callback"
+callback_port = 8089
