@@ -58,8 +58,14 @@ docker compose --profile dev --profile schedule-test up -d --build  # Test sched
 # Check token status
 ./export_trakt token-status
 
-# One-time export
+# One-time export (default aggregated mode)
 ./export_trakt --run --export all --mode complete
+
+# Individual watch history export (all viewing events)
+./export_trakt --run --export watched --history-mode individual
+
+# Aggregated export (one entry per movie, original behavior)
+./export_trakt --run --export watched --history-mode aggregated
 
 # Scheduled export
 ./export_trakt --schedule "0 */6 * * *" --export all --mode complete
@@ -111,6 +117,35 @@ docker compose --profile dev --profile schedule-test up -d --build  # Test sched
 - **OpenTelemetry Tracing** (`pkg/monitoring/tracing/`) - Distributed tracing
 - **Health Checks** (`pkg/monitoring/health/`) - Application health monitoring
 - **Alerting** (`pkg/monitoring/alerts/`) - Alert management
+
+## Export Modes
+
+The application supports two distinct export modes for watched movies:
+
+### Aggregated Mode (Default)
+- **Behavior**: One entry per unique movie with the most recent watch date
+- **Use Case**: Standard export compatible with original Letterboxd import expectations
+- **Configuration**: `history_mode = "aggregated"` or `--history-mode aggregated`
+- **Output**: Single CSV row per movie, rewatch flag based on total play count
+
+### Individual History Mode (New)
+- **Behavior**: One entry per viewing event with complete watch history
+- **Use Case**: Detailed tracking of all viewing dates and proper rewatch sequences
+- **Configuration**: `history_mode = "individual"` or `--history-mode individual`
+- **Output**: Multiple CSV rows per movie (one per viewing), chronological rewatch tracking
+- **Data Source**: Uses `/sync/history/movies` API endpoint with 'watch' and 'scrobble' actions
+- **Benefits**: 
+  - Complete viewing history preservation
+  - Accurate rewatch tracking (first watch = false, subsequent = true)
+  - Chronological sorting (most recent first)
+  - Same rating applied consistently across all viewings of a movie
+
+**Example Individual Mode Output:**
+```csv
+Title,Year,WatchedDate,Rating10,imdbID,tmdbID,Rewatch
+Cars,2006,2025-07-10,7,tt0317219,920,true
+Cars,2006,2024-12-01,7,tt0317219,920,false
+```
 
 ## Configuration Management
 
