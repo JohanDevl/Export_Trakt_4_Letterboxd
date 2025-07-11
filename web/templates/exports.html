@@ -1,0 +1,380 @@
+{{define "content"}}
+<div class="exports">
+  <div class="page-header">
+    <h1>📁 Export Management</h1>
+    <p class="page-subtitle">
+      Manage and download your Letterboxd export files
+    </p>
+  </div>
+
+  <!-- Export Actions -->
+  <div class="export-actions">
+    <h2>🚀 Start New Export</h2>
+    {{if .TokenStatus.IsValid}}
+    <div class="export-types">
+      <div class="export-type-card" data-type="watched">
+        <div class="export-icon">🎬</div>
+        <h3>Watched Movies</h3>
+        <p>Export your complete watch history</p>
+        <div class="export-options">
+          <label>
+            <input
+              type="radio"
+              name="history-mode"
+              value="aggregated"
+              checked
+            />
+            Aggregated (one per movie)
+          </label>
+          <label>
+            <input type="radio" name="history-mode" value="individual" />
+            Individual (all viewing events)
+          </label>
+        </div>
+        <button class="btn btn-primary export-btn" data-type="watched">
+          Export Watched
+        </button>
+      </div>
+
+      <div class="export-type-card" data-type="collection">
+        <div class="export-icon">📚</div>
+        <h3>Collection</h3>
+        <p>Export your movie collection</p>
+        <button class="btn btn-primary export-btn" data-type="collection">
+          Export Collection
+        </button>
+      </div>
+
+      <div class="export-type-card" data-type="shows">
+        <div class="export-icon">📺</div>
+        <h3>TV Shows</h3>
+        <p>Export your TV show data</p>
+        <button class="btn btn-primary export-btn" data-type="shows">
+          Export Shows
+        </button>
+      </div>
+
+      <div class="export-type-card" data-type="ratings">
+        <div class="export-icon">⭐</div>
+        <h3>Ratings</h3>
+        <p>Export your movie ratings</p>
+        <button class="btn btn-primary export-btn" data-type="ratings">
+          Export Ratings
+        </button>
+      </div>
+
+      <div class="export-type-card" data-type="watchlist">
+        <div class="export-icon">📝</div>
+        <h3>Watchlist</h3>
+        <p>Export your watchlist</p>
+        <button class="btn btn-primary export-btn" data-type="watchlist">
+          Export Watchlist
+        </button>
+      </div>
+
+      <div class="export-type-card" data-type="all">
+        <div class="export-icon">📦</div>
+        <h3>Complete Export</h3>
+        <p>Export all your data</p>
+        <button class="btn btn-secondary export-btn" data-type="all">
+          Export All
+        </button>
+      </div>
+    </div>
+    {{else}}
+    <div class="auth-required">
+      <p>🔐 Authentication required to perform exports</p>
+      <a href="/auth-url" class="btn btn-primary">Authenticate with Trakt.tv</a>
+    </div>
+    {{end}}
+  </div>
+
+  <!-- Export Progress -->
+  <div id="export-progress" class="export-progress" style="display: none">
+    <h3>🔄 Export in Progress</h3>
+    <div class="progress-bar">
+      <div class="progress-fill" id="progress-fill"></div>
+    </div>
+    <div class="progress-info">
+      <span id="progress-text">Starting export...</span>
+      <span id="progress-percent">0%</span>
+    </div>
+    <div class="progress-log" id="progress-log"></div>
+  </div>
+
+  <!-- Export History -->
+  <div class="export-history">
+    <h2>📋 Export History</h2>
+    <div class="history-controls">
+      <input
+        type="text"
+        id="search-exports"
+        placeholder="Search exports..."
+        class="search-input"
+      />
+      <select id="filter-type" class="filter-select">
+        <option value="">All Types</option>
+        <option value="watched">Watched</option>
+        <option value="collection">Collection</option>
+        <option value="shows">Shows</option>
+        <option value="ratings">Ratings</option>
+        <option value="watchlist">Watchlist</option>
+        <option value="all">Complete</option>
+      </select>
+      <select id="filter-status" class="filter-select">
+        <option value="">All Status</option>
+        <option value="completed">Completed</option>
+        <option value="failed">Failed</option>
+        <option value="in_progress">In Progress</option>
+      </select>
+    </div>
+
+    <div class="export-list">
+      {{if .Exports}} {{range .Exports}}
+      <div class="export-item" data-type="{{.Type}}" data-status="{{.Status}}">
+        <div class="export-info">
+          <div class="export-header">
+            <h4>
+              {{if eq .Type "all"}}📦 Complete Export{{else if eq .Type
+              "watched"}}🎬 Watched Movies{{else if eq .Type "collection"}}📚
+              Collection{{else if eq .Type "shows"}}📺 TV Shows{{else if eq
+              .Type "ratings"}}⭐ Ratings{{else if eq .Type "watchlist"}}📝
+              Watchlist{{else}}📄 {{.Type | title}}{{end}}
+            </h4>
+            <span class="export-status status-indicator {{.Status}}"
+              >{{.Status | title}}</span
+            >
+          </div>
+          <div class="export-details">
+            <span class="export-date"
+              >📅 {{.Date.Format "2006-01-02 15:04"}}</span
+            >
+            {{if .Duration}}
+            <span class="export-duration">⏱️ {{.Duration}}</span>
+            {{end}} {{if .FileSize}}
+            <span class="export-size">💾 {{.FileSize}}</span>
+            {{end}} {{if .RecordCount}}
+            <span class="export-records">📊 {{.RecordCount}} records</span>
+            {{end}}
+            <span class="export-files"
+              >📁 {{len .Files}} file{{if gt (len .Files) 1}}s{{end}}</span
+            >
+          </div>
+          {{if .Error}}
+          <div class="export-error">
+            <span class="error-icon">❌</span>
+            <span class="error-message">{{.Error}}</span>
+          </div>
+          {{end}}
+        </div>
+        <div class="export-actions-container">
+          {{if eq .Status "completed"}} {{range .Files}} {{if contains $.ID
+          "dir_"}}
+          <a
+            href="/download/{{substr $.ID 4}}/{{.}}"
+            class="btn btn-sm btn-secondary download-btn"
+            title="Download {{.}}"
+          >
+            📥 {{. | title}}
+          </a>
+          {{else}}
+          <a
+            href="/download/{{.}}"
+            class="btn btn-sm btn-secondary download-btn"
+            title="Download {{.}}"
+          >
+            📥 {{. | filename}}
+          </a>
+          {{end}} {{end}} {{if gt (len .Files) 1}}
+          <div class="download-all">
+            <small>💡 Tip: Right-click links to save files</small>
+          </div>
+          {{end}} {{end}}
+          <button
+            class="btn btn-sm btn-outline delete-btn"
+            data-id="{{.ID}}"
+            title="Delete this export"
+          >
+            🗑️ Delete
+          </button>
+        </div>
+      </div>
+      {{end}} {{else}}
+      <div class="no-exports">
+        <div class="no-exports-icon">📭</div>
+        <h3>No exports found</h3>
+        <p>
+          Your export history will appear here once you start your first export.
+        </p>
+        <p>Use the export buttons above to get started!</p>
+      </div>
+      {{end}}
+    </div>
+  </div>
+</div>
+
+<!-- Export Progress WebSocket -->
+<script>
+  let exportSocket = null;
+
+  function startExport(type, options = {}) {
+    // Show progress section
+    document.getElementById("export-progress").style.display = "block";
+
+    // Start WebSocket connection for real-time updates
+    if (window.WebSocket) {
+      exportSocket = new WebSocket(`ws://${window.location.host}/ws/export`);
+
+      exportSocket.onmessage = function (event) {
+        const data = JSON.parse(event.data);
+        updateProgress(data);
+      };
+
+      exportSocket.onerror = function (error) {
+        console.error("WebSocket error:", error);
+      };
+
+      exportSocket.onclose = function () {
+        console.log("WebSocket connection closed");
+      };
+    }
+
+    // Trigger export
+    const params = new URLSearchParams({ type, ...options });
+    fetch(`/api/export?${params}`, { method: "POST" })
+      .then((response) => response.json())
+      .then((data) => {
+        if (!data.success) {
+          showAlert("error", data.error || "Export failed");
+          hideProgress();
+        }
+      })
+      .catch((error) => {
+        showAlert("error", "Failed to start export: " + error.message);
+        hideProgress();
+      });
+  }
+
+  function updateProgress(data) {
+    const progressFill = document.getElementById("progress-fill");
+    const progressText = document.getElementById("progress-text");
+    const progressPercent = document.getElementById("progress-percent");
+    const progressLog = document.getElementById("progress-log");
+
+    if (data.progress !== undefined) {
+      progressFill.style.width = data.progress + "%";
+      progressPercent.textContent = data.progress + "%";
+    }
+
+    if (data.message) {
+      progressText.textContent = data.message;
+    }
+
+    if (data.log) {
+      const logEntry = document.createElement("div");
+      logEntry.className = "log-entry log-" + (data.level || "info");
+      logEntry.textContent = `[${new Date().toLocaleTimeString()}] ${data.log}`;
+      progressLog.appendChild(logEntry);
+      progressLog.scrollTop = progressLog.scrollHeight;
+    }
+
+    if (data.status === "completed") {
+      progressText.textContent = "Export completed successfully!";
+      setTimeout(() => {
+        hideProgress();
+        location.reload(); // Refresh to show new export
+      }, 2000);
+    }
+
+    if (data.status === "failed") {
+      progressText.textContent = "Export failed!";
+      showAlert("error", data.error || "Export failed");
+      setTimeout(hideProgress, 3000);
+    }
+  }
+
+  function hideProgress() {
+    document.getElementById("export-progress").style.display = "none";
+    if (exportSocket) {
+      exportSocket.close();
+      exportSocket = null;
+    }
+  }
+
+  // Export button handlers
+  document.addEventListener("DOMContentLoaded", function () {
+    document.querySelectorAll(".export-btn").forEach((btn) => {
+      btn.addEventListener("click", function () {
+        const type = this.dataset.type;
+        const options = {};
+
+        if (type === "watched") {
+          const historyMode = document.querySelector(
+            'input[name="history-mode"]:checked'
+          ).value;
+          options.historyMode = historyMode;
+        }
+
+        startExport(type, options);
+      });
+    });
+
+    // Delete button handlers
+    document.querySelectorAll(".delete-btn").forEach((btn) => {
+      btn.addEventListener("click", function () {
+        const id = this.dataset.id;
+        if (confirm("Are you sure you want to delete this export?")) {
+          deleteExport(id);
+        }
+      });
+    });
+
+    // Search and filter
+    document
+      .getElementById("search-exports")
+      .addEventListener("input", filterExports);
+    document
+      .getElementById("filter-type")
+      .addEventListener("change", filterExports);
+    document
+      .getElementById("filter-status")
+      .addEventListener("change", filterExports);
+  });
+
+  function deleteExport(id) {
+    fetch(`/api/export/${id}`, { method: "DELETE" })
+      .then((response) => response.json())
+      .then((data) => {
+        if (data.success) {
+          location.reload();
+        } else {
+          showAlert("error", data.error || "Failed to delete export");
+        }
+      })
+      .catch((error) => {
+        showAlert("error", "Failed to delete export: " + error.message);
+      });
+  }
+
+  function filterExports() {
+    const search = document
+      .getElementById("search-exports")
+      .value.toLowerCase();
+    const typeFilter = document.getElementById("filter-type").value;
+    const statusFilter = document.getElementById("filter-status").value;
+
+    document.querySelectorAll(".export-item").forEach((item) => {
+      const type = item.dataset.type;
+      const status = item.dataset.status;
+      const text = item.textContent.toLowerCase();
+
+      const matchesSearch = !search || text.includes(search);
+      const matchesType = !typeFilter || type === typeFilter;
+      const matchesStatus = !statusFilter || status === statusFilter;
+
+      item.style.display =
+        matchesSearch && matchesType && matchesStatus ? "block" : "none";
+    });
+  }
+</script>
+{{end}}

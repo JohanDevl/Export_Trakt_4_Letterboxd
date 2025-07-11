@@ -1,0 +1,191 @@
+{{define "content"}}
+<div class="auth-page">
+    <div class="auth-container">
+        <div class="auth-header">
+            <h1>🔗 OAuth Authentication</h1>
+            <p>Click the button below to authenticate with Trakt.tv</p>
+        </div>
+        
+        <div class="auth-details">
+            <div class="detail-item">
+                <span class="detail-label">Client ID:</span>
+                <span class="detail-value">{{.ClientID}}</span>
+            </div>
+            <div class="detail-item">
+                <span class="detail-label">Redirect URI:</span>
+                <span class="detail-value">{{.RedirectURI}}</span>
+            </div>
+        </div>
+        
+        <div class="auth-action">
+            <a href="{{.AuthURL}}" target="_blank" class="btn btn-primary btn-large">
+                🔗 Authenticate with Trakt.tv
+            </a>
+        </div>
+        
+        <div class="auth-info">
+            <h3>ℹ️ What happens next?</h3>
+            <ol>
+                <li>Click the authentication button above</li>
+                <li>You'll be redirected to Trakt.tv in a new window</li>
+                <li>Log in to your Trakt.tv account if you haven't already</li>
+                <li>Authorize the Export Trakt 4 Letterboxd application</li>
+                <li>You'll be redirected back to this server automatically</li>
+                <li>The authentication window will close and you can start using exports</li>
+            </ol>
+        </div>
+        
+        <div class="auth-troubleshooting">
+            <h3>🔧 Troubleshooting</h3>
+            <div class="troubleshooting-item">
+                <strong>Authentication window doesn't open?</strong>
+                <p>Make sure your browser allows pop-ups for this site, or copy the URL above and open it manually.</p>
+            </div>
+            <div class="troubleshooting-item">
+                <strong>Redirect doesn't work?</strong>
+                <p>Ensure this server is running and accessible at the configured redirect URI.</p>
+            </div>
+            <div class="troubleshooting-item">
+                <strong>Still having issues?</strong>
+                <p>Check the server logs for error messages or try refreshing this page to generate a new authentication URL.</p>
+            </div>
+        </div>
+        
+        <div class="auth-footer">
+            <a href="/" class="btn btn-secondary">← Back to Dashboard</a>
+            <button onclick="location.reload()" class="btn btn-outline">🔄 Generate New URL</button>
+        </div>
+    </div>
+</div>
+
+<style>
+.auth-page {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    min-height: 60vh;
+    padding: 2rem 0;
+}
+
+.auth-container {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+    padding: 3rem;
+    max-width: 600px;
+    width: 100%;
+    text-align: center;
+}
+
+.auth-header h1 {
+    color: #2d3748;
+    margin-bottom: 1rem;
+}
+
+.auth-header p {
+    color: #718096;
+    font-size: 1.1rem;
+    margin-bottom: 2rem;
+}
+
+.auth-details {
+    background: #f7fafc;
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+    text-align: left;
+}
+
+.detail-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.75rem;
+}
+
+.detail-item:last-child {
+    margin-bottom: 0;
+}
+
+.detail-label {
+    font-weight: 600;
+    color: #4a5568;
+}
+
+.detail-value {
+    color: #2d3748;
+    font-family: monospace;
+    font-size: 0.9rem;
+}
+
+.auth-action {
+    margin-bottom: 3rem;
+}
+
+.btn-large {
+    padding: 1rem 2rem;
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.auth-info, .auth-troubleshooting {
+    text-align: left;
+    margin-bottom: 2rem;
+}
+
+.auth-info h3, .auth-troubleshooting h3 {
+    color: #2d3748;
+    margin-bottom: 1rem;
+}
+
+.auth-info ol {
+    padding-left: 1.5rem;
+    color: #4a5568;
+}
+
+.auth-info li {
+    margin-bottom: 0.5rem;
+}
+
+.troubleshooting-item {
+    margin-bottom: 1.5rem;
+}
+
+.troubleshooting-item strong {
+    color: #2d3748;
+    display: block;
+    margin-bottom: 0.25rem;
+}
+
+.troubleshooting-item p {
+    color: #718096;
+    margin: 0;
+    font-size: 0.95rem;
+}
+
+.auth-footer {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    padding-top: 2rem;
+    border-top: 1px solid #e2e8f0;
+}
+
+@media (max-width: 768px) {
+    .auth-container {
+        padding: 2rem;
+        margin: 1rem;
+    }
+    
+    .detail-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.25rem;
+    }
+    
+    .auth-footer {
+        flex-direction: column;
+    }
+}
+</style>
+{{end}}
