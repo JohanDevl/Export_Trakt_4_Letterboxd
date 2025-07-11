@@ -1319,6 +1319,12 @@ func startPersistentServer(cfg *config.Config, log logger.Logger, tokenManager *
 	// Simple fallback server implementation
 	mux := http.NewServeMux()
 	
+	// Static files
+	staticDir := "./web/static"
+	if _, err := os.Stat(staticDir); err == nil {
+		mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(staticDir))))
+	}
+	
 	// Serve a simple dashboard
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
@@ -1507,7 +1513,7 @@ func startPersistentServer(cfg *config.Config, log logger.Logger, tokenManager *
 		// Render the exports page with real data
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		
-		// For now, use a simpler template until we can load the proper template system
+		// Use the proper template with CSS file reference
 		fmt.Fprintf(w, `
 <!DOCTYPE html>
 <html lang="en">
@@ -1515,31 +1521,7 @@ func startPersistentServer(cfg *config.Config, log logger.Logger, tokenManager *
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Export Management - Export Trakt 4 Letterboxd</title>
-    <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #f5f7fa; }
-        .container { max-width: 1200px; margin: 0 auto; }
-        .header { text-align: center; margin-bottom: 2rem; }
-        .export-actions { background: white; padding: 2rem; border-radius: 12px; margin-bottom: 2rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        .export-types { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-top: 1rem; }
-        .export-type-card { background: #f7fafc; padding: 1.5rem; border-radius: 8px; text-align: center; text-decoration: none; color: #333; border: 1px solid #e2e8f0; transition: all 0.3s; }
-        .export-type-card:hover { background: #edf2f7; transform: translateY(-2px); text-decoration: none; color: #333; }
-        .export-icon { font-size: 2.5rem; margin-bottom: 0.5rem; }
-        .export-history { background: white; padding: 2rem; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        .export-list { display: flex; flex-direction: column; gap: 1rem; margin-top: 1.5rem; }
-        .export-item { background: #f7fafc; padding: 1.5rem; border-radius: 8px; border: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; }
-        .export-info h4 { margin: 0 0 0.5rem 0; color: #2d3748; }
-        .export-details { display: flex; gap: 1rem; flex-wrap: wrap; font-size: 0.9rem; color: #718096; }
-        .export-actions { display: flex; gap: 0.5rem; }
-        .btn { padding: 0.5rem 1rem; border: none; border-radius: 6px; text-decoration: none; font-size: 0.9rem; cursor: pointer; transition: all 0.3s; }
-        .btn-primary { background: #667eea; color: white; }
-        .btn-secondary { background: #e2e8f0; color: #4a5568; }
-        .btn:hover { transform: translateY(-1px); text-decoration: none; }
-        .no-exports { text-align: center; padding: 3rem; color: #718096; }
-        .nav-link { color: #667eea; text-decoration: none; }
-        .status-indicator { padding: 0.25rem 0.75rem; border-radius: 20px; font-size: 0.8rem; font-weight: 600; }
-        .status-indicator.completed { background: #c6f6d5; color: #276749; }
-        .auth-required { background: #fef5e7; border: 1px solid #f6e05e; border-radius: 8px; padding: 1.5rem; text-align: center; }
-    </style>
+    <link rel="stylesheet" href="/static/css/style.css?v=20250111-2">
 </head>
 <body>
     <div class="container">
