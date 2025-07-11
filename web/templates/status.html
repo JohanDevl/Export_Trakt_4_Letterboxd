@@ -1,0 +1,337 @@
+{{define "content"}}
+<div class="status">
+    <div class="page-header">
+        <h1>🔍 System Status</h1>
+        <p class="page-subtitle">Monitor authentication, API connectivity, and system health</p>
+    </div>
+
+    <!-- Overall Status -->
+    <div class="overall-status">
+        <div class="status-card {{.OverallStatus}}">
+            <div class="status-icon">
+                {{if eq .OverallStatus "healthy"}}✅{{else if eq .OverallStatus "warning"}}⚠️{{else}}❌{{end}}
+            </div>
+            <div class="status-content">
+                <h2>System Status: {{.OverallStatus | title}}</h2>
+                <p>{{.OverallMessage}}</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="status-grid">
+        <!-- Authentication Status -->
+        <div class="card">
+            <div class="card-header">
+                <h3>🔐 Authentication Status</h3>
+                <span class="status-indicator {{if .TokenStatus.IsValid}}healthy{{else}}error{{end}}">
+                    {{if .TokenStatus.IsValid}}Valid{{else}}Invalid{{end}}
+                </span>
+            </div>
+            <div class="card-content">
+                {{if .TokenStatus.IsValid}}
+                <div class="status-details">
+                    <div class="status-item">
+                        <span class="label">Token Status:</span>
+                        <span class="value success">✅ Valid</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="label">Expires At:</span>
+                        <span class="value">{{.TokenStatus.ExpiresAt.Format "2006-01-02 15:04:05"}}</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="label">Time Until Expiry:</span>
+                        <span class="value">{{.TokenTimeRemaining}}</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="label">Auto-refresh:</span>
+                        <span class="value {{if .TokenStatus.HasRefreshToken}}success{{else}}warning{{end}}">
+                            {{if .TokenStatus.HasRefreshToken}}✅ Enabled{{else}}⚠️ Disabled{{end}}
+                        </span>
+                    </div>
+                    {{if .TokenStatus.RefreshesAt}}
+                    <div class="status-item">
+                        <span class="label">Next Refresh:</span>
+                        <span class="value">{{.TokenStatus.RefreshesAt.Format "2006-01-02 15:04:05"}}</span>
+                    </div>
+                    {{end}}
+                </div>
+                {{else}}
+                <div class="status-details">
+                    <div class="status-item">
+                        <span class="label">Token Status:</span>
+                        <span class="value error">❌ Missing or Invalid</span>
+                    </div>
+                    <div class="auth-action">
+                        <a href="/auth-url" class="btn btn-primary">🔗 Authenticate Now</a>
+                    </div>
+                </div>
+                {{end}}
+            </div>
+        </div>
+
+        <!-- API Connection Status -->
+        <div class="card">
+            <div class="card-header">
+                <h3>🌐 API Connection</h3>
+                <span class="status-indicator {{.APIStatus}}">{{.APIStatus | title}}</span>
+            </div>
+            <div class="card-content">
+                <div class="status-details">
+                    <div class="status-item">
+                        <span class="label">Trakt.tv API:</span>
+                        <span class="value {{.APIStatus}}">
+                            {{if eq .APIStatus "healthy"}}✅ Connected{{else if eq .APIStatus "warning"}}⚠️ Slow{{else}}❌ Disconnected{{end}}
+                        </span>
+                    </div>
+                    <div class="status-item">
+                        <span class="label">Last Check:</span>
+                        <span class="value">{{.LastAPICheck.Format "2006-01-02 15:04:05"}}</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="label">Response Time:</span>
+                        <span class="value">{{.APIResponseTime}}</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="label">Rate Limit:</span>
+                        <span class="value">{{.RateLimit.Remaining}}/{{.RateLimit.Limit}} remaining</span>
+                    </div>
+                    {{if .RateLimit.ResetTime}}
+                    <div class="status-item">
+                        <span class="label">Rate Limit Reset:</span>
+                        <span class="value">{{.RateLimit.ResetTime.Format "15:04:05"}}</span>
+                    </div>
+                    {{end}}
+                </div>
+                <button class="btn btn-secondary" onclick="testAPIConnection()">🧪 Test Connection</button>
+            </div>
+        </div>
+
+        <!-- Server Information -->
+        <div class="card">
+            <div class="card-header">
+                <h3>🖥️ Server Information</h3>
+                <span class="status-indicator {{.ServerStatus}}">{{.ServerStatus | title}}</span>
+            </div>
+            <div class="card-content">
+                <div class="status-details">
+                    <div class="status-item">
+                        <span class="label">Server Status:</span>
+                        <span class="value {{.ServerStatus}}">
+                            {{if eq .ServerStatus "healthy"}}✅ Running{{else}}❌ Error{{end}}
+                        </span>
+                    </div>
+                    <div class="status-item">
+                        <span class="label">Version:</span>
+                        <span class="value">{{.Version}}</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="label">Uptime:</span>
+                        <span class="value">{{.Uptime}}</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="label">Port:</span>
+                        <span class="value">{{.Port}}</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="label">Build Date:</span>
+                        <span class="value">{{.BuildDate}}</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="label">Go Version:</span>
+                        <span class="value">{{.GoVersion}}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Configuration Status -->
+        <div class="card">
+            <div class="card-header">
+                <h3>⚙️ Configuration</h3>
+                <span class="status-indicator {{.ConfigStatus}}">{{.ConfigStatus | title}}</span>
+            </div>
+            <div class="card-content">
+                <div class="status-details">
+                    <div class="status-item">
+                        <span class="label">Config File:</span>
+                        <span class="value {{.ConfigStatus}}">
+                            {{if eq .ConfigStatus "healthy"}}✅ Loaded{{else}}❌ Error{{end}}
+                        </span>
+                    </div>
+                    <div class="status-item">
+                        <span class="label">Client ID:</span>
+                        <span class="value">{{.Config.ClientID | mask}}</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="label">Redirect URI:</span>
+                        <span class="value">{{.Config.RedirectURI}}</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="label">OAuth Enabled:</span>
+                        <span class="value {{if .Config.UseOAuth}}success{{else}}warning{{end}}">
+                            {{if .Config.UseOAuth}}✅ Yes{{else}}⚠️ No{{end}}
+                        </span>
+                    </div>
+                    <div class="status-item">
+                        <span class="label">Performance Mode:</span>
+                        <span class="value">{{.Config.PerformanceMode}}</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="label">Worker Pool Size:</span>
+                        <span class="value">{{.Config.WorkerPoolSize}}</span>
+                    </div>
+                </div>
+                <a href="/config" class="btn btn-secondary">⚙️ Edit Configuration</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- System Resources -->
+    <div class="system-resources">
+        <h2>📊 System Resources</h2>
+        <div class="resource-grid">
+            <div class="resource-card">
+                <h4>💾 Memory Usage</h4>
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: {{.Resources.MemoryPercent}}%"></div>
+                </div>
+                <span class="resource-text">{{.Resources.MemoryUsed}} / {{.Resources.MemoryTotal}} ({{.Resources.MemoryPercent}}%)</span>
+            </div>
+            
+            <div class="resource-card">
+                <h4>🔄 Goroutines</h4>
+                <div class="resource-number">{{.Resources.Goroutines}}</div>
+            </div>
+            
+            <div class="resource-card">
+                <h4>📁 Disk Space</h4>
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: {{.Resources.DiskPercent}}%"></div>
+                </div>
+                <span class="resource-text">{{.Resources.DiskUsed}} / {{.Resources.DiskTotal}} ({{.Resources.DiskPercent}}%)</span>
+            </div>
+            
+            <div class="resource-card">
+                <h4>🗃️ Cache Entries</h4>
+                <div class="resource-number">{{.Resources.CacheEntries}}</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Logs -->
+    <div class="recent-logs">
+        <h2>📝 Recent Logs</h2>
+        <div class="log-controls">
+            <select id="log-level-filter">
+                <option value="">All Levels</option>
+                <option value="error">Error</option>
+                <option value="warning">Warning</option>
+                <option value="info">Info</option>
+                <option value="debug">Debug</option>
+            </select>
+            <button class="btn btn-secondary" onclick="refreshLogs()">🔄 Refresh</button>
+            <button class="btn btn-secondary" onclick="downloadLogs()">📥 Download Logs</button>
+        </div>
+        
+        <div class="log-viewer" id="log-viewer">
+            {{range .RecentLogs}}
+            <div class="log-entry log-{{.Level}}">
+                <span class="log-time">{{.Time.Format "15:04:05"}}</span>
+                <span class="log-level">{{.Level | upper}}</span>
+                <span class="log-message">{{.Message}}</span>
+                {{if .Context}}
+                <div class="log-context">{{.Context}}</div>
+                {{end}}
+            </div>
+            {{end}}
+        </div>
+    </div>
+</div>
+
+<script>
+function testAPIConnection() {
+    const btn = event.target;
+    const originalText = btn.textContent;
+    btn.textContent = '🔄 Testing...';
+    btn.disabled = true;
+    
+    fetch('/api/test-connection')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showAlert('success', `API connection successful! Response time: ${data.responseTime}`);
+            } else {
+                showAlert('error', `API connection failed: ${data.error}`);
+            }
+        })
+        .catch(error => {
+            showAlert('error', `API test failed: ${error.message}`);
+        })
+        .finally(() => {
+            btn.textContent = originalText;
+            btn.disabled = false;
+            // Refresh page after a short delay to update status
+            setTimeout(() => location.reload(), 1000);
+        });
+}
+
+function refreshLogs() {
+    fetch('/api/logs/recent')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                updateLogViewer(data.logs);
+            } else {
+                showAlert('error', 'Failed to refresh logs');
+            }
+        })
+        .catch(error => {
+            showAlert('error', 'Failed to refresh logs: ' + error.message);
+        });
+}
+
+function downloadLogs() {
+    window.open('/api/logs/download', '_blank');
+}
+
+function updateLogViewer(logs) {
+    const viewer = document.getElementById('log-viewer');
+    viewer.innerHTML = '';
+    
+    logs.forEach(log => {
+        const entry = document.createElement('div');
+        entry.className = `log-entry log-${log.level}`;
+        
+        entry.innerHTML = `
+            <span class="log-time">${new Date(log.time).toLocaleTimeString()}</span>
+            <span class="log-level">${log.level.toUpperCase()}</span>
+            <span class="log-message">${log.message}</span>
+            ${log.context ? `<div class="log-context">${log.context}</div>` : ''}
+        `;
+        
+        viewer.appendChild(entry);
+    });
+}
+
+// Log level filtering
+document.getElementById('log-level-filter').addEventListener('change', function() {
+    const level = this.value;
+    const entries = document.querySelectorAll('.log-entry');
+    
+    entries.forEach(entry => {
+        if (!level || entry.classList.contains(`log-${level}`)) {
+            entry.style.display = 'block';
+        } else {
+            entry.style.display = 'none';
+        }
+    });
+});
+
+// Auto-refresh status every 30 seconds
+setInterval(() => {
+    if (document.visibilityState === 'visible') {
+        location.reload();
+    }
+}, 30000);
+</script>
+{{end}}

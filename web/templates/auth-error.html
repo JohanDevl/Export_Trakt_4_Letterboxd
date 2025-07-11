@@ -1,0 +1,309 @@
+{{define "content"}}
+<div class="auth-page">
+    <div class="auth-container error">
+        <div class="auth-header">
+            <div class="error-icon">❌</div>
+            <h1>Authentication Error</h1>
+            <p>There was a problem with the authentication process</p>
+        </div>
+        
+        {{if .Alert}}
+        <div class="error-details">
+            <div class="error-message">
+                <span class="error-icon-small">{{.Alert.Icon}}</span>
+                <span class="error-text">{{.Alert.Message}}</span>
+            </div>
+        </div>
+        {{end}}
+        
+        <div class="troubleshooting">
+            <h3>🔧 What can you try?</h3>
+            <div class="troubleshooting-steps">
+                <div class="step">
+                    <div class="step-number">1</div>
+                    <div class="step-content">
+                        <strong>Check your Trakt.tv account</strong>
+                        <p>Make sure you're logged into Trakt.tv and your account is active</p>
+                    </div>
+                </div>
+                
+                <div class="step">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <strong>Verify server configuration</strong>
+                        <p>Ensure the redirect URI in your Trakt.tv app matches this server's configuration</p>
+                    </div>
+                </div>
+                
+                <div class="step">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <strong>Try again</strong>
+                        <p>Generate a new authentication URL and try the process again</p>
+                    </div>
+                </div>
+                
+                <div class="step">
+                    <div class="step-number">4</div>
+                    <div class="step-content">
+                        <strong>Check server logs</strong>
+                        <p>Look at the server logs for more detailed error information</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="common-issues">
+            <h3>⚠️ Common Issues</h3>
+            <div class="issues-list">
+                <div class="issue-item">
+                    <strong>Invalid Client ID</strong>
+                    <p>The client ID in your configuration doesn't match your Trakt.tv application</p>
+                </div>
+                <div class="issue-item">
+                    <strong>Redirect URI Mismatch</strong>
+                    <p>The redirect URI configured in Trakt.tv doesn't match this server's URL</p>
+                </div>
+                <div class="issue-item">
+                    <strong>Network Issues</strong>
+                    <p>Connection problems between this server and Trakt.tv API</p>
+                </div>
+                <div class="issue-item">
+                    <strong>Expired Authorization Code</strong>
+                    <p>The authorization code from Trakt.tv has expired (codes are valid for 10 minutes)</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="help-links">
+            <h3>📚 Need More Help?</h3>
+            <div class="links-grid">
+                <a href="https://trakt.docs.apiary.io/#reference/authentication-oauth" target="_blank" class="help-link">
+                    <div class="link-icon">📖</div>
+                    <div class="link-title">Trakt.tv OAuth Docs</div>
+                    <div class="link-desc">Official OAuth documentation</div>
+                </a>
+                
+                <a href="/status" class="help-link">
+                    <div class="link-icon">🔍</div>
+                    <div class="link-title">System Status</div>
+                    <div class="link-desc">Check server configuration</div>
+                </a>
+                
+                <a href="https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/issues" target="_blank" class="help-link">
+                    <div class="link-icon">🐛</div>
+                    <div class="link-title">Report Issue</div>
+                    <div class="link-desc">Get community support</div>
+                </a>
+            </div>
+        </div>
+        
+        <div class="auth-footer">
+            <a href="/auth-url" class="btn btn-primary">🔄 Try Again</a>
+            <a href="/" class="btn btn-secondary">🏠 Back to Dashboard</a>
+        </div>
+    </div>
+</div>
+
+<style>
+.auth-page {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    min-height: 60vh;
+    padding: 2rem 0;
+}
+
+.auth-container.error {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+    padding: 3rem;
+    max-width: 700px;
+    width: 100%;
+    text-align: center;
+    border-top: 4px solid #e53e3e;
+}
+
+.error-icon {
+    font-size: 4rem;
+    margin-bottom: 1rem;
+}
+
+.auth-header h1 {
+    color: #e53e3e;
+    margin-bottom: 1rem;
+}
+
+.auth-header p {
+    color: #718096;
+    font-size: 1.1rem;
+    margin-bottom: 2rem;
+}
+
+.error-details {
+    background: #fed7d7;
+    border: 1px solid #fc8181;
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.error-message {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    color: #c53030;
+    font-weight: 500;
+}
+
+.error-icon-small {
+    font-size: 1.25rem;
+}
+
+.troubleshooting, .common-issues, .help-links {
+    margin-bottom: 2rem;
+    text-align: left;
+}
+
+.troubleshooting h3, .common-issues h3, .help-links h3 {
+    color: #2d3748;
+    margin-bottom: 1.5rem;
+    text-align: center;
+}
+
+.troubleshooting-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.step {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    background: #f7fafc;
+    border-radius: 8px;
+    padding: 1rem;
+}
+
+.step-number {
+    background: #667eea;
+    color: white;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    flex-shrink: 0;
+}
+
+.step-content strong {
+    color: #2d3748;
+    display: block;
+    margin-bottom: 0.25rem;
+}
+
+.step-content p {
+    color: #718096;
+    margin: 0;
+    font-size: 0.9rem;
+}
+
+.issues-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.issue-item {
+    background: #fef5e7;
+    border: 1px solid #f6e05e;
+    border-radius: 8px;
+    padding: 1rem;
+}
+
+.issue-item strong {
+    color: #975a16;
+    display: block;
+    margin-bottom: 0.25rem;
+}
+
+.issue-item p {
+    color: #744210;
+    margin: 0;
+    font-size: 0.9rem;
+}
+
+.links-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+}
+
+.help-link {
+    background: #f7fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 1.5rem;
+    text-decoration: none;
+    color: inherit;
+    transition: all 0.3s ease;
+    text-align: center;
+}
+
+.help-link:hover {
+    background: #edf2f7;
+    transform: translateY(-2px);
+    text-decoration: none;
+    color: inherit;
+}
+
+.link-icon {
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+}
+
+.link-title {
+    font-weight: 600;
+    color: #2d3748;
+    margin-bottom: 0.25rem;
+}
+
+.link-desc {
+    font-size: 0.9rem;
+    color: #718096;
+}
+
+.auth-footer {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    padding-top: 2rem;
+    border-top: 1px solid #e2e8f0;
+}
+
+@media (max-width: 768px) {
+    .auth-container.error {
+        padding: 2rem;
+        margin: 1rem;
+    }
+    
+    .step {
+        flex-direction: column;
+        text-align: center;
+        gap: 0.5rem;
+    }
+    
+    .links-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .auth-footer {
+        flex-direction: column;
+    }
+}
+</style>
+{{end}}

@@ -1,0 +1,280 @@
+{{define "content"}}
+<div class="auth-page">
+    <div class="auth-container success">
+        <div class="auth-header">
+            <div class="success-icon">✅</div>
+            <h1>Authentication Successful!</h1>
+            <p>You have successfully authenticated with Trakt.tv</p>
+        </div>
+        
+        <div class="auth-details">
+            <div class="success-message">
+                <h3>🎉 What's been configured:</h3>
+                <ul>
+                    <li>✅ OAuth token received and stored securely</li>
+                    <li>✅ Automatic token refresh enabled</li>
+                    <li>✅ Full access to Trakt.tv data granted</li>
+                    <li>✅ All export features are now available</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="next-steps">
+            <h3>🚀 Next Steps</h3>
+            <div class="action-grid">
+                <a href="/" class="action-item">
+                    <div class="action-icon">📊</div>
+                    <div class="action-title">View Dashboard</div>
+                    <div class="action-desc">See your system status and recent activity</div>
+                </a>
+                
+                <a href="/exports" class="action-item">
+                    <div class="action-icon">📁</div>
+                    <div class="action-title">Start Export</div>
+                    <div class="action-desc">Export your Trakt.tv data to Letterboxd format</div>
+                </a>
+                
+                <a href="/status" class="action-item">
+                    <div class="action-icon">🔍</div>
+                    <div class="action-title">Check Status</div>
+                    <div class="action-desc">Verify authentication and system health</div>
+                </a>
+            </div>
+        </div>
+        
+        <div class="security-info">
+            <h3>🔒 Security Information</h3>
+            <div class="security-details">
+                <div class="security-item">
+                    <span class="security-icon">🔐</span>
+                    <div class="security-content">
+                        <strong>Secure Storage</strong>
+                        <p>Your OAuth token is encrypted and stored securely using the system keyring</p>
+                    </div>
+                </div>
+                <div class="security-item">
+                    <span class="security-icon">🔄</span>
+                    <div class="security-content">
+                        <strong>Auto-Refresh</strong>
+                        <p>Tokens are automatically refreshed before expiration to maintain access</p>
+                    </div>
+                </div>
+                <div class="security-item">
+                    <span class="security-icon">🚫</span>
+                    <div class="security-content">
+                        <strong>Revocation</strong>
+                        <p>You can revoke access anytime through your Trakt.tv account settings</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="auth-footer">
+            <button onclick="window.close()" class="btn btn-secondary">🗙 Close Window</button>
+            <a href="/" class="btn btn-primary">🏠 Go to Dashboard</a>
+        </div>
+    </div>
+</div>
+
+<script>
+// Auto-close window after 5 seconds with user confirmation
+setTimeout(function() {
+    if (confirm("Authentication successful! Close this window and return to the main application?")) {
+        window.close();
+    }
+}, 5000);
+
+// If window.close() doesn't work (e.g., not opened as popup), redirect to dashboard
+setTimeout(function() {
+    if (!window.closed) {
+        window.location.href = '/';
+    }
+}, 8000);
+</script>
+
+<style>
+.auth-page {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    min-height: 60vh;
+    padding: 2rem 0;
+}
+
+.auth-container.success {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+    padding: 3rem;
+    max-width: 700px;
+    width: 100%;
+    text-align: center;
+    border-top: 4px solid #38a169;
+}
+
+.success-icon {
+    font-size: 4rem;
+    margin-bottom: 1rem;
+}
+
+.auth-header h1 {
+    color: #38a169;
+    margin-bottom: 1rem;
+}
+
+.auth-header p {
+    color: #718096;
+    font-size: 1.1rem;
+    margin-bottom: 2rem;
+}
+
+.auth-details {
+    background: #f0fff4;
+    border: 1px solid #9ae6b4;
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+    text-align: left;
+}
+
+.success-message h3 {
+    color: #276749;
+    margin-bottom: 1rem;
+}
+
+.success-message ul {
+    list-style: none;
+    padding: 0;
+}
+
+.success-message li {
+    color: #276749;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+}
+
+.next-steps {
+    margin-bottom: 2rem;
+    text-align: left;
+}
+
+.next-steps h3 {
+    color: #2d3748;
+    margin-bottom: 1.5rem;
+    text-align: center;
+}
+
+.action-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+}
+
+.action-item {
+    background: #f7fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 1.5rem;
+    text-decoration: none;
+    color: inherit;
+    transition: all 0.3s ease;
+}
+
+.action-item:hover {
+    background: #edf2f7;
+    transform: translateY(-2px);
+    text-decoration: none;
+    color: inherit;
+}
+
+.action-icon {
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+}
+
+.action-title {
+    font-weight: 600;
+    color: #2d3748;
+    margin-bottom: 0.25rem;
+}
+
+.action-desc {
+    font-size: 0.9rem;
+    color: #718096;
+}
+
+.security-info {
+    margin-bottom: 2rem;
+    text-align: left;
+}
+
+.security-info h3 {
+    color: #2d3748;
+    margin-bottom: 1rem;
+    text-align: center;
+}
+
+.security-details {
+    background: #f7fafc;
+    border-radius: 8px;
+    padding: 1.5rem;
+}
+
+.security-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.security-item:last-child {
+    margin-bottom: 0;
+}
+
+.security-icon {
+    font-size: 1.5rem;
+    margin-top: 0.25rem;
+}
+
+.security-content strong {
+    color: #2d3748;
+    display: block;
+    margin-bottom: 0.25rem;
+}
+
+.security-content p {
+    color: #718096;
+    margin: 0;
+    font-size: 0.9rem;
+}
+
+.auth-footer {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    padding-top: 2rem;
+    border-top: 1px solid #e2e8f0;
+}
+
+@media (max-width: 768px) {
+    .auth-container.success {
+        padding: 2rem;
+        margin: 1rem;
+    }
+    
+    .action-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .auth-footer {
+        flex-direction: column;
+    }
+    
+    .security-item {
+        flex-direction: column;
+        text-align: center;
+        gap: 0.5rem;
+    }
+}
+</style>
+{{end}}
