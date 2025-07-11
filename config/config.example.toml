@@ -17,9 +17,8 @@
 [trakt]
 #  Your Trakt.tv application credentials
 # ✅ CONFIGURED: Real credentials in use
-client_id = "c479b2e7dc4fbec157d89cd4cba9cf88fc614de7ec17813fc9f5bac92e1c8786"
-client_secret = "dc25b9c7cbe7346b9ff65d545ddbc8d1fe645268d42b6a105b3da249dc73fb2a"
-access_token = ""
+client_id = ""
+client_secret = ""
 
 #  API endpoint (don't change unless you know what you're doing)
 api_base_url = "https://api.trakt.tv"
