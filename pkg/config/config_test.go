@@ -8,6 +8,25 @@ import (
 	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/security"
 )
 
+func TestConfigSetDefaults(t *testing.T) {
+	cfg := &Config{}
+	cfg.SetDefaults()
+	
+	// Check that defaults are set
+	if cfg.Trakt.APIBaseURL != "https://api.trakt.tv" {
+		t.Errorf("Expected default API URL, got %s", cfg.Trakt.APIBaseURL)
+	}
+	if cfg.Export.Format != "csv" {
+		t.Errorf("Expected default format csv, got %s", cfg.Export.Format)
+	}
+	if cfg.Logging.Level != "info" {
+		t.Errorf("Expected default log level info, got %s", cfg.Logging.Level)
+	}
+	if cfg.I18n.DefaultLanguage != "en" {
+		t.Errorf("Expected default language en, got %s", cfg.I18n.DefaultLanguage)
+	}
+}
+
 func TestLoadConfig(t *testing.T) {
 	// Create a temporary directory for test files
 	tmpDir, err := os.MkdirTemp("", "config_test")

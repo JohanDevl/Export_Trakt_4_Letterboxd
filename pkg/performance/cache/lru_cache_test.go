@@ -88,3 +88,25 @@ func TestNewAPIResponseCache(t *testing.T) {
 		t.Fatal("Expected API response cache to be created")
 	}
 }
+
+func TestCacheKeys(t *testing.T) {
+	config := CacheConfig{
+		Capacity: 5,
+		TTL:      time.Hour,
+	}
+	cache := NewLRUCache(config)
+	
+	// Test Keys method on empty cache
+	keys := cache.Keys()
+	if len(keys) != 0 {
+		t.Errorf("Expected 0 keys in empty cache, got %d", len(keys))
+	}
+	
+	// Add some data and test keys again
+	cache.Set("test1", "value1")
+	cache.Set("test2", "value2")
+	keys = cache.Keys()
+	if len(keys) != 2 {
+		t.Errorf("Expected 2 keys, got %d", len(keys))
+	}
+}
