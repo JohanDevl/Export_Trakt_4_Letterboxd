@@ -40,9 +40,10 @@ type LetterboxdConfig struct {
 
 // ExportConfig holds export settings
 type ExportConfig struct {
-	Format     string `toml:"format"`
-	DateFormat string `toml:"date_format"`
-	Timezone   string `toml:"timezone"`
+	Format      string `toml:"format"`
+	DateFormat  string `toml:"date_format"`
+	Timezone    string `toml:"timezone"`
+	HistoryMode string `toml:"history_mode"` // "aggregated" or "individual"
 }
 
 // LoggingConfig holds logging settings
@@ -140,6 +141,16 @@ func (c *ExportConfig) Validate() error {
 	if c.DateFormat == "" {
 		return fmt.Errorf("date_format is required")
 	}
+	// Validate history mode
+	if c.HistoryMode != "" {
+		validModes := map[string]bool{
+			"aggregated": true,
+			"individual": true,
+		}
+		if !validModes[c.HistoryMode] {
+			return fmt.Errorf("invalid history_mode: %s (must be 'aggregated' or 'individual')", c.HistoryMode)
+		}
+	}
 	// If timezone is empty, we'll use UTC as default, so no error needed
 	return nil
 }
@@ -230,6 +241,9 @@ func (c *Config) SetDefaults() {
 	}
 	if c.Export.Timezone == "" {
 		c.Export.Timezone = "UTC"
+	}
+	if c.Export.HistoryMode == "" {
+		c.Export.HistoryMode = "aggregated"
 	}
 
 	// Logging defaults

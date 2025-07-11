@@ -65,6 +65,13 @@ date_format = "2006-01-02"
 #  CONFIGURED: Using Paris timezone
 timezone = "Europe/Paris"
 
+# 📊 History mode for watched movie exports
+# Options: "aggregated" | "individual"
+# "aggregated": One entry per movie with latest watch date (default/original behavior)
+# "individual": One entry per watch event with all watch dates and proper rewatch tracking
+# 💡 Use "individual" for complete watch history with multiple viewing dates
+history_mode = "aggregated"
+
 # ┌─────────────────────────────────────────────────────────────────────────────┐
 # │                            📝 LOGGING CONFIGURATION                        │
 # └─────────────────────────────────────────────────────────────────────────────┘

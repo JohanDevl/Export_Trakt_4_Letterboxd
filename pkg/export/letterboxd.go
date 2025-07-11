@@ -273,6 +273,148 @@ func (e *LetterboxdExporter) ExportMovies(movies []api.Movie, client *api.Client
 	return nil
 }
 
+// ExportMovieHistory exports the user's complete movie watch history to a CSV file with individual watch events
+func (e *LetterboxdExporter) ExportMovieHistory(history []api.HistoryItem, apiClient *api.Client) error {
+	// Get export directory
+	exportDir, err := e.getExportDir()
+	if err != nil {
+		return err
+	}
+
+	// Check if we're in a test environment
+	isTestEnv := containsAny(exportDir, []string{"test", "tmp", "temp"})
+
+	// Use configured filename, or generate one with timestamp if not specified
+	var filename string
+	if e.config.Letterboxd.WatchedFilename != "" {
+		filename = e.config.Letterboxd.WatchedFilename
+	} else if isTestEnv {
+		filename = "watched-history-test.csv"
+	} else {
+		now := e.getTimeInConfigTimezone()
+		filename = fmt.Sprintf("watched-history_%s_%s.csv", 
+			now.Format("2006-01-02"),
+			now.Format("15-04"))
+	}
+	filePath := filepath.Join(exportDir, filename)
+
+	file, err := os.Create(filePath)
+	if err != nil {
+		e.log.Error("errors.file_create_failed", map[string]interface{}{
+			"error": err.Error(),
+			"path": filePath,
+		})
+		return fmt.Errorf("failed to create export file: %w", err)
+	}
+	defer file.Close()
+
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+
+	// Write header
+	header := []string{"Title", "Year", "WatchedDate", "Rating10", "imdbID", "tmdbID", "Rewatch"}
+	if err := writer.Write(header); err != nil {
+		return fmt.Errorf("failed to write header: %w", err)
+	}
+
+	// Get ratings if available
+	movieRatings := make(map[string]string)
+	if apiClient != nil {
+		if ratings, err := apiClient.GetRatings(); err == nil {
+			for _, rating := range ratings {
+				if rating.Movie.IDs.IMDB != "" {
+					movieRatings[rating.Movie.IDs.IMDB] = strconv.Itoa(int(rating.Rating))
+				}
+			}
+		}
+	}
+
+	// Sort history by watched date (most recent first)
+	sortedHistory := make([]api.HistoryItem, len(history))
+	copy(sortedHistory, history)
+	
+	sort.Slice(sortedHistory, func(i, j int) bool {
+		timeI, errI := time.Parse(time.RFC3339, sortedHistory[i].WatchedAt)
+		timeJ, errJ := time.Parse(time.RFC3339, sortedHistory[j].WatchedAt)
+		
+		if errI != nil && errJ != nil {
+			return false
+		}
+		if errI != nil {
+			return false
+		}
+		if errJ != nil {
+			return true
+		}
+		
+		return timeI.After(timeJ)
+	})
+
+	// Track first occurrence of each movie to determine rewatch status
+	movieFirstWatch := make(map[string]bool)
+	
+	// Process in reverse order to identify first watches
+	for i := len(sortedHistory) - 1; i >= 0; i-- {
+		item := sortedHistory[i]
+		if item.Movie.IDs.IMDB != "" {
+			if !movieFirstWatch[item.Movie.IDs.IMDB] {
+				movieFirstWatch[item.Movie.IDs.IMDB] = true
+			}
+		}
+	}
+
+	// Track which movies we've seen to determine rewatch
+	seenMovies := make(map[string]bool)
+
+	// Write history entries
+	for _, item := range sortedHistory {
+		// Parse watched date
+		watchedDate := ""
+		if item.WatchedAt != "" {
+			if parsedTime, err := time.Parse(time.RFC3339, item.WatchedAt); err == nil {
+				watchedDate = parsedTime.Format(e.config.Export.DateFormat)
+			}
+		}
+
+		// Get rating for this movie
+		rating := ""
+		if r, exists := movieRatings[item.Movie.IDs.IMDB]; exists {
+			rating = r
+		}
+		
+		// Determine if this is a rewatch
+		rewatch := "false"
+		if seenMovies[item.Movie.IDs.IMDB] {
+			rewatch = "true"
+		} else {
+			seenMovies[item.Movie.IDs.IMDB] = true
+		}
+
+		// Convert TMDB ID to string
+		tmdbID := strconv.Itoa(item.Movie.IDs.TMDB)
+
+		record := []string{
+			item.Movie.Title,
+			strconv.Itoa(item.Movie.Year),
+			watchedDate,
+			rating,
+			item.Movie.IDs.IMDB,
+			tmdbID,
+			rewatch,
+		}
+
+		if err := writer.Write(record); err != nil {
+			return fmt.Errorf("failed to write history record: %w", err)
+		}
+	}
+
+	e.log.Info("export.history_export_complete", map[string]interface{}{
+		"count": len(history),
+		"path":  filePath,
+	})
+	return nil
+}
+
 // ExportCollectionMovies exports the user's movie collection to a CSV file in Letterboxd format
 func (e *LetterboxdExporter) ExportCollectionMovies(movies []api.CollectionMovie) error {
 	// Get export directory

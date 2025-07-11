@@ -35,6 +35,7 @@ func main() {
 	configPath := flag.String("config", "config/config.toml", "Path to configuration file")
 	exportType := flag.String("export", "watched", "Type of export (watched, collection, shows, ratings, watchlist, all)")
 	exportMode := flag.String("mode", "normal", "Export mode (normal, initial, complete)")
+	historyMode := flag.String("history-mode", "", "History mode for watched export (aggregated, individual) - overrides config")
 	runOnce := flag.Bool("run", false, "Run the script immediately once then exit")
 	scheduleFlag := flag.String("schedule", "", "Run the script according to cron schedule format (e.g., '0 */6 * * *' for every 6 hours)")
 	validateSecurity := flag.Bool("validate-security", false, "Validate security configuration and exit")
@@ -89,7 +90,7 @@ func main() {
 			"export_type": *exportType,
 			"export_mode": *exportMode,
 		})
-		runExportOnce(cfg, log, *exportType, *exportMode)
+		runExportOnce(cfg, log, *exportType, *exportMode, *historyMode)
 		return
 	}
 
@@ -176,7 +177,7 @@ func main() {
 
 		switch *exportType {
 		case "watched":
-			exportWatchedMovies(traktClient, letterboxdExporter, log)
+			exportWatchedMovies(traktClient, letterboxdExporter, log, *historyMode)
 		case "collection":
 			exportCollection(traktClient, letterboxdExporter, log)
 		case "shows":
@@ -186,7 +187,7 @@ func main() {
 		case "watchlist":
 			exportWatchlist(traktClient, letterboxdExporter, log)
 		case "all":
-			exportWatchedMovies(traktClient, letterboxdExporter, log)
+			exportWatchedMovies(traktClient, letterboxdExporter, log, *historyMode)
 			exportCollection(traktClient, letterboxdExporter, log)
 			exportShows(traktClient, letterboxdExporter, log)
 			exportRatings(traktClient, letterboxdExporter, log)
@@ -302,16 +303,51 @@ func main() {
 	}
 }
 
-func exportWatchedMovies(client *api.Client, exporter *export.LetterboxdExporter, log logger.Logger) {
-	// Get watched movies
-	log.Info("export.retrieving_watched_movies", nil)
+func exportWatchedMovies(client *api.Client, exporter *export.LetterboxdExporter, log logger.Logger, historyMode string) {
+	// Determine which history mode to use
+	effectiveHistoryMode := historyMode
+	if effectiveHistoryMode == "" {
+		effectiveHistoryMode = client.GetConfig().Export.HistoryMode
+	}
+
+	// Export based on history mode
+	if effectiveHistoryMode == "individual" {
+		// Get complete movie history (individual watch events)
+		log.Info("export.retrieving_movie_history", nil)
+		history, err := client.GetMovieHistory()
+		if err != nil {
+			log.Error("errors.api_request_failed", map[string]interface{}{"error": err.Error()})
+			os.Exit(1)
+		}
+
+		log.Info("export.history_retrieved", map[string]interface{}{
+			"count": len(history),
+			"mode":  "individual",
+		})
+
+		// Export individual watch history
+		log.Info("export.exporting_movie_history", nil)
+		if err := exporter.ExportMovieHistory(history, client); err != nil {
+			log.Error("export.export_failed", map[string]interface{}{"error": err.Error()})
+			os.Exit(1)
+		}
+		return
+	}
+
+	// Default: aggregated mode (original behavior)
+	log.Info("export.retrieving_watched_movies", map[string]interface{}{
+		"mode": "aggregated",
+	})
 	movies, err := client.GetWatchedMovies()
 	if err != nil {
 		log.Error("errors.api_request_failed", map[string]interface{}{"error": err.Error()})
 		os.Exit(1)
 	}
 
-	log.Info("export.movies_retrieved", map[string]interface{}{"count": len(movies)})
+	log.Info("export.movies_retrieved", map[string]interface{}{
+		"count": len(movies),
+		"mode":  "aggregated",
+	})
 
 	// If extended_info is set to "letterboxd", export in Letterboxd format
 	if client.GetConfig().Trakt.ExtendedInfo == "letterboxd" {
@@ -430,7 +466,7 @@ func exportWatchlist(client *api.Client, exporter *export.LetterboxdExporter, lo
 }
 
 // runExportOnce executes the export once and then exits
-func runExportOnce(cfg *config.Config, log logger.Logger, exportType, exportMode string) {
+func runExportOnce(cfg *config.Config, log logger.Logger, exportType, exportMode, historyMode string) {
 	log.Info("export.starting_execution", map[string]interface{}{
 		"export_type": exportType,
 		"export_mode": exportMode,
@@ -549,7 +585,7 @@ func runExportOnce(cfg *config.Config, log logger.Logger, exportType, exportMode
 	switch exportType {
 	case "watched":
 		log.Info("export.executing_watched_movies", nil)
-		exportWatchedMovies(traktClient, letterboxdExporter, log)
+		exportWatchedMovies(traktClient, letterboxdExporter, log, historyMode)
 	case "collection":
 		log.Info("export.executing_collection", nil)
 		exportCollection(traktClient, letterboxdExporter, log)
@@ -564,7 +600,7 @@ func runExportOnce(cfg *config.Config, log logger.Logger, exportType, exportMode
 		exportWatchlist(traktClient, letterboxdExporter, log)
 	case "all":
 		log.Info("export.executing_all_types", nil)
-		exportWatchedMovies(traktClient, letterboxdExporter, log)
+		exportWatchedMovies(traktClient, letterboxdExporter, log, historyMode)
 		exportCollection(traktClient, letterboxdExporter, log)
 		exportShows(traktClient, letterboxdExporter, log)
 		exportRatings(traktClient, letterboxdExporter, log)
@@ -681,7 +717,7 @@ func runWithSchedule(cfg *config.Config, log logger.Logger, schedule, exportType
 		})
 		
 		startTime := time.Now()
-		runExportOnce(cfg, log, exportType, exportMode)
+		runExportOnce(cfg, log, exportType, exportMode, "")
 		duration := time.Since(startTime)
 		
 		// Get next run time for display
@@ -1528,7 +1564,7 @@ setTimeout(function() {
 				"client_ip": r.RemoteAddr,
 			})
 			
-			runExportOnce(cfg, log, exportType, "normal")
+			runExportOnce(cfg, log, exportType, "normal", "")
 		}()
 	})
 
