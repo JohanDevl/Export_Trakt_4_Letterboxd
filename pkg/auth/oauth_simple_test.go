@@ -101,7 +101,7 @@ func TestOAuthManager_ParseCallbackURL_ErrorConditions(t *testing.T) {
 	assert.Error(t, err)
 	assert.Empty(t, code)
 	assert.Empty(t, state)
-	assert.Contains(t, err.Error(), "invalid callback URL")
+	assert.Contains(t, err.Error(), "failed to parse callback URL")
 }
 
 func TestTokenResponse_JSONSerialization(t *testing.T) {
