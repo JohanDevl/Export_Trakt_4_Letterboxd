@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/johandevl/Export_Trakt_4_Letterboxd/pkg/auth"
-	"github.com/johandevl/Export_Trakt_4_Letterboxd/pkg/config"
-	"github.com/johandevl/Export_Trakt_4_Letterboxd/pkg/logger"
-	"github.com/johandevl/Export_Trakt_4_Letterboxd/pkg/web/handlers"
+	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/auth"
+	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/config"
+	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/logger"
+	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/web/handlers"
 )
 
 type Server struct {
@@ -167,8 +167,8 @@ func (s *Server) setupRoutes() {
 	
 	// Download handler for export files
 	exportsDir := "./exports"
-	if s.config.Export.OutputDir != "" {
-		exportsDir = s.config.Export.OutputDir
+	if s.config.Letterboxd.ExportDir != "" {
+		exportsDir = s.config.Letterboxd.ExportDir
 	}
 	downloadHandler := handlers.NewDownloadHandler(exportsDir, s.logger)
 	

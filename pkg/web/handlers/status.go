@@ -8,9 +8,9 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/johandevl/Export_Trakt_4_Letterboxd/pkg/auth"
-	"github.com/johandevl/Export_Trakt_4_Letterboxd/pkg/config"
-	"github.com/johandevl/Export_Trakt_4_Letterboxd/pkg/logger"
+	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/auth"
+	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/config"
+	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/logger"
 )
 
 type StatusData struct {

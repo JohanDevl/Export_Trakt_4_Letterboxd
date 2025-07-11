@@ -4,17 +4,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
-	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
-	"github.com/johandevl/Export_Trakt_4_Letterboxd/pkg/auth"
-	"github.com/johandevl/Export_Trakt_4_Letterboxd/pkg/config"
-	"github.com/johandevl/Export_Trakt_4_Letterboxd/pkg/logger"
+	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/auth"
+	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/config"
+	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/logger"
 )
 
 type ExportsData struct {
@@ -55,8 +53,8 @@ type ExportsHandler struct {
 
 func NewExportsHandler(cfg *config.Config, log logger.Logger, tokenManager *auth.TokenManager, templates *template.Template) *ExportsHandler {
 	exportsDir := "./exports"
-	if cfg.Export.OutputDir != "" {
-		exportsDir = cfg.Export.OutputDir
+	if cfg.Letterboxd.ExportDir != "" {
+		exportsDir = cfg.Letterboxd.ExportDir
 	}
 	
 	return &ExportsHandler{
