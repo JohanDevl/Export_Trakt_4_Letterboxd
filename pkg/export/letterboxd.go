@@ -180,11 +180,16 @@ func (e *LetterboxdExporter) ExportMovies(movies []api.Movie, client *api.Client
 	}
 
 	// Get ratings for movies
-	ratings, err := client.GetRatings()
-	if err != nil {
-		e.log.Warn("export.ratings_fetch_failed", map[string]interface{}{
-			"error": err.Error(),
-		})
+	var ratings []api.Rating
+	if client != nil {
+		ratingsData, err := client.GetRatings()
+		if err != nil {
+			e.log.Warn("export.ratings_fetch_failed", map[string]interface{}{
+				"error": err.Error(),
+			})
+		} else {
+			ratings = ratingsData
+		}
 	}
 
 	// Create a map of movie ratings for quick lookup

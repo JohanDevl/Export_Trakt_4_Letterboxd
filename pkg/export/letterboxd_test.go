@@ -162,7 +162,9 @@ func TestExportMovies(t *testing.T) {
 
 	// Create exporter and export movies
 	exporter := NewLetterboxdExporter(cfg, log)
-	err = exporter.ExportMovies(testMovies)
+	
+	// Pass nil client for testing (ratings will be skipped)
+	err = exporter.ExportMovies(testMovies, nil)
 	if err != nil {
 		t.Fatalf("Failed to export movies: %v", err)
 	}
@@ -210,7 +212,9 @@ func TestExportMoviesErrorHandling(t *testing.T) {
 	log := &MockLogger{}
 
 	exporter := NewLetterboxdExporter(cfg, log)
-	err := exporter.ExportMovies([]api.Movie{})
+	
+	// Pass nil client for testing (ratings will be skipped)
+	err := exporter.ExportMovies([]api.Movie{}, nil)
 	if err == nil {
 		t.Error("Expected error for invalid export directory, got nil")
 	}
