@@ -133,7 +133,7 @@ func containsAny(s string, substrings []string) bool {
 }
 
 // ExportMovies exports the given movies to a CSV file in Letterboxd format
-func (e *LetterboxdExporter) ExportMovies(movies []api.Movie) error {
+func (e *LetterboxdExporter) ExportMovies(movies []api.Movie, client *api.Client) error {
 	// Get export directory
 	exportDir, err := e.getExportDir()
 	if err != nil {
@@ -180,7 +180,7 @@ func (e *LetterboxdExporter) ExportMovies(movies []api.Movie) error {
 	}
 
 	// Get ratings for movies
-	ratings, err := e.fetchRatings()
+	ratings, err := client.GetRatings()
 	if err != nil {
 		e.log.Warn("export.ratings_fetch_failed", map[string]interface{}{
 			"error": err.Error(),

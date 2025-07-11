@@ -336,7 +336,7 @@ func exportWatchedMovies(client *api.Client, exporter *export.LetterboxdExporter
 
 	// Export movies in standard format
 	log.Info("export.exporting_watched_movies", nil)
-	if err := exporter.ExportMovies(movies); err != nil {
+	if err := exporter.ExportMovies(movies, client); err != nil {
 		log.Error("export.export_failed", map[string]interface{}{"error": err.Error()})
 		os.Exit(1)
 	}
