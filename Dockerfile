@@ -40,7 +40,7 @@ RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 WORKDIR /app
 
 # Create directories and set permissions
-RUN mkdir -p /app/config /app/logs /app/exports /app/web /app/pkg/webui \
+RUN mkdir -p /app/config /app/logs /app/exports /app/web \
     && chown -R appuser:appgroup /app
 
 # Copy binary from builder stage
@@ -51,7 +51,6 @@ COPY --from=builder /app/locales /app/locales
 
 # Copy web assets (templates, CSS, JS)
 COPY --from=builder /app/web /app/web
-COPY --from=builder /app/pkg/webui /app/pkg/webui
 
 # Set environment variables
 ENV EXPORT_TRAKT_EXPORT_OUTPUT_DIR=/app/exports
