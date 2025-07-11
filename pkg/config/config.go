@@ -15,6 +15,7 @@ type Config struct {
 	Logging   LoggingConfig   `toml:"logging"`
 	I18n      I18nConfig      `toml:"i18n"`
 	Security  security.Config `toml:"security"`
+	Auth      AuthConfig      `toml:"auth"`
 }
 
 // TraktConfig holds Trakt.tv API configuration
@@ -39,9 +40,10 @@ type LetterboxdConfig struct {
 
 // ExportConfig holds export settings
 type ExportConfig struct {
-	Format     string `toml:"format"`
-	DateFormat string `toml:"date_format"`
-	Timezone   string `toml:"timezone"`
+	Format      string `toml:"format"`
+	DateFormat  string `toml:"date_format"`
+	Timezone    string `toml:"timezone"`
+	HistoryMode string `toml:"history_mode"` // "aggregated" or "individual"
 }
 
 // LoggingConfig holds logging settings
@@ -57,12 +59,23 @@ type I18nConfig struct {
 	LocalesDir    string `toml:"locales_dir"`
 }
 
+// AuthConfig holds OAuth authentication settings
+type AuthConfig struct {
+	RedirectURI    string `toml:"redirect_uri"`
+	CallbackPort   int    `toml:"callback_port"`
+	UseOAuth       bool   `toml:"use_oauth"`
+	AutoRefresh    bool   `toml:"auto_refresh"`
+}
+
 // LoadConfig reads the config file and returns a Config struct
 func LoadConfig(path string) (*Config, error) {
 	var config Config
 	if _, err := toml.DecodeFile(path, &config); err != nil {
 		return nil, fmt.Errorf("failed to decode config file: %w", err)
 	}
+
+	// Set defaults before validation
+	config.SetDefaults()
 
 	if err := config.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid configuration: %w", err)
@@ -97,6 +110,10 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("security config: %w", err)
 	}
 
+	if err := c.Auth.Validate(); err != nil {
+		return fmt.Errorf("auth config: %w", err)
+	}
+
 	return nil
 }
 
@@ -123,6 +140,16 @@ func (c *ExportConfig) Validate() error {
 	}
 	if c.DateFormat == "" {
 		return fmt.Errorf("date_format is required")
+	}
+	// Validate history mode
+	if c.HistoryMode != "" {
+		validModes := map[string]bool{
+			"aggregated": true,
+			"individual": true,
+		}
+		if !validModes[c.HistoryMode] {
+			return fmt.Errorf("invalid history_mode: %s (must be 'aggregated' or 'individual')", c.HistoryMode)
+		}
 	}
 	// If timezone is empty, we'll use UTC as default, so no error needed
 	return nil
@@ -157,4 +184,95 @@ func (c *I18nConfig) Validate() error {
 		return fmt.Errorf("locales_dir is required")
 	}
 	return nil
+}
+
+// Validate checks if the Auth configuration is valid
+func (c *AuthConfig) Validate() error {
+	// Set defaults if not specified
+	if c.RedirectURI == "" {
+		c.RedirectURI = "http://localhost:8080/callback"
+	}
+	if c.CallbackPort == 0 {
+		c.CallbackPort = 8080
+	}
+	
+	return nil
+}
+
+// SetDefaults sets default values for the configuration
+func (c *Config) SetDefaults() {
+	// Trakt defaults
+	if c.Trakt.APIBaseURL == "" {
+		c.Trakt.APIBaseURL = "https://api.trakt.tv"
+	}
+	if c.Trakt.ExtendedInfo == "" {
+		c.Trakt.ExtendedInfo = "full"
+	}
+
+	// Letterboxd defaults
+	if c.Letterboxd.ExportDir == "" {
+		c.Letterboxd.ExportDir = "./exports"
+	}
+	if c.Letterboxd.WatchedFilename == "" {
+		c.Letterboxd.WatchedFilename = "watched.csv"
+	}
+	if c.Letterboxd.CollectionFilename == "" {
+		c.Letterboxd.CollectionFilename = "collection.csv"
+	}
+	if c.Letterboxd.ShowsFilename == "" {
+		c.Letterboxd.ShowsFilename = "shows.csv"
+	}
+	if c.Letterboxd.RatingsFilename == "" {
+		c.Letterboxd.RatingsFilename = "ratings.csv"
+	}
+	if c.Letterboxd.WatchlistFilename == "" {
+		c.Letterboxd.WatchlistFilename = "watchlist.csv"
+	}
+	if c.Letterboxd.LetterboxdImportFilename == "" {
+		c.Letterboxd.LetterboxdImportFilename = "letterboxd_import.csv"
+	}
+
+	// Export defaults
+	if c.Export.Format == "" {
+		c.Export.Format = "csv"
+	}
+	if c.Export.DateFormat == "" {
+		c.Export.DateFormat = "2006-01-02"
+	}
+	if c.Export.Timezone == "" {
+		c.Export.Timezone = "UTC"
+	}
+	if c.Export.HistoryMode == "" {
+		c.Export.HistoryMode = "aggregated"
+	}
+
+	// Logging defaults
+	if c.Logging.Level == "" {
+		c.Logging.Level = "info"
+	}
+	if c.Logging.File == "" {
+		c.Logging.File = "./logs/app.log"
+	}
+
+	// I18n defaults
+	if c.I18n.DefaultLanguage == "" {
+		c.I18n.DefaultLanguage = "en"
+	}
+	if c.I18n.Language == "" {
+		c.I18n.Language = "en"
+	}
+	if c.I18n.LocalesDir == "" {
+		c.I18n.LocalesDir = "./locales"
+	}
+
+	// Auth defaults
+	if c.Auth.RedirectURI == "" {
+		c.Auth.RedirectURI = "http://localhost:8080/callback"
+	}
+	if c.Auth.CallbackPort == 0 {
+		c.Auth.CallbackPort = 8080
+	}
+	// OAuth is enabled by default
+	c.Auth.UseOAuth = true
+	c.Auth.AutoRefresh = true
 } 

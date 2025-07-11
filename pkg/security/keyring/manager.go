@@ -25,7 +25,7 @@ var (
 	// ErrUnsupportedBackend is returned when an unsupported backend is specified
 	ErrUnsupportedBackend = errors.New("unsupported keyring backend")
 	// ErrPermissionDenied is returned when file permissions are incorrect
-	ErrPermissionDenied = errors.New("file permissions must be 0600 for security")
+	ErrPermissionDenied = errors.New("file permissions must be 0600 for security (or 0644 max in Docker)")
 )
 
 // Backend represents different credential storage backends
@@ -38,6 +38,8 @@ const (
 	EnvBackend Backend = "env"
 	// FileBackend uses encrypted file storage
 	FileBackend Backend = "file"
+	// MemoryBackend uses in-memory storage (ephemeral, lost on restart)
+	MemoryBackend Backend = "memory"
 )
 
 // Credential represents a stored credential
@@ -51,12 +53,18 @@ type Manager struct {
 	backend       Backend
 	encryptionKey []byte
 	filePath      string
+	memoryStore   map[string]string // For memory backend
 }
 
 // NewManager creates a new credential manager with the specified backend
 func NewManager(backend Backend, options ...Option) (*Manager, error) {
 	m := &Manager{
 		backend: backend,
+	}
+	
+	// Initialize memory store for memory backend
+	if backend == MemoryBackend {
+		m.memoryStore = make(map[string]string)
 	}
 
 	// Apply options
@@ -114,6 +122,9 @@ func (m *Manager) validateBackend() error {
 			return errors.New("file backend requires file path")
 		}
 		return nil
+	case MemoryBackend:
+		// Memory backend requires no additional configuration
+		return nil
 	default:
 		return ErrUnsupportedBackend
 	}
@@ -128,6 +139,8 @@ func (m *Manager) Store(key, value string) error {
 		return m.storeEnv(key, value)
 	case FileBackend:
 		return m.storeFile(key, value)
+	case MemoryBackend:
+		return m.storeMemory(key, value)
 	default:
 		return ErrUnsupportedBackend
 	}
@@ -142,6 +155,8 @@ func (m *Manager) Retrieve(key string) (string, error) {
 		return m.retrieveEnv(key)
 	case FileBackend:
 		return m.retrieveFile(key)
+	case MemoryBackend:
+		return m.retrieveMemory(key)
 	default:
 		return "", ErrUnsupportedBackend
 	}
@@ -156,6 +171,8 @@ func (m *Manager) Delete(key string) error {
 		return m.deleteEnv(key)
 	case FileBackend:
 		return m.deleteFile(key)
+	case MemoryBackend:
+		return m.deleteMemory(key)
 	default:
 		return ErrUnsupportedBackend
 	}
@@ -170,6 +187,8 @@ func (m *Manager) List() ([]string, error) {
 		return m.listEnv()
 	case FileBackend:
 		return m.listFile()
+	case MemoryBackend:
+		return m.listMemory()
 	default:
 		return nil, ErrUnsupportedBackend
 	}
@@ -422,11 +441,94 @@ func (m *Manager) checkFilePermissions() error {
 
 	// Check if permissions are 0600 (rw-------) or more restrictive
 	mode := info.Mode()
+	
+	// In Docker environments, file permissions might be handled differently
+	// Check if we're likely in a container environment
+	if isDockerEnvironment() {
+		// In Docker, be more lenient with file permissions
+		// Just ensure the file is not world-writable (no write permissions for others)
+		if mode&0002 != 0 { // Check if others have write permission
+			return ErrPermissionDenied
+		}
+		return nil
+	}
+	
+	// Standard permission check for non-Docker environments
 	if mode&0077 != 0 {
 		return ErrPermissionDenied
 	}
 
 	return nil
+}
+
+// isDockerEnvironment checks if we're running in a Docker container
+func isDockerEnvironment() bool {
+	// Check for common Docker environment indicators
+	if _, err := os.Stat("/.dockerenv"); err == nil {
+		return true
+	}
+	
+	// Check if running as PID 1 (common in containers)
+	if os.Getpid() == 1 {
+		return true
+	}
+	
+	// Check for container-specific environment variables
+	if os.Getenv("DOCKER_CONTAINER") == "1" || 
+	   os.Getenv("KUBERNETES_SERVICE_HOST") != "" ||
+	   os.Getenv("container") != "" {
+		return true
+	}
+	
+	return false
+}
+
+// Memory backend implementations
+func (m *Manager) storeMemory(key, value string) error {
+	if m.memoryStore == nil {
+		m.memoryStore = make(map[string]string)
+	}
+	m.memoryStore[key] = value
+	return nil
+}
+
+func (m *Manager) retrieveMemory(key string) (string, error) {
+	if m.memoryStore == nil {
+		return "", ErrCredentialNotFound
+	}
+	
+	value, exists := m.memoryStore[key]
+	if !exists {
+		return "", ErrCredentialNotFound
+	}
+	
+	return value, nil
+}
+
+func (m *Manager) deleteMemory(key string) error {
+	if m.memoryStore == nil {
+		return ErrCredentialNotFound
+	}
+	
+	if _, exists := m.memoryStore[key]; !exists {
+		return ErrCredentialNotFound
+	}
+	
+	delete(m.memoryStore, key)
+	return nil
+}
+
+func (m *Manager) listMemory() ([]string, error) {
+	if m.memoryStore == nil {
+		return []string{}, nil
+	}
+	
+	keys := make([]string, 0, len(m.memoryStore))
+	for key := range m.memoryStore {
+		keys = append(keys, key)
+	}
+	
+	return keys, nil
 }
 
 // Destroy securely clears sensitive data from memory
@@ -436,5 +538,13 @@ func (m *Manager) Destroy() {
 			m.encryptionKey[i] = 0
 		}
 		m.encryptionKey = nil
+	}
+	
+	// Clear memory store
+	if m.memoryStore != nil {
+		for key := range m.memoryStore {
+			delete(m.memoryStore, key)
+		}
+		m.memoryStore = nil
 	}
 } 

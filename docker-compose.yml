@@ -30,6 +30,21 @@ services:
 
   # === PRODUCTION SERVICES (using registry image) ===
 
+  # Persistent OAuth & Export Server (production) - RECOMMENDED
+  export-trakt-server:
+    <<: *export-trakt-base-prod
+    profiles: ["server", "oauth", "prod"]
+    container_name: export-trakt-server
+    restart: unless-stopped
+    ports:
+      - "8089:8089"
+    environment:
+      - TZ=Europe/Paris
+      - LOG_LEVEL=info
+      - TRAKT_CLIENT_ID=c479b2e7dc4fbec157d89cd4cba9cf88fc614de7ec17813fc9f5bac92e1c8786
+      - TRAKT_CLIENT_SECRET=dc25b9c7cbe7346b9ff65d545ddbc8d1fe645268d42b6a105b3da249dc73fb2a
+    command: ["server"]
+
   # Normal export (production)
   export-trakt:
     <<: *export-trakt-base-prod
@@ -69,6 +84,29 @@ services:
     command: ["--run", "--export", "all", "--mode", "complete"]
 
   # === DEVELOPMENT/TEST SERVICES (using local build) ===
+
+  # Persistent OAuth & Export Server (development)
+  export-trakt-server-dev:
+    <<: *export-trakt-base-dev
+    profiles: ["server", "oauth", "dev"]
+    container_name: export-trakt-server-dev
+    restart: unless-stopped
+    ports:
+      - "8089:8089"
+    environment:
+      - TZ=Europe/Paris
+      - LOG_LEVEL=debug
+    command: ["server"]
+
+  # OAuth Authentication (dev)
+  export-trakt-auth-dev:
+    <<: *export-trakt-base-dev
+    profiles: ["auth", "dev"]
+    ports:
+      - "8089:8089"
+    command: ["auth"]
+    tty: true
+    stdin_open: true
 
   # Interactive setup (dev)
   export-trakt-setup-dev:
@@ -143,6 +181,25 @@ services:
 
 # === USAGE EXAMPLES ===
 #
+# 🌟 RECOMMENDED: PERSISTENT SERVER WITH WEB INTERFACE
+#
+# 🚀 Production OAuth Server (with web interface):
+# docker compose --profile server up -d
+# Then visit: http://your-ip:8089 for web interface
+# OAuth callback: http://your-ip:8089/callback
+#
+# 🛠️  Development OAuth Server (with web interface):
+# docker compose --profile server --profile dev up -d --build
+# Then visit: http://localhost:8089 for web interface
+#
+# 🔐 OAUTH AUTHENTICATION (Command Line):
+#
+# Interactive OAuth (development):
+# docker compose --profile auth --profile dev up --build
+#
+# Generate OAuth URL only:
+# docker run --rm -v "$(pwd)/config:/app/config" trakt-exporter auth-url
+#
 # 🚀 PRODUCTION MODE (pulls from GitHub Container Registry):
 #
 # Run production scheduler (every 6 hours):
@@ -176,17 +233,20 @@ services:
 #
 # 🔄 SWITCHING MODES:
 #
-# Stop test scheduler and start production:
+# Stop test scheduler and start production server:
 # docker compose --profile dev --profile schedule-test down
-# docker compose --profile schedule-6h up -d
+# docker compose --profile server up -d
 #
-# Stop production and start development:
-# docker compose --profile schedule-6h down
-# docker compose --profile dev --profile schedule-test up -d --build
+# Stop production and start development server:
+# docker compose --profile server down
+# docker compose --profile server --profile dev up -d --build
 #
 # 📊 MONITORING:
 #
-# Check production logs:
+# Check server logs:
+# docker compose --profile server logs -f
+#
+# Check production scheduler logs:
 # docker compose --profile schedule-6h logs -f
 #
 # Check development logs:
@@ -194,14 +254,26 @@ services:
 #
 # 🎯 QUICK COMMANDS:
 #
+# Start OAuth server (RECOMMENDED):
+# docker compose --profile server --profile dev up -d --build
+#
 # Test your changes:
 # docker compose --profile dev --profile run-watched up --build
 #
 # Deploy to production:
-# docker compose --profile schedule-6h up -d
+# docker compose --profile server up -d
 #
 # Check status:
 # docker compose ps
+#
+# 🌐 WEB INTERFACE ENDPOINTS (when server is running):
+#
+# Main dashboard: http://localhost:8089/
+# OAuth authentication: http://localhost:8089/auth-url
+# Token status: http://localhost:8089/status
+# Export watched movies: http://localhost:8089/export/watched
+# Export all data: http://localhost:8089/export/all
+# Health check: http://localhost:8089/health
 
 volumes:
   trakt_logs:

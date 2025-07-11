@@ -13,6 +13,41 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// MockTokenManager for testing
+type MockTokenManager struct{}
+
+func (m *MockTokenManager) GetValidAccessToken() (string, error) {
+	return "test_token", nil
+}
+
+func TestNewClientWithTokenManager(t *testing.T) {
+	cfg := &config.Config{
+		Trakt: config.TraktConfig{
+			ClientID:     "test_client_id",
+			ClientSecret: "test_client_secret",
+			APIBaseURL:   "https://api.trakt.tv",
+		},
+	}
+	
+	log := logger.NewLogger()
+	tokenMgr := &MockTokenManager{}
+	
+	client := NewClientWithTokenManager(cfg, log, tokenMgr)
+	
+	if client == nil {
+		t.Fatal("Expected client to be created, got nil")
+	}
+	if client.config != cfg {
+		t.Error("Expected config to be set")
+	}
+	if client.logger != log {
+		t.Error("Expected logger to be set")
+	}
+	if client.tokenManager != tokenMgr {
+		t.Error("Expected token manager to be set")
+	}
+}
+
 // MockLogger implements the logger.Logger interface for testing
 type MockLogger struct {
 	lastMessage string

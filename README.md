@@ -220,6 +220,30 @@ Export_Trakt_4_Letterboxd/
 | `shows`      | TV show data                   | ⚠️ Limited support    |
 | `all`        | Everything above               | ✅ Complete migration |
 
+### 🎯 Watch History Modes
+
+The `watched` export type supports two distinct modes:
+
+| Mode          | Behavior                                 | CLI Usage                           |
+| ------------- | ---------------------------------------- | ----------------------------------- |
+| `aggregated`  | One entry per movie (original behavior) | `--history-mode aggregated`         |
+| `individual`  | One entry per viewing event              | `--history-mode individual`         |
+
+**Individual Mode Benefits:**
+- 📅 Complete viewing history with all dates
+- 🔄 Accurate rewatch tracking (chronological order)
+- 📊 Multiple entries for rewatched movies
+- ⏰ Preserves exact viewing timestamps
+
+**Example:**
+```bash
+# Get complete viewing history (all watch events)
+./export_trakt --run --export watched --history-mode individual
+
+# Standard export (one entry per movie)
+./export_trakt --run --export watched --history-mode aggregated
+```
+
 ## 🌍 Internationalization
 
 Supported languages:

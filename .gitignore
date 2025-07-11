@@ -218,6 +218,38 @@ config/config.toml
 # But keep the example file
 !config/config.example.toml
 
+# OAuth credential files
+config/credentials.enc
+config/credentials.*
+config/*credentials*
+config/*.key
+config/token.json
+config/*.token
+**/access_token*
+**/refresh_token*
+
+# Security and encryption keys
+*.enc
+*.key
+*.pem
+*.p12
+*.pfx
+encryption_key*
+auth_key*
+
+# Environment files with secrets
+.env
+.env.local
+.env.production
+.env.test
+*.env
+
+# Docker secrets and credentials
+secrets/
+.secrets/
+docker-secrets/
+.docker-secrets/
+
 # Go specific ignores
 export_trakt
 export-trakt

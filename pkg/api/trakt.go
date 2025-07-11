@@ -123,9 +123,15 @@ type ShowSeason struct {
 
 // Client represents a Trakt API client
 type Client struct {
-	config     *config.Config
-	logger     logger.Logger
-	httpClient *http.Client
+	config       *config.Config
+	logger       logger.Logger
+	httpClient   *http.Client
+	tokenManager TokenManager
+}
+
+// TokenManager interface for token management
+type TokenManager interface {
+	GetValidAccessToken() (string, error)
 }
 
 // NewClient creates a new Trakt API client
@@ -139,8 +145,23 @@ func NewClient(cfg *config.Config, log logger.Logger) *Client {
 	}
 }
 
-// makeRequest makes an HTTP request with retries
+// NewClientWithTokenManager creates a new Trakt API client with token management
+func NewClientWithTokenManager(cfg *config.Config, log logger.Logger, tokenMgr TokenManager) *Client {
+	return &Client{
+		config:       cfg,
+		logger:       log,
+		httpClient:   &http.Client{Timeout: time.Second * 30},
+		tokenManager: tokenMgr,
+	}
+}
+
+// makeRequest makes an HTTP request with retries and automatic token refresh
 func (c *Client) makeRequest(req *http.Request) (*http.Response, error) {
+	// Set authentication header
+	if err := c.setAuthHeader(req); err != nil {
+		return nil, fmt.Errorf("failed to set auth header: %w", err)
+	}
+
 	var lastErr error
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		if attempt > 0 {
@@ -151,10 +172,47 @@ func (c *Client) makeRequest(req *http.Request) (*http.Response, error) {
 			time.Sleep(retryInterval * time.Duration(attempt))
 		}
 
-		resp, err := c.httpClient.Do(req)
+		// Clone the request for retry attempts
+		reqClone := req.Clone(req.Context())
+		if err := c.setAuthHeader(reqClone); err != nil {
+			lastErr = fmt.Errorf("failed to set auth header on retry: %w", err)
+			continue
+		}
+
+		resp, err := c.httpClient.Do(reqClone)
 		if err != nil {
 			lastErr = fmt.Errorf("request failed: %w", err)
 			continue
+		}
+
+		// Handle authentication errors (401) with token refresh
+		if resp.StatusCode == http.StatusUnauthorized && c.tokenManager != nil {
+			resp.Body.Close()
+			c.logger.Info("api.token_expired_refreshing", nil)
+			
+			// Try to refresh token and retry once
+			if _, err := c.tokenManager.GetValidAccessToken(); err != nil {
+				return nil, fmt.Errorf("token refresh failed: %w", err)
+			}
+			
+			// Retry the request with new token
+			reqRetry := req.Clone(req.Context())
+			if err := c.setAuthHeader(reqRetry); err != nil {
+				return nil, fmt.Errorf("failed to set refreshed auth header: %w", err)
+			}
+			
+			retryResp, retryErr := c.httpClient.Do(reqRetry)
+			if retryErr != nil {
+				return nil, fmt.Errorf("retry after token refresh failed: %w", retryErr)
+			}
+			
+			if retryResp.StatusCode == http.StatusUnauthorized {
+				retryResp.Body.Close()
+				return nil, fmt.Errorf("authentication failed even after token refresh")
+			}
+			
+			c.logger.Info("api.token_refresh_success", nil)
+			return retryResp, nil
 		}
 
 		// Only retry on server errors (5xx)
@@ -168,6 +226,33 @@ func (c *Client) makeRequest(req *http.Request) (*http.Response, error) {
 	}
 
 	return nil, fmt.Errorf("max retries exceeded: %w", lastErr)
+}
+
+// setAuthHeader sets the authentication header for the request
+func (c *Client) setAuthHeader(req *http.Request) error {
+	// Set basic headers
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("trakt-api-version", "2")
+	req.Header.Set("trakt-api-key", c.config.Trakt.ClientID)
+
+	// Get access token
+	var accessToken string
+	if c.tokenManager != nil {
+		token, err := c.tokenManager.GetValidAccessToken()
+		if err != nil {
+			return fmt.Errorf("failed to get valid access token: %w", err)
+		}
+		accessToken = token
+	} else {
+		// Fallback to config token
+		accessToken = c.config.Trakt.AccessToken
+		if accessToken == "" {
+			return fmt.Errorf("no access token available")
+		}
+	}
+
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+	return nil
 }
 
 // addExtendedInfo adds the extended parameter to the URL if it's configured
@@ -208,11 +293,7 @@ func (c *Client) GetWatchedMovies() ([]Movie, error) {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	// Add required headers
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("trakt-api-version", "2")
-	req.Header.Set("trakt-api-key", c.config.Trakt.ClientID)
-	req.Header.Set("Authorization", "Bearer "+c.config.Trakt.AccessToken)
+	// Headers are now set by makeRequest via setAuthHeader
 
 	resp, err := c.makeRequest(req)
 	if err != nil {
@@ -269,11 +350,7 @@ func (c *Client) GetCollectionMovies() ([]CollectionMovie, error) {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	// Add required headers
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("trakt-api-version", "2")
-	req.Header.Set("trakt-api-key", c.config.Trakt.ClientID)
-	req.Header.Set("Authorization", "Bearer "+c.config.Trakt.AccessToken)
+	// Headers are now set by makeRequest via setAuthHeader
 
 	resp, err := c.makeRequest(req)
 	if err != nil {
@@ -333,11 +410,7 @@ func (c *Client) GetWatchedShows() ([]WatchedShow, error) {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	// Add required headers
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("trakt-api-version", "2")
-	req.Header.Set("trakt-api-key", c.config.Trakt.ClientID)
-	req.Header.Set("Authorization", "Bearer "+c.config.Trakt.AccessToken)
+	// Headers are now set by makeRequest via setAuthHeader
 
 	resp, err := c.makeRequest(req)
 	if err != nil {
@@ -415,6 +488,21 @@ type WatchlistMovie struct {
 	Notes     string    `json:"notes,omitempty"`
 }
 
+// HistoryItem represents a single watch event from the user's watch history
+type HistoryItem struct {
+	ID        int       `json:"id"`
+	WatchedAt string    `json:"watched_at"`
+	Action    string    `json:"action"`
+	Type      string    `json:"type"`
+	Movie     MovieInfo `json:"movie,omitempty"`
+	Show      ShowInfo  `json:"show,omitempty"`
+}
+
+// MovieHistoryResponse represents the paginated response from the history API
+type MovieHistoryResponse struct {
+	Items []HistoryItem `json:"items,omitempty"`
+}
+
 // GetRatings retrieves the user's ratings from Trakt
 func (c *Client) GetRatings() ([]Rating, error) {
 	endpoint := c.addExtendedInfo(c.config.Trakt.APIBaseURL + "/sync/ratings/movies")
@@ -426,11 +514,7 @@ func (c *Client) GetRatings() ([]Rating, error) {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	// Add required headers
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("trakt-api-version", "2")
-	req.Header.Set("trakt-api-key", c.config.Trakt.ClientID)
-	req.Header.Set("Authorization", "Bearer "+c.config.Trakt.AccessToken)
+	// Headers are now set by makeRequest via setAuthHeader
 
 	resp, err := c.makeRequest(req)
 	if err != nil {
@@ -490,11 +574,7 @@ func (c *Client) GetWatchlist() ([]WatchlistMovie, error) {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	// Add required headers
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("trakt-api-version", "2")
-	req.Header.Set("trakt-api-key", c.config.Trakt.ClientID)
-	req.Header.Set("Authorization", "Bearer "+c.config.Trakt.AccessToken)
+	// Headers are now set by makeRequest via setAuthHeader
 
 	resp, err := c.makeRequest(req)
 	if err != nil {
@@ -554,11 +634,7 @@ func (c *Client) GetShowRatings() ([]ShowRating, error) {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	// Add required headers
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("trakt-api-version", "2")
-	req.Header.Set("trakt-api-key", c.config.Trakt.ClientID)
-	req.Header.Set("Authorization", "Bearer "+c.config.Trakt.AccessToken)
+	// Headers are now set by makeRequest via setAuthHeader
 
 	resp, err := c.makeRequest(req)
 	if err != nil {
@@ -618,11 +694,7 @@ func (c *Client) GetEpisodeRatings() ([]EpisodeRating, error) {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	// Add required headers
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("trakt-api-version", "2")
-	req.Header.Set("trakt-api-key", c.config.Trakt.ClientID)
-	req.Header.Set("Authorization", "Bearer "+c.config.Trakt.AccessToken)
+	// Headers are now set by makeRequest via setAuthHeader
 
 	resp, err := c.makeRequest(req)
 	if err != nil {
@@ -674,4 +746,97 @@ func (c *Client) GetEpisodeRatings() ([]EpisodeRating, error) {
 // GetConfig returns the client's configuration
 func (c *Client) GetConfig() *config.Config {
 	return c.config
+}
+
+// GetMovieHistory retrieves the user's complete movie watch history from Trakt
+func (c *Client) GetMovieHistory() ([]HistoryItem, error) {
+	var allHistory []HistoryItem
+	page := 1
+	limit := 100
+
+	for {
+		endpoint := fmt.Sprintf("%s/sync/history/movies?page=%d&limit=%d", 
+			c.config.Trakt.APIBaseURL, page, limit)
+		endpoint = c.addExtendedInfo(endpoint)
+		
+		req, err := http.NewRequest("GET", endpoint, nil)
+		if err != nil {
+			c.logger.Error("errors.api_request_failed", map[string]interface{}{
+				"error": err.Error(),
+			})
+			return nil, fmt.Errorf("failed to create history request: %w", err)
+		}
+
+		resp, err := c.makeRequest(req)
+		if err != nil {
+			c.logger.Error("errors.api_request_failed", map[string]interface{}{
+				"error": err.Error(),
+			})
+			return nil, fmt.Errorf("failed to execute history request: %w", err)
+		}
+		defer resp.Body.Close()
+
+		// Handle rate limiting
+		if limitHeader := resp.Header.Get("X-Ratelimit-Remaining"); limitHeader != "" {
+			remaining, _ := strconv.Atoi(limitHeader)
+			if remaining < 100 {
+				c.logger.Warn("api.rate_limit_warning", map[string]interface{}{
+					"remaining": remaining,
+				})
+			}
+		}
+
+		// Check response status
+		if resp.StatusCode != http.StatusOK {
+			var errorResp map[string]string
+			if err := json.NewDecoder(resp.Body).Decode(&errorResp); err != nil {
+				errorResp = map[string]string{"error": "unknown error"}
+			}
+			c.logger.Error("errors.api_request_failed", map[string]interface{}{
+				"status": resp.StatusCode,
+				"error":  errorResp["error"],
+			})
+			return nil, fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, errorResp["error"])
+		}
+
+		// Parse response - Trakt history API returns array directly, not wrapped
+		var pageHistory []HistoryItem
+		if err := json.NewDecoder(resp.Body).Decode(&pageHistory); err != nil {
+			c.logger.Error("errors.api_response_parse_failed", map[string]interface{}{
+				"error": err.Error(),
+			})
+			return nil, fmt.Errorf("failed to parse history response: %w", err)
+		}
+
+		// Filter for completed viewing actions (watch, scrobble) - exclude checkin
+		var watchHistory []HistoryItem
+		for _, item := range pageHistory {
+			if item.Action == "watch" || item.Action == "scrobble" {
+				watchHistory = append(watchHistory, item)
+			}
+		}
+
+		allHistory = append(allHistory, watchHistory...)
+
+		// Check if we have more pages
+		if len(pageHistory) < limit {
+			break // No more pages
+		}
+
+		page++
+		
+		// Safety check to prevent infinite loops
+		if page > 1000 {
+			c.logger.Warn("api.history_pagination_limit_reached", map[string]interface{}{
+				"page": page,
+			})
+			break
+		}
+	}
+
+	c.logger.Info("api.movie_history_fetched", map[string]interface{}{
+		"count": len(allHistory),
+		"pages": page,
+	})
+	return allHistory, nil
 } 
