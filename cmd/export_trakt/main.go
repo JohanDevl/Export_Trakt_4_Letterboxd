@@ -93,8 +93,8 @@ func main() {
 		return
 	}
 
-	// Handle --schedule flag (cron scheduling)
-	if *scheduleFlag != "" {
+	// Handle --schedule flag (cron scheduling) only if not in server mode
+	if *scheduleFlag != "" && (len(flag.Args()) == 0 || flag.Args()[0] != "server") {
 		log.Info("startup.schedule_mode", map[string]interface{}{
 			"schedule":    *scheduleFlag,
 			"export_type": *exportType,
@@ -281,7 +281,7 @@ func main() {
 
 	case "server":
 		// Start persistent server with callback and export endpoints
-		if err := startPersistentServer(cfg, log, tokenManager); err != nil {
+		if err := startPersistentServer(cfg, log, tokenManager, *scheduleFlag, *exportType, *exportMode); err != nil {
 			log.Error("server.start_failed", map[string]interface{}{"error": err.Error()})
 			fmt.Printf("❌ Failed to start server: %s\n", err.Error())
 			os.Exit(1)
@@ -1236,12 +1236,31 @@ func authenticateWithCode(cfg *config.Config, log logger.Logger, tokenManager *a
 }
 
 // startPersistentServer starts a persistent HTTP server that handles OAuth callbacks and export requests
-func startPersistentServer(cfg *config.Config, log logger.Logger, tokenManager *auth.TokenManager) error {
+func startPersistentServer(cfg *config.Config, log logger.Logger, tokenManager *auth.TokenManager, scheduleFlag, exportType, exportMode string) error {
 	oauthMgr := auth.NewOAuthManager(cfg, log)
 	
 	port := cfg.Auth.CallbackPort
 	if port == 0 {
 		port = 8080
+	}
+	
+	// Start scheduler if schedule flag is provided
+	if scheduleFlag != "" {
+		log.Info("server.starting_scheduler", map[string]interface{}{
+			"schedule":    scheduleFlag,
+			"export_type": exportType,
+			"export_mode": exportMode,
+		})
+		
+		go func() {
+			runWithSchedule(cfg, log, scheduleFlag, exportType, exportMode)
+		}()
+		
+		fmt.Println("🕒 Automatic Export Scheduler Started")
+		fmt.Printf("📅 Schedule: %s\n", scheduleFlag)
+		fmt.Printf("📦 Export Type: %s\n", exportType)
+		fmt.Printf("🔧 Export Mode: %s\n", exportMode)
+		fmt.Println()
 	}
 	
 	fmt.Println("🚀 Starting Persistent Export & OAuth Server")
