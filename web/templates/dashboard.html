@@ -1,0 +1,164 @@
+{{define "content"}}
+<div class="dashboard">
+    <div class="dashboard-header">
+        <h1>📊 Dashboard</h1>
+        <p class="dashboard-subtitle">Monitor your Trakt.tv exports and server status</p>
+    </div>
+
+    <div class="dashboard-grid">
+        <!-- Server Status Card -->
+        <div class="card">
+            <div class="card-header">
+                <h3>🚀 Server Status</h3>
+            </div>
+            <div class="card-content">
+                <div class="status-item">
+                    <span class="status-label">Server:</span>
+                    <span class="status-value status-indicator {{.ServerStatus}}">{{.ServerStatus}}</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">Uptime:</span>
+                    <span class="status-value">{{.Uptime}}</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">Port:</span>
+                    <span class="status-value">{{.Port}}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Authentication Status Card -->
+        <div class="card">
+            <div class="card-header">
+                <h3>🔐 Authentication</h3>
+            </div>
+            <div class="card-content">
+                <div class="status-item">
+                    <span class="status-label">Token Status:</span>
+                    <span class="status-value status-indicator {{if .TokenStatus.IsValid}}healthy{{else}}error{{end}}">
+                        {{if .TokenStatus.IsValid}}Valid{{else}}Invalid{{end}}
+                    </span>
+                </div>
+                {{if .TokenStatus.IsValid}}
+                <div class="status-item">
+                    <span class="status-label">Expires:</span>
+                    <span class="status-value">{{.TokenStatus.ExpiresAt.Format "2006-01-02 15:04:05"}}</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">Auto-refresh:</span>
+                    <span class="status-value">{{if .TokenStatus.HasRefreshToken}}Enabled{{else}}Disabled{{end}}</span>
+                </div>
+                {{else}}
+                <div class="auth-actions">
+                    <a href="/auth-url" class="btn btn-primary">🔗 Authenticate</a>
+                </div>
+                {{end}}
+            </div>
+        </div>
+
+        <!-- API Connection Card -->
+        <div class="card">
+            <div class="card-header">
+                <h3>🌐 API Connection</h3>
+            </div>
+            <div class="card-content">
+                <div class="status-item">
+                    <span class="status-label">Trakt.tv API:</span>
+                    <span class="status-value status-indicator {{.APIStatus}}">{{.APIStatus}}</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">Last Check:</span>
+                    <span class="status-value">{{.LastAPICheck.Format "15:04:05"}}</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">Response Time:</span>
+                    <span class="status-value">{{.APIResponseTime}}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Last Export Card -->
+        <div class="card">
+            <div class="card-header">
+                <h3>📁 Last Export</h3>
+            </div>
+            <div class="card-content">
+                {{if .LastExport}}
+                <div class="status-item">
+                    <span class="status-label">Type:</span>
+                    <span class="status-value">{{.LastExport.Type}}</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">Date:</span>
+                    <span class="status-value">{{.LastExport.Date.Format "2006-01-02 15:04:05"}}</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">Status:</span>
+                    <span class="status-value status-indicator {{.LastExport.Status}}">{{.LastExport.Status}}</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">Files:</span>
+                    <span class="status-value">{{.LastExport.FileCount}} files</span>
+                </div>
+                {{else}}
+                <p class="no-data">No exports found</p>
+                <a href="/exports" class="btn btn-secondary">Start Export</a>
+                {{end}}
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="quick-actions">
+        <h2>🚀 Quick Actions</h2>
+        <div class="action-grid">
+            {{if .TokenStatus.IsValid}}
+            <a href="/export/watched" class="action-card">
+                <div class="action-icon">🎬</div>
+                <div class="action-title">Export Watched</div>
+                <div class="action-desc">Export your watched movies</div>
+            </a>
+            <a href="/export/collection" class="action-card">
+                <div class="action-icon">📚</div>
+                <div class="action-title">Export Collection</div>
+                <div class="action-desc">Export your movie collection</div>
+            </a>
+            <a href="/export/all" class="action-card">
+                <div class="action-icon">📦</div>
+                <div class="action-title">Export All</div>
+                <div class="action-desc">Complete data export</div>
+            </a>
+            <a href="/exports" class="action-card">
+                <div class="action-icon">📁</div>
+                <div class="action-title">View Exports</div>
+                <div class="action-desc">Browse export history</div>
+            </a>
+            {{else}}
+            <div class="auth-required">
+                <p>🔐 Authentication required to perform exports</p>
+                <a href="/auth-url" class="btn btn-primary">Authenticate with Trakt.tv</a>
+            </div>
+            {{end}}
+        </div>
+    </div>
+
+    <!-- Recent Activity -->
+    {{if .RecentActivity}}
+    <div class="recent-activity">
+        <h2>📊 Recent Activity</h2>
+        <div class="activity-list">
+            {{range .RecentActivity}}
+            <div class="activity-item">
+                <div class="activity-icon">{{.Icon}}</div>
+                <div class="activity-content">
+                    <div class="activity-title">{{.Title}}</div>
+                    <div class="activity-desc">{{.Description}}</div>
+                    <div class="activity-time">{{.Time.Format "15:04:05"}}</div>
+                </div>
+            </div>
+            {{end}}
+        </div>
+    </div>
+    {{end}}
+</div>
+{{end}}
