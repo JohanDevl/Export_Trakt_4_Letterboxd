@@ -6,8 +6,8 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function initializeApp() {
-    // Initialize WebSocket connection for real-time updates
-    initializeWebSocket();
+    // WebSocket disabled - not implemented on server side
+    // initializeWebSocket();
     
     // Initialize auto-refresh for dynamic content
     initializeAutoRefresh();
