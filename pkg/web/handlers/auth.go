@@ -72,8 +72,22 @@ func (h *AuthHandler) handleAuthURL(w http.ResponseWriter, r *http.Request) {
 		
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusInternalServerError)
-		tmpl, _ := h.templates.Clone()
-		tmpl.ParseFiles("web/templates/auth-error.html")
+		tmpl, cloneErr := h.templates.Clone()
+		if cloneErr != nil {
+			h.logger.Error("web.template_clone_error", map[string]interface{}{
+				"error": cloneErr.Error(),
+			})
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+		if _, parseErr := tmpl.ParseFiles("web/templates/auth-error.html"); parseErr != nil {
+			h.logger.Error("web.template_parse_error", map[string]interface{}{
+				"error":    parseErr.Error(),
+				"template": "auth-error.html",
+			})
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
 		tmpl.ExecuteTemplate(w, "base.html", data)
 		return
 	}
