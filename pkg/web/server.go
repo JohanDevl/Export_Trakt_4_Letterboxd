@@ -54,7 +54,12 @@ func NewServer(cfg *config.Config, log logger.Logger, tokenManager *auth.TokenMa
 func (s *Server) loadTemplates() error {
 	// Define template functions
 	funcMap := template.FuncMap{
-		"title":    strings.Title,
+		"title": func(str string) string {
+			if len(str) == 0 {
+				return str
+			}
+			return strings.ToUpper(str[:1]) + strings.ToLower(str[1:])
+		},
 		"upper":    strings.ToUpper,
 		"lower":    strings.ToLower,
 		"filename": filepath.Base,
@@ -88,6 +93,12 @@ func (s *Server) loadTemplates() error {
 		},
 		"gt": func(a, b int) bool {
 			return a > b
+		},
+		"add": func(a, b int) int {
+			return a + b
+		},
+		"sub": func(a, b int) int {
+			return a - b
 		},
 	}
 	
@@ -185,6 +196,9 @@ func (s *Server) setupRoutes() {
 	mux.Handle("/auth-url", authHandler)
 	mux.Handle("/callback", authHandler)
 	mux.Handle("/download/", downloadHandler)
+	
+	// Config page
+	mux.HandleFunc("/config", s.handleConfig)
 	
 	// Legacy export endpoints for compatibility
 	mux.HandleFunc("/export/", s.handleLegacyExport)
@@ -339,4 +353,58 @@ func (s *Server) GetAddr() string {
 
 func (s *Server) GetStartTime() time.Time {
 	return s.startTime
+}
+
+func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
+	data := struct {
+		Title             string
+		CurrentPage       string
+		ServerStatus      string
+		LastUpdated       string
+		ExportDir         string
+		LogLevel          string
+		ServerPort        int
+		UseOAuth          bool
+		AutoRefresh       bool
+		RedirectURI       string
+		ClientID          string
+		DateFormat        string
+		Timezone          string
+		HistoryMode       string
+		ExtendedInfo      string
+		EncryptionEnabled bool
+		KeyringBackend    string
+		AuditLogging      bool
+		RateLimitEnabled  bool
+	}{
+		Title:             "Configuration",
+		CurrentPage:       "config",
+		ServerStatus:      "healthy",
+		LastUpdated:       time.Now().Format("2006-01-02 15:04:05"),
+		ExportDir:         s.config.Letterboxd.ExportDir,
+		LogLevel:          s.config.Logging.Level,
+		ServerPort:        s.config.Auth.CallbackPort,
+		UseOAuth:          s.config.Auth.UseOAuth,
+		AutoRefresh:       s.config.Auth.AutoRefresh,
+		RedirectURI:       s.config.Auth.RedirectURI,
+		ClientID:          s.config.Trakt.ClientID,
+		DateFormat:        s.config.Export.DateFormat,
+		Timezone:          s.config.Export.Timezone,
+		HistoryMode:       s.config.Export.HistoryMode,
+		ExtendedInfo:      s.config.Trakt.ExtendedInfo,
+		EncryptionEnabled: s.config.Security.EncryptionEnabled,
+		KeyringBackend:    s.config.Security.KeyringBackend,
+		AuditLogging:      s.config.Security.AuditLogging,
+		RateLimitEnabled:  s.config.Security.RateLimitEnabled,
+	}
+	
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := s.templates.ExecuteTemplate(w, "config.html", data); err != nil {
+		s.logger.Error("web.template_error", map[string]interface{}{
+			"error":    err.Error(),
+			"template": "config.html",
+		})
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
 }

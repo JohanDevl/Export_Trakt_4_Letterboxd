@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configuration - Export Trakt 4 Letterboxd</title>
+    <link rel="stylesheet" href="/static/css/style.css?v=20250111-2">
+    <link rel="icon" type="image/x-icon" href="/static/img/favicon.ico">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <h1 class="nav-title">🎬 Export Trakt 4 Letterboxd</h1>
+            <div class="nav-links">
+                <a href="/" class="nav-link {{if eq .CurrentPage "dashboard"}}active{{end}}">Dashboard</a>
+                <a href="/exports" class="nav-link {{if eq .CurrentPage "exports"}}active{{end}}">Exports</a>
+                <a href="/status" class="nav-link {{if eq .CurrentPage "status"}}active{{end}}">Status</a>
+                <a href="/config" class="nav-link {{if eq .CurrentPage "config"}}active{{end}}">Config</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container">
+        {{if .Alert}}
+        <div class="alert alert-{{.Alert.Type}}">
+            <span class="alert-icon">{{.Alert.Icon}}</span>
+            <span class="alert-message">{{.Alert.Message}}</span>
+        </div>
+        {{end}}
+
+        <div class="config">
+            <div class="page-header">
+                <h1>⚙️ Configuration</h1>
+                <p class="page-subtitle">Application settings and configuration management</p>
+            </div>
+
+            <div class="config-section">
+                <h2>🔧 System Information</h2>
+                <div class="info-grid">
+                    <div class="info-item">
+                        <strong>Configuration File:</strong>
+                        <span>config/config.toml</span>
+                    </div>
+                    <div class="info-item">
+                        <strong>Export Directory:</strong>
+                        <span>{{.ExportDir}}</span>
+                    </div>
+                    <div class="info-item">
+                        <strong>Log Level:</strong>
+                        <span>{{.LogLevel}}</span>
+                    </div>
+                    <div class="info-item">
+                        <strong>Server Port:</strong>
+                        <span>{{.ServerPort}}</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="config-section">
+                <h2>🔐 Authentication Settings</h2>
+                <div class="info-grid">
+                    <div class="info-item">
+                        <strong>OAuth Enabled:</strong>
+                        <span>{{if .UseOAuth}}✅ Yes{{else}}❌ No{{end}}</span>
+                    </div>
+                    <div class="info-item">
+                        <strong>Auto Refresh:</strong>
+                        <span>{{if .AutoRefresh}}✅ Enabled{{else}}❌ Disabled{{end}}</span>
+                    </div>
+                    <div class="info-item">
+                        <strong>Redirect URI:</strong>
+                        <span>{{.RedirectURI}}</span>
+                    </div>
+                    <div class="info-item">
+                        <strong>Client ID:</strong>
+                        <span>{{mask .ClientID}}</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="config-section">
+                <h2>📊 Export Settings</h2>
+                <div class="info-grid">
+                    <div class="info-item">
+                        <strong>Date Format:</strong>
+                        <span>{{.DateFormat}}</span>
+                    </div>
+                    <div class="info-item">
+                        <strong>Timezone:</strong>
+                        <span>{{.Timezone}}</span>
+                    </div>
+                    <div class="info-item">
+                        <strong>History Mode:</strong>
+                        <span>{{.HistoryMode}}</span>
+                    </div>
+                    <div class="info-item">
+                        <strong>Extended Info:</strong>
+                        <span>{{.ExtendedInfo}}</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="config-section">
+                <h2>🛡️ Security Settings</h2>
+                <div class="info-grid">
+                    <div class="info-item">
+                        <strong>Encryption:</strong>
+                        <span>{{if .EncryptionEnabled}}✅ Enabled{{else}}❌ Disabled{{end}}</span>
+                    </div>
+                    <div class="info-item">
+                        <strong>Keyring Backend:</strong>
+                        <span>{{.KeyringBackend}}</span>
+                    </div>
+                    <div class="info-item">
+                        <strong>Audit Logging:</strong>
+                        <span>{{if .AuditLogging}}✅ Enabled{{else}}❌ Disabled{{end}}</span>
+                    </div>
+                    <div class="info-item">
+                        <strong>Rate Limiting:</strong>
+                        <span>{{if .RateLimitEnabled}}✅ Enabled{{else}}❌ Disabled{{end}}</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="config-actions">
+                <div class="alert alert-info">
+                    <span class="alert-icon">💡</span>
+                    <span class="alert-message">Configuration is read-only in the web interface. To modify settings, edit the config/config.toml file and restart the server.</span>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <div class="footer-container">
+            <p>&copy; 2025 Export Trakt 4 Letterboxd - Server Status: <span class="status-indicator {{.ServerStatus}}">{{.ServerStatus}}</span></p>
+            <p>Last Updated: <span id="last-updated">{{.LastUpdated}}</span></p>
+        </div>
+    </footer>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>

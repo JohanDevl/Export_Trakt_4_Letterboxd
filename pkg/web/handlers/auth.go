@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"time"
 
 	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/auth"
 	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/config"
@@ -52,6 +53,11 @@ func (h *AuthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AuthHandler) handleAuthURL(w http.ResponseWriter, r *http.Request) {
+	h.logger.Info("web.auth_url_request_started", map[string]interface{}{
+		"client_ip": r.RemoteAddr,
+		"user_agent": r.UserAgent(),
+	})
+	
 	// Generate fresh auth URL and state
 	authURL, state, err := h.oauthManager.GenerateAuthURL()
 	if err != nil {
@@ -72,7 +78,20 @@ func (h *AuthHandler) handleAuthURL(w http.ResponseWriter, r *http.Request) {
 		
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusInternalServerError)
-		h.templates.ExecuteTemplate(w, "auth-error.html", data)
+		if h.templates == nil {
+			h.logger.Error("web.templates_nil", map[string]interface{}{
+				"template": "auth-error.html",
+			})
+			w.Write([]byte("Template system not initialized"))
+			return
+		}
+		if err := h.templates.ExecuteTemplate(w, "auth-error.html", data); err != nil {
+			h.logger.Error("web.template_error", map[string]interface{}{
+				"error":    err.Error(),
+				"template": "auth-error.html",
+			})
+			w.Write([]byte("Internal Server Error"))
+		}
 		return
 	}
 	
@@ -82,19 +101,28 @@ func (h *AuthHandler) handleAuthURL(w http.ResponseWriter, r *http.Request) {
 		Title:        "OAuth Authentication",
 		CurrentPage:  "auth",
 		ServerStatus: "healthy",
+		LastUpdated:  time.Now().Format("2006-01-02 15:04:05"),
 		AuthURL:      authURL,
 		ClientID:     h.config.Trakt.ClientID,
 		RedirectURI:  h.config.Auth.RedirectURI,
 	}
 	
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	
+	// Execute standalone template directly (thread-safe)
 	if err := h.templates.ExecuteTemplate(w, "auth-url.html", data); err != nil {
 		h.logger.Error("web.template_error", map[string]interface{}{
 			"error":    err.Error(),
 			"template": "auth-url.html",
 		})
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
 	}
+	
+	h.logger.Info("web.auth_url_request_completed", map[string]interface{}{
+		"client_ip": r.RemoteAddr,
+		"auth_url_length": len(authURL),
+	})
 }
 
 func (h *AuthHandler) handleCallback(w http.ResponseWriter, r *http.Request) {
@@ -118,6 +146,7 @@ func (h *AuthHandler) handleCallback(w http.ResponseWriter, r *http.Request) {
 			Title:        "Authentication Error",
 			CurrentPage:  "auth",
 			ServerStatus: "error",
+			LastUpdated:  time.Now().Format("2006-01-02 15:04:05"),
 			Alert: &AlertData{
 				Type:    "error",
 				Icon:    "❌",
@@ -127,7 +156,20 @@ func (h *AuthHandler) handleCallback(w http.ResponseWriter, r *http.Request) {
 		
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusBadRequest)
-		h.templates.ExecuteTemplate(w, "auth-error.html", data)
+		if h.templates == nil {
+			h.logger.Error("web.templates_nil", map[string]interface{}{
+				"template": "auth-error.html",
+			})
+			w.Write([]byte("Template system not initialized"))
+			return
+		}
+		if err := h.templates.ExecuteTemplate(w, "auth-error.html", data); err != nil {
+			h.logger.Error("web.template_error", map[string]interface{}{
+				"error":    err.Error(),
+				"template": "auth-error.html",
+			})
+			w.Write([]byte("Internal Server Error"))
+		}
 		return
 	}
 	
@@ -139,6 +181,7 @@ func (h *AuthHandler) handleCallback(w http.ResponseWriter, r *http.Request) {
 			Title:        "Authentication Error",
 			CurrentPage:  "auth",
 			ServerStatus: "error",
+			LastUpdated:  time.Now().Format("2006-01-02 15:04:05"),
 			Alert: &AlertData{
 				Type:    "error",
 				Icon:    "❌",
@@ -148,7 +191,20 @@ func (h *AuthHandler) handleCallback(w http.ResponseWriter, r *http.Request) {
 		
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusBadRequest)
-		h.templates.ExecuteTemplate(w, "auth-error.html", data)
+		if h.templates == nil {
+			h.logger.Error("web.templates_nil", map[string]interface{}{
+				"template": "auth-error.html",
+			})
+			w.Write([]byte("Template system not initialized"))
+			return
+		}
+		if err := h.templates.ExecuteTemplate(w, "auth-error.html", data); err != nil {
+			h.logger.Error("web.template_error", map[string]interface{}{
+				"error":    err.Error(),
+				"template": "auth-error.html",
+			})
+			w.Write([]byte("Internal Server Error"))
+		}
 		return
 	}
 	
@@ -163,6 +219,7 @@ func (h *AuthHandler) handleCallback(w http.ResponseWriter, r *http.Request) {
 			Title:        "Authentication Failed",
 			CurrentPage:  "auth",
 			ServerStatus: "error",
+			LastUpdated:  time.Now().Format("2006-01-02 15:04:05"),
 			Alert: &AlertData{
 				Type:    "error",
 				Icon:    "❌",
@@ -172,7 +229,20 @@ func (h *AuthHandler) handleCallback(w http.ResponseWriter, r *http.Request) {
 		
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusInternalServerError)
-		h.templates.ExecuteTemplate(w, "auth-error.html", data)
+		if h.templates == nil {
+			h.logger.Error("web.templates_nil", map[string]interface{}{
+				"template": "auth-error.html",
+			})
+			w.Write([]byte("Template system not initialized"))
+			return
+		}
+		if err := h.templates.ExecuteTemplate(w, "auth-error.html", data); err != nil {
+			h.logger.Error("web.template_error", map[string]interface{}{
+				"error":    err.Error(),
+				"template": "auth-error.html",
+			})
+			w.Write([]byte("Internal Server Error"))
+		}
 		return
 	}
 	
@@ -186,6 +256,7 @@ func (h *AuthHandler) handleCallback(w http.ResponseWriter, r *http.Request) {
 			Title:        "Token Storage Failed",
 			CurrentPage:  "auth",
 			ServerStatus: "warning",
+			LastUpdated:  time.Now().Format("2006-01-02 15:04:05"),
 			Alert: &AlertData{
 				Type:    "warning",
 				Icon:    "⚠️",
@@ -195,7 +266,20 @@ func (h *AuthHandler) handleCallback(w http.ResponseWriter, r *http.Request) {
 		
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusInternalServerError)
-		h.templates.ExecuteTemplate(w, "auth-error.html", data)
+		if h.templates == nil {
+			h.logger.Error("web.templates_nil", map[string]interface{}{
+				"template": "auth-error.html",
+			})
+			w.Write([]byte("Template system not initialized"))
+			return
+		}
+		if err := h.templates.ExecuteTemplate(w, "auth-error.html", data); err != nil {
+			h.logger.Error("web.template_error", map[string]interface{}{
+				"error":    err.Error(),
+				"template": "auth-error.html",
+			})
+			w.Write([]byte("Internal Server Error"))
+		}
 		return
 	}
 	
@@ -207,6 +291,7 @@ func (h *AuthHandler) handleCallback(w http.ResponseWriter, r *http.Request) {
 		Title:        "Authentication Successful",
 		CurrentPage:  "auth",
 		ServerStatus: "healthy",
+		LastUpdated:  time.Now().Format("2006-01-02 15:04:05"),
 		Alert: &AlertData{
 			Type:    "success",
 			Icon:    "✅",

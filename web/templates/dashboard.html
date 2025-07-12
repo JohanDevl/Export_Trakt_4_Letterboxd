@@ -1,4 +1,33 @@
-{{define "content"}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}} - Export Trakt 4 Letterboxd</title>
+    <link rel="stylesheet" href="/static/css/style.css?v=20250111-2">
+    <link rel="icon" type="image/x-icon" href="/static/img/favicon.ico">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <h1 class="nav-title">🎬 Export Trakt 4 Letterboxd</h1>
+            <div class="nav-links">
+                <a href="/" class="nav-link {{if eq .CurrentPage "dashboard"}}active{{end}}">Dashboard</a>
+                <a href="/exports" class="nav-link {{if eq .CurrentPage "exports"}}active{{end}}">Exports</a>
+                <a href="/status" class="nav-link {{if eq .CurrentPage "status"}}active{{end}}">Status</a>
+                <a href="/config" class="nav-link {{if eq .CurrentPage "config"}}active{{end}}">Config</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container">
+        {{if .Alert}}
+        <div class="alert alert-{{.Alert.Type}}">
+            <span class="alert-icon">{{.Alert.Icon}}</span>
+            <span class="alert-message">{{.Alert.Message}}</span>
+        </div>
+        {{end}}
+
 <div class="dashboard">
     <div class="dashboard-header">
         <h1>📊 Dashboard</h1>
@@ -161,4 +190,15 @@
     </div>
     {{end}}
 </div>
-{{end}}
+    </main>
+
+    <footer class="footer">
+        <div class="footer-container">
+            <p>&copy; 2025 Export Trakt 4 Letterboxd - Server Status: <span class="status-indicator {{.ServerStatus}}">{{.ServerStatus}}</span></p>
+            <p>Last Updated: <span id="last-updated">{{.LastUpdated}}</span></p>
+        </div>
+    </footer>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
