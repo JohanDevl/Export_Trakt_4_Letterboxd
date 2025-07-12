@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -160,12 +161,14 @@ func (h *ExportsHandler) handleStartExport(w http.ResponseWriter, r *http.Reques
 		"client_ip":    r.RemoteAddr,
 	})
 	
-	// In a real implementation, this would trigger the actual export
-	// For now, we'll just log it and return success
+	// Start export in background
+	exportID := fmt.Sprintf("export_%d", time.Now().Unix())
+	go h.runExportAsync(exportID, exportType, historyMode)
+	
 	h.writeJSONResponse(w, ExportAPIResponse{
 		Success: true,
 		Data: map[string]interface{}{
-			"export_id": fmt.Sprintf("export_%d", time.Now().Unix()),
+			"export_id": exportID,
 			"type":      exportType,
 			"status":    "started",
 		},
@@ -569,6 +572,64 @@ func (h *ExportsHandler) writeJSONResponse(w http.ResponseWriter, response Expor
 			"error": err.Error(),
 		})
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	}
+}
+
+// runExportAsync executes an export command asynchronously
+func (h *ExportsHandler) runExportAsync(exportID, exportType, historyMode string) {
+	h.logger.Info("web.export_async_started", map[string]interface{}{
+		"export_id":    exportID,
+		"export_type":  exportType,
+		"history_mode": historyMode,
+	})
+
+	// Find the current executable path
+	execPath, err := os.Executable()
+	if err != nil {
+		h.logger.Error("web.export_async_failed", map[string]interface{}{
+			"export_id": exportID,
+			"error":     "Could not find executable path: " + err.Error(),
+		})
+		return
+	}
+
+	// Build command arguments
+	args := []string{
+		"--run",
+		"--export", exportType,
+		"--mode", "complete",
+	}
+
+	// Add history mode for watched exports
+	if exportType == "watched" && historyMode != "" {
+		args = append(args, "--history-mode", historyMode)
+	}
+
+	h.logger.Info("web.export_async_command", map[string]interface{}{
+		"export_id": exportID,
+		"command":   execPath,
+		"args":      strings.Join(args, " "),
+	})
+
+	// Execute the command
+	cmd := exec.Command(execPath, args...)
+	cmd.Env = os.Environ() // Inherit environment variables
+	
+	// Capture both stdout and stderr for better debugging
+	output, err := cmd.CombinedOutput()
+	
+	if err != nil {
+		h.logger.Error("web.export_async_failed", map[string]interface{}{
+			"export_id": exportID,
+			"error":     err.Error(),
+			"output":    string(output),
+			"command":   execPath + " " + strings.Join(args, " "),
+		})
+	} else {
+		h.logger.Info("web.export_async_completed", map[string]interface{}{
+			"export_id": exportID,
+			"output":    string(output),
+		})
 	}
 }
 

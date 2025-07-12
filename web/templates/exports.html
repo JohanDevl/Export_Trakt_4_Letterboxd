@@ -141,6 +141,9 @@
         {{else}}
         Total: {{if .Exports}}{{len .Exports}}{{else}}0{{end}} exports
         {{end}}
+        <span id="auto-refresh-indicator" style="display: none; color: #28a745; margin-left: 10px;">
+          🔄 Auto-refreshing...
+        </span>
       </div>
     </div>
     
@@ -315,25 +318,15 @@
 
   function startExport(type, options = {}) {
     // Show progress section
-    document.getElementById("export-progress").style.display = "block";
-
-    // Start WebSocket connection for real-time updates
-    if (window.WebSocket) {
-      exportSocket = new WebSocket(`ws://${window.location.host}/ws/export`);
-
-      exportSocket.onmessage = function (event) {
-        const data = JSON.parse(event.data);
-        updateProgress(data);
-      };
-
-      exportSocket.onerror = function (error) {
-        console.error("WebSocket error:", error);
-      };
-
-      exportSocket.onclose = function () {
-        console.log("WebSocket connection closed");
-      };
-    }
+    const progressSection = document.getElementById("export-progress");
+    const progressText = document.getElementById("progress-text");
+    const progressFill = document.getElementById("progress-fill");
+    const progressPercent = document.getElementById("progress-percent");
+    
+    progressSection.style.display = "block";
+    progressText.textContent = "Starting export...";
+    progressFill.style.width = "0%";
+    progressPercent.textContent = "0%";
 
     // Trigger export
     const params = new URLSearchParams({ type, ...options });
@@ -343,11 +336,25 @@
         if (!data.success) {
           showAlert("error", data.error || "Export failed");
           hideProgress();
+          return;
         }
+        
+        // Show export started message
+        progressText.textContent = "Export started in background...";
+        progressFill.style.width = "100%";
+        progressPercent.textContent = "100%";
+        
+        // Hide progress after 3 seconds and reset button
+        setTimeout(() => {
+          hideProgress();
+          showAlert("success", `Export ${type} started successfully! Auto-refreshing...`);
+          resetExportButtons();
+        }, 3000);
       })
       .catch((error) => {
         showAlert("error", "Failed to start export: " + error.message);
         hideProgress();
+        resetExportButtons();
       });
   }
 
@@ -659,6 +666,79 @@
     });
   }
 
+  // Reset export buttons to initial state
+  function resetExportButtons() {
+    document.querySelectorAll(".export-btn").forEach((btn) => {
+      btn.disabled = false;
+      // Restore original text based on button type
+      const type = btn.dataset.type;
+      switch(type) {
+        case 'watched':
+          btn.textContent = 'Export Watched';
+          break;
+        case 'collection':
+          btn.textContent = 'Export Collection';
+          break;
+        case 'shows':
+          btn.textContent = 'Export Shows';
+          break;
+        case 'ratings':
+          btn.textContent = 'Export Ratings';
+          break;
+        case 'watchlist':
+          btn.textContent = 'Export Watchlist';
+          break;
+        case 'all':
+          btn.textContent = 'Export All';
+          break;
+        default:
+          btn.textContent = 'Export';
+      }
+    });
+  }
+
+  // Auto-refresh functionality for exports
+  let autoRefreshInterval = null;
+  
+  function startAutoRefresh() {
+    // Stop any existing auto-refresh
+    if (autoRefreshInterval) {
+      clearInterval(autoRefreshInterval);
+    }
+    
+    // Show auto-refresh indicator
+    const indicator = document.getElementById('auto-refresh-indicator');
+    if (indicator) {
+      indicator.style.display = 'inline';
+    }
+    
+    // Start auto-refresh every 5 seconds for 30 seconds (6 attempts)
+    let attempts = 0;
+    autoRefreshInterval = setInterval(() => {
+      attempts++;
+      if (attempts > 6) {
+        stopAutoRefresh();
+        return;
+      }
+      
+      // Refresh the exports list
+      loadPage(currentPage, currentPageSize);
+    }, 5000);
+  }
+  
+  function stopAutoRefresh() {
+    if (autoRefreshInterval) {
+      clearInterval(autoRefreshInterval);
+      autoRefreshInterval = null;
+    }
+    
+    // Hide auto-refresh indicator
+    const indicator = document.getElementById('auto-refresh-indicator');
+    if (indicator) {
+      indicator.style.display = 'none';
+    }
+  }
+
   // Export button handlers
   document.addEventListener("DOMContentLoaded", function () {
     document.querySelectorAll(".export-btn").forEach((btn) => {
@@ -674,6 +754,9 @@
         }
 
         startExport(type, options);
+        
+        // Start auto-refresh to catch the new export when it appears
+        startAutoRefresh();
       });
     });
 
