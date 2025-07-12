@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -18,6 +17,7 @@ import (
 	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/export"
 	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/i18n"
 	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/logger"
+	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/web"
 	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/scheduler"
 	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/security"
 	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/security/keyring"
@@ -1275,9 +1275,11 @@ func authenticateWithCode(cfg *config.Config, log logger.Logger, tokenManager *a
 
 // startPersistentServer starts a persistent HTTP server that handles OAuth callbacks and export requests
 func startPersistentServer(cfg *config.Config, log logger.Logger, tokenManager *auth.TokenManager, scheduleFlag, exportType, exportMode string) error {
-	// Import the web package
-	webPkg := "github.com/johandevl/Export_Trakt_4_Letterboxd/pkg/web"
-	_ = webPkg // Avoid unused import error temporarily
+	// Use the real web package with pagination support
+	webServer, err := web.NewServer(cfg, log, tokenManager)
+	if err != nil {
+		return fmt.Errorf("failed to create web server: %w", err)
+	}
 	
 	port := cfg.Auth.CallbackPort
 	if port == 0 {
@@ -1303,568 +1305,18 @@ func startPersistentServer(cfg *config.Config, log logger.Logger, tokenManager *
 		fmt.Println()
 	}
 	
-	fmt.Println("🚀 Starting Enhanced Web Interface Server")
-	fmt.Println("==========================================")
+	fmt.Println("🚀 Starting Enhanced Web Interface Server with Pagination")
+	fmt.Println("=========================================================")
 	fmt.Printf("📱 Client ID: %s\n", cfg.Trakt.ClientID)
 	fmt.Printf("🔗 Redirect URI: %s\n", cfg.Auth.RedirectURI)
 	fmt.Printf("🌐 Server running on: http://0.0.0.0:%d\n", port)
 	fmt.Printf("📊 Dashboard: http://0.0.0.0:%d/\n", port)
 	fmt.Printf("📁 Exports: http://0.0.0.0:%d/exports\n", port)
 	fmt.Printf("🔍 Status: http://0.0.0.0:%d/status\n", port)
+	fmt.Println("📄 Features: Server-side pagination, lazy loading, configurable page sizes")
+	fmt.Println()
 	
-	// Create web server with modern interface
-	// For now, use a simple implementation until we can import the web package
-	// This will be replaced with the proper web.NewServer() once imports are resolved
-	
-	// Simple fallback server implementation
-	mux := http.NewServeMux()
-	
-	// Static files
-	staticDir := "./web/static"
-	if _, err := os.Stat(staticDir); err == nil {
-		mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(staticDir))))
-	}
-	
-	// Serve a simple dashboard
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/" {
-			http.NotFound(w, r)
-			return
-		}
-		
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		fmt.Fprintf(w, `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Export Trakt 4 Letterboxd - Enhanced Interface</title>
-    <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: linear-gradient(135deg, #667eea 0%%, #764ba2 100%%); color: white; }
-        .container { max-width: 800px; margin: 0 auto; background: rgba(255,255,255,0.1); padding: 30px; border-radius: 15px; backdrop-filter: blur(10px); }
-        .header { text-align: center; margin-bottom: 30px; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
-        .card { background: rgba(255,255,255,0.2); padding: 20px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.3); }
-        .card h3 { margin-top: 0; font-size: 1.2em; }
-        .btn { display: inline-block; padding: 10px 20px; background: rgba(255,255,255,0.3); color: white; text-decoration: none; border-radius: 5px; margin: 5px; border: 1px solid rgba(255,255,255,0.5); transition: all 0.3s; }
-        .btn:hover { background: rgba(255,255,255,0.5); transform: translateY(-2px); }
-        .status { padding: 10px; border-radius: 5px; margin: 10px 0; }
-        .status.success { background: rgba(46, 160, 67, 0.3); }
-        .status.warning { background: rgba(255, 193, 7, 0.3); }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>🎬 Export Trakt 4 Letterboxd</h1>
-            <h2>Enhanced Web Interface</h2>
-            <p>Modern dashboard for managing your movie exports</p>
-        </div>
-        
-        <div class="grid">
-            <div class="card">
-                <h3>🔐 Authentication</h3>
-                <div id="auth-status" class="status">Checking authentication...</div>
-                <a href="/auth-url" class="btn">🔗 Authenticate</a>
-                <a href="/status" class="btn">📊 Check Status</a>
-            </div>
-            
-            <div class="card">
-                <h3>📁 Export Management</h3>
-                <p>Start new exports or manage existing ones</p>
-                <a href="/exports" class="btn">📁 Manage Exports</a>
-                <a href="/export/watched" class="btn">🎬 Export Watched</a>
-                <a href="/export/all" class="btn">📦 Export All</a>
-            </div>
-            
-            <div class="card">
-                <h3>🔧 System Features</h3>
-                <ul style="margin: 0; padding-left: 20px;">
-                    <li>✅ Modern responsive web interface</li>
-                    <li>✅ Real-time export progress tracking</li>
-                    <li>✅ Download management for CSV files</li>
-                    <li>✅ Enhanced authentication flow</li>
-                    <li>✅ System health monitoring</li>
-                    <li>✅ Mobile-friendly design</li>
-                </ul>
-            </div>
-            
-            <div class="card">
-                <h3>🌐 Quick Links</h3>
-                <a href="/" class="btn">🏠 Dashboard</a>
-                <a href="/exports" class="btn">📁 Exports</a>
-                <a href="/status" class="btn">🔍 Status</a>
-                <a href="/health" class="btn">❤️ Health</a>
-            </div>
-        </div>
-        
-        <div style="text-align: center; margin-top: 30px; opacity: 0.8;">
-            <p>🚀 Enhanced interface with modern features and improved user experience</p>
-            <p>Server running on port %d | Version 1.0.0</p>
-        </div>
-    </div>
-    
-    <script>
-        // Check authentication status
-        fetch('/health')
-            .then(r => r.json())
-            .then(data => {
-                const statusEl = document.getElementById('auth-status');
-                statusEl.className = 'status success';
-                statusEl.textContent = '✅ Server is running and healthy';
-            })
-            .catch(() => {
-                const statusEl = document.getElementById('auth-status');
-                statusEl.className = 'status warning';
-                statusEl.textContent = '⚠️ Unable to check server status';
-            });
-    </script>
-</body>
-</html>`, port)
-	})
-	
-	// Legacy compatibility endpoints
-	mux.HandleFunc("/auth-url", func(w http.ResponseWriter, r *http.Request) {
-		oauthMgr := auth.NewOAuthManager(cfg, log)
-		authURL, _, err := oauthMgr.GenerateAuthURL()
-		if err != nil {
-			http.Error(w, "Failed to generate auth URL", http.StatusInternalServerError)
-			return
-		}
-		
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		fmt.Fprintf(w, `
-<!DOCTYPE html>
-<html>
-<head><title>OAuth Authentication</title></head>
-<body style="font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px;">
-<h2>🔗 OAuth Authentication</h2>
-<p>Click the link below to authenticate with Trakt.tv:</p>
-<p><a href="%s" target="_blank" style="background: #667eea; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; display: inline-block;">🔗 Authenticate with Trakt.tv</a></p>
-<p><small>After authentication, you'll be redirected back to this server automatically.</small></p>
-<p><a href="/" style="color: #667eea;">← Back to Dashboard</a></p>
-</body>
-</html>`, authURL)
-	})
-	
-	mux.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
-		status, err := tokenManager.GetTokenStatus()
-		if err != nil {
-			http.Error(w, fmt.Sprintf("Error checking status: %s", err.Error()), http.StatusInternalServerError)
-			return
-		}
-
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		if status.HasToken && status.IsValid {
-			fmt.Fprintf(w, `
-<!DOCTYPE html>
-<html>
-<head><title>Token Status</title></head>
-<body style="font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px;">
-<h2>✅ Token Status: Valid</h2>
-<p><strong>Expires:</strong> %s</p>
-<p><strong>Auto-refresh:</strong> %s</p>
-<h3>🚀 Available Actions:</h3>
-<ul>
-<li><a href="/exports">📁 Manage Exports</a></li>
-<li><a href="/export/watched">🎬 Export watched movies</a></li>
-<li><a href="/export/collection">📚 Export collection</a></li>
-<li><a href="/export/all">📦 Export all data</a></li>
-</ul>
-<p><a href="/" style="color: #667eea;">← Back to Dashboard</a></p>
-</body>
-</html>`, status.ExpiresAt.Format("2006-01-02 15:04:05"), fmt.Sprintf("%t", status.HasRefreshToken))
-		} else {
-			fmt.Fprintf(w, `
-<!DOCTYPE html>
-<html>
-<head><title>Token Status</title></head>
-<body style="font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px;">
-<h2>❌ Token Status: Invalid or Missing</h2>
-<p>You need to authenticate first.</p>
-<p><a href="/auth-url" style="background: #667eea; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">🔗 Authenticate with Trakt.tv</a></p>
-<p><a href="/" style="color: #667eea;">← Back to Dashboard</a></p>
-</body>
-</html>`)
-		}
-	})
-	
-	mux.HandleFunc("/exports", func(w http.ResponseWriter, r *http.Request) {
-		// Determine exports directory
-		exportsDir := "./exports"
-		if cfg.Letterboxd.ExportDir != "" {
-			exportsDir = cfg.Letterboxd.ExportDir
-		}
-		
-		// Scan for existing exports
-		exports := scanExportFiles(exportsDir, log)
-		
-		// Get token status
-		var tokenStatus struct {
-			IsValid bool
-			HasToken bool
-		}
-		if status, err := tokenManager.GetTokenStatus(); err == nil {
-			tokenStatus.IsValid = status.IsValid
-			tokenStatus.HasToken = status.HasToken
-		}
-		
-		// Render the exports page with real data
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		
-		// Use the proper template with CSS file reference
-		fmt.Fprintf(w, `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Export Management - Export Trakt 4 Letterboxd</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=20250111-2">
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>📁 Export Management</h1>
-            <p>Manage and download your Letterboxd export files</p>
-        </div>
-        
-        <div class="export-actions">
-            <h2>🚀 Start New Export</h2>
-            %s
-            <div class="export-types">
-                <a href="/export/watched" class="export-type-card">
-                    <div class="export-icon">🎬</div>
-                    <strong>Watched Movies</strong>
-                    <p>Export your complete watch history</p>
-                </a>
-                <a href="/export/collection" class="export-type-card">
-                    <div class="export-icon">📚</div>
-                    <strong>Collection</strong>
-                    <p>Export your movie collection</p>
-                </a>
-                <a href="/export/shows" class="export-type-card">
-                    <div class="export-icon">📺</div>
-                    <strong>TV Shows</strong>
-                    <p>Export your TV show data</p>
-                </a>
-                <a href="/export/ratings" class="export-type-card">
-                    <div class="export-icon">⭐</div>
-                    <strong>Ratings</strong>
-                    <p>Export your movie ratings</p>
-                </a>
-                <a href="/export/watchlist" class="export-type-card">
-                    <div class="export-icon">📝</div>
-                    <strong>Watchlist</strong>
-                    <p>Export your watchlist</p>
-                </a>
-                <a href="/export/all" class="export-type-card">
-                    <div class="export-icon">📦</div>
-                    <strong>Complete Export</strong>
-                    <p>Export all your data</p>
-                </a>
-            </div>
-        </div>
-        
-        <div class="export-history">
-            <h2>📋 Export History</h2>
-            %s
-        </div>
-        
-        <p style="text-align: center; margin-top: 2rem;">
-            <a href="/" class="nav-link">← Back to Dashboard</a>
-        </p>
-    </div>
-</body>
-</html>`,
-			getAuthSection(tokenStatus.IsValid),
-			getExportsSection(exports))
-	})
-	
-	// OAuth callback handler
-	mux.HandleFunc("/callback", func(w http.ResponseWriter, r *http.Request) {
-		log.Info("server.oauth_callback_received", nil)
-		
-		code := r.URL.Query().Get("code")
-		errorParam := r.URL.Query().Get("error")
-		
-		oauthMgr := auth.NewOAuthManager(cfg, log)
-		
-		if errorParam != "" {
-			errDescription := r.URL.Query().Get("error_description")
-			log.Error("server.oauth_error", map[string]interface{}{
-				"error": errorParam,
-				"description": errDescription,
-			})
-			
-			w.WriteHeader(http.StatusBadRequest)
-			fmt.Fprintf(w, `
-<!DOCTYPE html>
-<html>
-<head><title>Authentication Error</title></head>
-<body style="font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px;">
-<h2>❌ Authentication Error</h2>
-<p><strong>Error:</strong> %s</p>
-<p><strong>Description:</strong> %s</p>
-<p><a href="/auth-url" style="background: #667eea; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">🔄 Try Again</a></p>
-<p><a href="/" style="color: #667eea;">← Back to Dashboard</a></p>
-</body>
-</html>`, errorParam, errDescription)
-			return
-		}
-
-		if code == "" {
-			log.Error("server.no_auth_code", nil)
-			w.WriteHeader(http.StatusBadRequest)
-			fmt.Fprint(w, `
-<!DOCTYPE html>
-<html>
-<head><title>Authentication Error</title></head>
-<body style="font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px;">
-<h2>❌ Authentication Error</h2>
-<p>No authorization code received.</p>
-<p><a href="/auth-url" style="background: #667eea; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">🔄 Try Again</a></p>
-<p><a href="/" style="color: #667eea;">← Back to Dashboard</a></p>
-</body>
-</html>`)
-			return
-		}
-
-		// Exchange code for token
-		token, err := oauthMgr.ExchangeCodeForToken(code, "", "")
-		if err != nil {
-			log.Error("server.token_exchange_failed", map[string]interface{}{
-				"error": err.Error(),
-			})
-			
-			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprintf(w, `
-<!DOCTYPE html>
-<html>
-<head><title>Authentication Failed</title></head>
-<body style="font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px;">
-<h2>❌ Authentication Failed</h2>
-<p>Failed to exchange authorization code for token.</p>
-<p><strong>Error:</strong> %s</p>
-<p><a href="/auth-url" style="background: #667eea; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">🔄 Try Again</a></p>
-<p><a href="/" style="color: #667eea;">← Back to Dashboard</a></p>
-</body>
-</html>`, err.Error())
-			return
-		}
-
-		// Store the token
-		if err := tokenManager.StoreToken(token); err != nil {
-			log.Error("server.token_store_failed", map[string]interface{}{
-				"error": err.Error(),
-			})
-			
-			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprintf(w, `
-<!DOCTYPE html>
-<html>
-<head><title>Token Storage Failed</title></head>
-<body style="font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px;">
-<h2>⚠️ Token Storage Failed</h2>
-<p>Authentication succeeded but failed to store token.</p>
-<p><strong>Error:</strong> %s</p>
-<p><a href="/" style="color: #667eea;">← Back to Dashboard</a></p>
-</body>
-</html>`, err.Error())
-			return
-		}
-
-		log.Info("server.oauth_success", map[string]interface{}{
-			"expires_at": oauthMgr.GetTokenExpiryTime(token),
-		})
-
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprintf(w, `
-<!DOCTYPE html>
-<html>
-<head><title>Authentication Successful</title></head>
-<body style="font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px;">
-<div style="text-align: center;">
-<h2>✅ Authentication Successful!</h2>
-<p>You have successfully authenticated with Trakt.tv.</p>
-<div style="background: #e8f5e8; padding: 15px; border-radius: 8px; border-left: 4px solid #4CAF50; margin: 20px 0;">
-<p><strong>Token expires:</strong> %s</p>
-<p><strong>Automatic refresh:</strong> Enabled</p>
-</div>
-<h3>🚀 What's Next?</h3>
-<p><a href="/exports" style="background: #667eea; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; margin: 10px;">📁 Start Exporting</a></p>
-<p><a href="/" style="background: #28a745; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; margin: 10px;">🏠 Go to Dashboard</a></p>
-</div>
-<script>
-setTimeout(function() {
-	if (confirm("Authentication successful! Close this window and return to the dashboard?")) {
-		window.close();
-		if (!window.closed) {
-			window.location.href = '/';
-		}
-	}
-}, 3000);
-</script>
-</body>
-</html>`, oauthMgr.GetTokenExpiryTime(token).Format("2006-01-02 15:04:05"))
-	})
-	
-	// Export endpoints
-	mux.HandleFunc("/export/", func(w http.ResponseWriter, r *http.Request) {
-		exportType := strings.TrimPrefix(r.URL.Path, "/export/")
-		if exportType == "" {
-			exportType = "watched"
-		}
-
-		// Check authentication
-		status, err := tokenManager.GetTokenStatus()
-		if err != nil || !status.HasToken || !status.IsValid {
-			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			fmt.Fprint(w, `
-<!DOCTYPE html>
-<html>
-<head><title>Authentication Required</title></head>
-<body style="font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px;">
-<h2>🔐 Authentication Required</h2>
-<p>You need to authenticate before exporting data.</p>
-<p><a href="/auth-url" style="background: #667eea; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">🔗 Authenticate with Trakt.tv</a></p>
-<p><a href="/" style="color: #667eea;">← Back to Dashboard</a></p>
-</body>
-</html>`)
-			return
-		}
-
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		fmt.Fprintf(w, `
-<!DOCTYPE html>
-<html>
-<head><title>Export Started</title></head>
-<body style="font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px;">
-<h2>🚀 Export Started</h2>
-<p>Export type: <strong>%s</strong></p>
-<div style="background: #e8f5e8; padding: 15px; border-radius: 8px; border-left: 4px solid #4CAF50; margin: 20px 0;">
-<p>✅ The export is running in the background.</p>
-<p>📁 Files will be available in the exports directory when complete.</p>
-<p>📊 Check the server logs for real-time progress updates.</p>
-</div>
-<p><a href="/exports" style="background: #667eea; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">📁 Back to Exports</a></p>
-<p><a href="/" style="color: #667eea;">← Back to Dashboard</a></p>
-</body>
-</html>`, exportType)
-
-		// Trigger export in background
-		go func() {
-			log.Info("server.export_triggered", map[string]interface{}{
-				"export_type": exportType,
-				"client_ip": r.RemoteAddr,
-			})
-			
-			runExportOnce(cfg, log, exportType, "normal", "")
-		}()
-	})
-
-	// Download endpoint for CSV files
-	mux.HandleFunc("/download/", func(w http.ResponseWriter, r *http.Request) {
-		// Extract file path from URL
-		urlPath := strings.TrimPrefix(r.URL.Path, "/download/")
-		if urlPath == "" {
-			http.Error(w, "File path required", http.StatusBadRequest)
-			return
-		}
-		
-		// Determine exports directory
-		exportsDir := "./exports"
-		if cfg.Letterboxd.ExportDir != "" {
-			exportsDir = cfg.Letterboxd.ExportDir
-		}
-		
-		// Handle both direct files and files in subdirectories
-		var fullPath string
-		if strings.Contains(urlPath, "/") {
-			// For subdirectory files, use the full relative path
-			fullPath = filepath.Join(exportsDir, urlPath)
-		} else {
-			// For direct files, just add to exports directory
-			fullPath = filepath.Join(exportsDir, urlPath)
-		}
-		
-		// Security check: ensure the file is within the exports directory
-		absExportsDir, err := filepath.Abs(exportsDir)
-		if err != nil {
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
-			return
-		}
-		
-		absFilePath, err := filepath.Abs(fullPath)
-		if err != nil {
-			http.Error(w, "Invalid file path", http.StatusBadRequest)
-			return
-		}
-		
-		if !strings.HasPrefix(absFilePath, absExportsDir) {
-			log.Warn("web.download_access_denied", map[string]interface{}{
-				"requested_path": urlPath,
-				"client_ip":      r.RemoteAddr,
-			})
-			http.Error(w, "Access denied", http.StatusForbidden)
-			return
-		}
-		
-		// Check if file exists
-		if _, err := os.Stat(absFilePath); os.IsNotExist(err) {
-			log.Warn("web.download_file_not_found", map[string]interface{}{
-				"requested_path": urlPath,
-				"full_path":      absFilePath,
-				"client_ip":      r.RemoteAddr,
-			})
-			http.Error(w, "File not found", http.StatusNotFound)
-			return
-		}
-		
-		log.Info("web.file_download", map[string]interface{}{
-			"requested_path": urlPath,
-			"full_path":      absFilePath,
-			"client_ip":      r.RemoteAddr,
-		})
-		
-		// Extract just the filename for the download
-		filename := filepath.Base(absFilePath)
-		
-		// Set headers for download
-		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
-		w.Header().Set("Content-Type", "text/csv")
-		
-		// Get file size for Content-Length header
-		if info, err := os.Stat(absFilePath); err == nil {
-			w.Header().Set("Content-Length", fmt.Sprintf("%d", info.Size()))
-		}
-		
-		// Serve the file
-		http.ServeFile(w, r, absFilePath)
-	})
-
-	// Health check endpoint
-	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"status":"healthy","service":"export-trakt-enhanced","timestamp":"` + time.Now().Format(time.RFC3339) + `"}`)
-	})
-
-	// Start server
-	server := &http.Server{
-		Addr: fmt.Sprintf(":%d", port),
-		Handler: mux,
-		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 30 * time.Second,
-		IdleTimeout:  120 * time.Second,
-	}
-
-	log.Info("server.starting", map[string]interface{}{
-		"port": port,
-		"interface": "enhanced",
-	})
-
-	// Handle graceful shutdown
+	// Set up graceful shutdown
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
@@ -1878,7 +1330,7 @@ setTimeout(function() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		
-		if err := server.Shutdown(ctx); err != nil {
+		if err := webServer.Stop(ctx); err != nil {
 			log.Error("server.shutdown_error", map[string]interface{}{
 				"error": err.Error(),
 			})
@@ -1888,15 +1340,13 @@ setTimeout(function() {
 		os.Exit(0)
 	}()
 
-	fmt.Printf("\n✅ Enhanced Web Interface started! Press Ctrl+C to stop.\n")
-	fmt.Printf("🌐 Access your dashboard at: http://localhost:%d\n\n", port)
+	fmt.Printf("\n✅ Enhanced Web Interface with Pagination started! Press Ctrl+C to stop.\n")
+	fmt.Printf("🌐 Access your dashboard at: http://localhost:%d\n", port)
+	fmt.Printf("📁 Exports page: http://localhost:%d/exports\n", port)
+	fmt.Println()
 	
-	// Start HTTP server
-	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		return fmt.Errorf("server failed: %w", err)
-	}
-
-	return nil
+	// Start the web server with pagination support
+	return webServer.Start()
 }
 
 // Helper structures for export scanning

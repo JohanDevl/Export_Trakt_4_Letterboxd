@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -23,6 +24,19 @@ type ExportsData struct {
 	TokenStatus  *TokenStatusData
 	Exports      []ExportItem
 	Alert        *AlertData
+	Pagination   *PaginationData
+}
+
+type PaginationData struct {
+	CurrentPage  int
+	TotalPages   int
+	TotalItems   int
+	ItemsPerPage int
+	HasPrevious  bool
+	HasNext      bool
+	ShowFirst    bool
+	ShowLast     bool
+	PageNumbers  []int
 }
 
 type ExportItem struct {
@@ -80,7 +94,13 @@ func (h *ExportsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ExportsHandler) handleGetExports(w http.ResponseWriter, r *http.Request) {
-	data := h.prepareExportsData()
+	// Check if this is an AJAX request for pagination
+	if r.Header.Get("X-Requested-With") == "XMLHttpRequest" {
+		h.handleGetExportsPaginated(w, r)
+		return
+	}
+	
+	data := h.prepareExportsData(r)
 	
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := h.templates.ExecuteTemplate(w, "exports.html", data); err != nil {
@@ -90,6 +110,26 @@ func (h *ExportsHandler) handleGetExports(w http.ResponseWriter, r *http.Request
 		})
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
+	}
+}
+
+func (h *ExportsHandler) handleGetExportsPaginated(w http.ResponseWriter, r *http.Request) {
+	data := h.prepareExportsData(r)
+	
+	response := struct {
+		Exports    []ExportItem    `json:"exports"`
+		Pagination *PaginationData `json:"pagination"`
+	}{
+		Exports:    data.Exports,
+		Pagination: data.Pagination,
+	}
+	
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		h.logger.Error("web.json_encode_error", map[string]interface{}{
+			"error": err.Error(),
+		})
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 	}
 }
 
@@ -154,7 +194,7 @@ func (h *ExportsHandler) handleDeleteExport(w http.ResponseWriter, r *http.Reque
 	})
 }
 
-func (h *ExportsHandler) prepareExportsData() *ExportsData {
+func (h *ExportsHandler) prepareExportsData(r *http.Request) *ExportsData {
 	data := &ExportsData{
 		Title:        "Export Management",
 		CurrentPage:  "exports",
@@ -177,10 +217,108 @@ func (h *ExportsHandler) prepareExportsData() *ExportsData {
 		}
 	}
 	
-	// Scan for existing export files
-	data.Exports = h.scanExportFiles()
+	// Parse pagination parameters
+	page := h.getIntParam(r, "page", 1)
+	limit := h.getIntParam(r, "limit", 10)
+	
+	// Validate parameters
+	if page < 1 {
+		page = 1
+	}
+	if limit < 5 {
+		limit = 5
+	} else if limit > 100 {
+		limit = 100
+	}
+	
+	// Scan for existing export files with pagination
+	allExports := h.scanExportFiles()
+	totalItems := len(allExports)
+	totalPages := (totalItems + limit - 1) / limit
+	
+	if totalPages == 0 {
+		totalPages = 1
+	}
+	
+	if page > totalPages {
+		page = totalPages
+	}
+	
+	// Calculate pagination slice
+	start := (page - 1) * limit
+	end := start + limit
+	if end > totalItems {
+		end = totalItems
+	}
+	
+	if start < totalItems {
+		data.Exports = allExports[start:end]
+	} else {
+		data.Exports = []ExportItem{}
+	}
+	
+	// Build pagination data
+	data.Pagination = h.buildPaginationData(page, totalPages, totalItems, limit)
+	
+	h.logger.Info("web.pagination_debug", map[string]interface{}{
+		"total_items": totalItems,
+		"total_pages": totalPages,
+		"current_page": page,
+		"limit": limit,
+		"pagination_nil": data.Pagination == nil,
+	})
 	
 	return data
+}
+
+func (h *ExportsHandler) getIntParam(r *http.Request, key string, defaultValue int) int {
+	value := r.URL.Query().Get(key)
+	if value == "" {
+		return defaultValue
+	}
+	
+	if intValue, err := strconv.Atoi(value); err == nil {
+		return intValue
+	}
+	
+	return defaultValue
+}
+
+func (h *ExportsHandler) buildPaginationData(currentPage, totalPages, totalItems, itemsPerPage int) *PaginationData {
+	pagination := &PaginationData{
+		CurrentPage:  currentPage,
+		TotalPages:   totalPages,
+		TotalItems:   totalItems,
+		ItemsPerPage: itemsPerPage,
+		HasPrevious:  currentPage > 1,
+		HasNext:      currentPage < totalPages,
+		ShowFirst:    currentPage > 3,
+		ShowLast:     currentPage < totalPages-2,
+	}
+	
+	// Generate page numbers to show (max 5 pages around current)
+	start := currentPage - 2
+	end := currentPage + 2
+	
+	if start < 1 {
+		start = 1
+		end = 5
+	}
+	
+	if end > totalPages {
+		end = totalPages
+		start = totalPages - 4
+	}
+	
+	if start < 1 {
+		start = 1
+	}
+	
+	for i := start; i <= end; i++ {
+		pagination.PageNumbers = append(pagination.PageNumbers, i)
+	}
+	
+	return pagination
 }
 
 func (h *ExportsHandler) scanExportFiles() []ExportItem {
