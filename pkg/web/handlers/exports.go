@@ -224,6 +224,10 @@ func (h *ExportsHandler) prepareExportsData(r *http.Request) *ExportsData {
 	page := h.getIntParam(r, "page", 1)
 	limit := h.getIntParam(r, "limit", 10)
 	
+	// Parse filter parameters
+	typeFilter := r.URL.Query().Get("type")
+	statusFilter := r.URL.Query().Get("status")
+	
 	// Validate parameters
 	if page < 1 {
 		page = 1
@@ -234,9 +238,12 @@ func (h *ExportsHandler) prepareExportsData(r *http.Request) *ExportsData {
 		limit = 100
 	}
 	
-	// Scan for existing export files with pagination
+	// Scan for existing export files with filtering
 	allExports := h.scanExportFiles()
-	totalItems := len(allExports)
+	
+	// Apply filters
+	filteredExports := h.applyFilters(allExports, typeFilter, statusFilter)
+	totalItems := len(filteredExports)
 	totalPages := (totalItems + limit - 1) / limit
 	
 	if totalPages == 0 {
@@ -255,7 +262,7 @@ func (h *ExportsHandler) prepareExportsData(r *http.Request) *ExportsData {
 	}
 	
 	if start < totalItems {
-		data.Exports = allExports[start:end]
+		data.Exports = filteredExports[start:end]
 	} else {
 		data.Exports = []ExportItem{}
 	}
@@ -285,6 +292,24 @@ func (h *ExportsHandler) getIntParam(r *http.Request, key string, defaultValue i
 	}
 	
 	return defaultValue
+}
+
+func (h *ExportsHandler) applyFilters(exports []ExportItem, typeFilter, statusFilter string) []ExportItem {
+	if typeFilter == "" && statusFilter == "" {
+		return exports
+	}
+	
+	var filtered []ExportItem
+	for _, export := range exports {
+		matchesType := typeFilter == "" || export.Type == typeFilter
+		matchesStatus := statusFilter == "" || export.Status == statusFilter
+		
+		if matchesType && matchesStatus {
+			filtered = append(filtered, export)
+		}
+	}
+	
+	return filtered
 }
 
 func (h *ExportsHandler) buildPaginationData(currentPage, totalPages, totalItems, itemsPerPage int) *PaginationData {

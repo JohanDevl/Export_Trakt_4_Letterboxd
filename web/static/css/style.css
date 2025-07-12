@@ -520,6 +520,20 @@ body {
   gap: 1rem;
   margin-bottom: 2rem;
   flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.controls-left {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.controls-right {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .search-input,
@@ -1307,5 +1321,177 @@ body {
     box-shadow: none;
     border: 1px solid #ccc;
     page-break-inside: avoid;
+  }
+}
+
+/* Enhanced Mobile Responsive Design for Exports */
+@media (max-width: 768px) {
+  .export-types {
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 1.5rem;
+    padding: 0 1rem;
+    margin-bottom: 2rem;
+  }
+  
+  .export-type-card {
+    width: 100%;
+    min-height: 170px;
+    padding: 1.25rem;
+  }
+  
+  .export-type-card h3 {
+    font-size: 1rem;
+    margin: 0.5rem 0;
+  }
+  
+  .export-type-card p {
+    font-size: 0.85rem;
+    margin-bottom: 1rem;
+  }
+  
+  .history-controls {
+    flex-direction: column;
+    gap: 1.25rem;
+    margin-bottom: 2.5rem;
+  }
+  
+  .controls-left {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    width: 100%;
+  }
+  
+  .controls-right {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+  }
+  
+  .filter-select, .page-size-select {
+    width: 100%;
+    font-size: 1rem;
+    padding: 0.75rem;
+  }
+  
+  .page-size-label {
+    white-space: nowrap;
+    margin-right: 0.5rem;
+  }
+  
+  .export-item {
+    flex-direction: column;
+    gap: 1.25rem;
+    margin-bottom: 1.5rem;
+    padding: 1.25rem;
+  }
+  
+  .export-actions-container {
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  
+  .btn {
+    flex: 1;
+    min-width: 120px;
+    text-align: center;
+  }
+  
+  .pagination {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.25rem;
+  }
+  
+  .pagination-btn {
+    min-width: 40px;
+    padding: 0.5rem 0.75rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .container {
+    padding: 1rem 1rem;
+  }
+  
+  .export-actions {
+    margin-bottom: 2.5rem;
+  }
+  
+  .export-types {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+    padding: 0 0.75rem;
+    margin-bottom: 2.5rem;
+  }
+  
+  .export-type-card {
+    width: 100%;
+    min-height: 160px;
+    padding: 1.5rem;
+  }
+  
+  .export-icon {
+    font-size: 1.5rem;
+  }
+  
+  .export-type-card h3 {
+    font-size: 0.95rem;
+  }
+  
+  .export-type-card p {
+    font-size: 0.85rem;
+    margin-bottom: 1rem;
+  }
+  
+  .btn {
+    padding: 0.75rem 1rem;
+    font-size: 0.9rem;
+  }
+  
+  .controls-right {
+    flex-direction: column;
+    gap: 1rem;
+    align-items: stretch;
+  }
+  
+  .page-size-label {
+    text-align: center;
+    margin-right: 0;
+    margin-bottom: 0.5rem;
+  }
+  
+  .export-details {
+    flex-direction: column;
+    gap: 0.5rem;
+    align-items: flex-start;
+  }
+  
+  .export-details span {
+    font-size: 0.85rem;
+  }
+  
+  .pagination-btn {
+    min-width: 35px;
+    padding: 0.4rem 0.6rem;
+    font-size: 0.85rem;
+  }
+  
+  .pagination-info {
+    font-size: 0.85rem;
+    text-align: center;
+    margin-top: 1rem;
+  }
+  
+  .export-actions-container {
+    flex-direction: column;
+  }
+  
+  .btn {
+    width: 100%;
+    margin: 0;
   }
 }
