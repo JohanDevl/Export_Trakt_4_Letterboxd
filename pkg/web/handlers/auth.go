@@ -73,6 +73,7 @@ func (h *AuthHandler) handleAuthURL(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusInternalServerError)
 		tmpl, _ := h.templates.Clone()
+		tmpl.ParseFiles("web/templates/auth-error.html")
 		tmpl.ExecuteTemplate(w, "base.html", data)
 		return
 	}
@@ -95,6 +96,16 @@ func (h *AuthHandler) handleAuthURL(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.logger.Error("web.template_clone_error", map[string]interface{}{
 			"error": err.Error(),
+		})
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	
+	// Parse the auth-url template to associate it with base template
+	if _, err := tmpl.ParseFiles("web/templates/auth-url.html"); err != nil {
+		h.logger.Error("web.template_parse_error", map[string]interface{}{
+			"error":    err.Error(),
+			"template": "auth-url.html",
 		})
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
@@ -140,6 +151,7 @@ func (h *AuthHandler) handleCallback(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusBadRequest)
 		tmpl, _ := h.templates.Clone()
+		tmpl.ParseFiles("web/templates/auth-error.html")
 		tmpl.ExecuteTemplate(w, "base.html", data)
 		return
 	}
@@ -162,6 +174,7 @@ func (h *AuthHandler) handleCallback(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusBadRequest)
 		tmpl, _ := h.templates.Clone()
+		tmpl.ParseFiles("web/templates/auth-error.html")
 		tmpl.ExecuteTemplate(w, "base.html", data)
 		return
 	}
@@ -187,6 +200,7 @@ func (h *AuthHandler) handleCallback(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusInternalServerError)
 		tmpl, _ := h.templates.Clone()
+		tmpl.ParseFiles("web/templates/auth-error.html")
 		tmpl.ExecuteTemplate(w, "base.html", data)
 		return
 	}
@@ -211,6 +225,7 @@ func (h *AuthHandler) handleCallback(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusInternalServerError)
 		tmpl, _ := h.templates.Clone()
+		tmpl.ParseFiles("web/templates/auth-error.html")
 		tmpl.ExecuteTemplate(w, "base.html", data)
 		return
 	}
@@ -232,6 +247,7 @@ func (h *AuthHandler) handleCallback(w http.ResponseWriter, r *http.Request) {
 	
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	tmpl, _ := h.templates.Clone()
+	tmpl.ParseFiles("web/templates/auth-success.html")
 	if err := tmpl.ExecuteTemplate(w, "base.html", data); err != nil {
 		h.logger.Error("web.template_error", map[string]interface{}{
 			"error":    err.Error(),
