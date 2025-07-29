@@ -270,3 +270,5 @@ coverage.txt
 
 # Go workspace file
 go.work
+
+.claude

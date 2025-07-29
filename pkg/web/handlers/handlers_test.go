@@ -2,9 +2,11 @@ package handlers
 
 import (
 	"html/template"
+	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -633,5 +635,214 @@ func TestCountCSVRecords(t *testing.T) {
 	count = handler.countCSVRecords(nonExistentFile)
 	if count != 0 {
 		t.Errorf("countCSVRecords() for non-existent file = %d, expected 0", count)
+	}
+
+	// Test optimized CSV record counting
+	countOpt := handler.countCSVRecordsOptimized(testFile)
+	if countOpt != expectedCount {
+		t.Errorf("countCSVRecordsOptimized() = %d, expected %d", countOpt, expectedCount)
+	}
+
+	// Test optimized counting with non-existent file
+	countOptNonExistent := handler.countCSVRecordsOptimized(nonExistentFile)
+	if countOptNonExistent != 0 {
+		t.Errorf("countCSVRecordsOptimized() for non-existent file = %d, expected 0", countOptNonExistent)
+	}
+}
+
+func TestCacheSystem(t *testing.T) {
+	// Create test configuration
+	cfg := &config.Config{}
+	log := logger.NewLogger()
+	keyringMgr, _ := keyring.NewManager(keyring.MemoryBackend)
+	tokenManager := auth.NewTokenManager(cfg, log, keyringMgr)
+	templates := template.New("")
+
+	// Create exports handler
+	handler := NewExportsHandler(cfg, log, tokenManager, templates)
+
+	// Test cache initialization
+	if handler.cache == nil {
+		t.Error("Cache should be initialized")
+	}
+
+	if handler.cache.cacheTTL != 5*time.Minute {
+		t.Errorf("Expected cache TTL of 5 minutes, got %v", handler.cache.cacheTTL)
+	}
+
+	// Test cache with empty exports dir
+	exports := handler.getExportsWithCache(1, 10)
+	if len(exports) != 0 {
+		t.Errorf("Expected 0 exports for non-existent dir, got %d", len(exports))
+	}
+}
+
+func TestLazyLoading(t *testing.T) {
+	// Create test configuration
+	cfg := &config.Config{}
+	log := logger.NewLogger()
+	keyringMgr, _ := keyring.NewManager(keyring.MemoryBackend)
+	tokenManager := auth.NewTokenManager(cfg, log, keyringMgr)
+	templates := template.New("")
+
+	// Create temporary exports directory
+	tempDir, err := ioutil.TempDir("", "test_exports_*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Set exports directory
+	cfg.Letterboxd.ExportDir = tempDir
+	handler := NewExportsHandler(cfg, log, tokenManager, templates)
+
+	// Create test export directories with different dates
+	recentDir := filepath.Join(tempDir, "export_2025-07-29_10-00")
+	olderDir := filepath.Join(tempDir, "export_2024-01-01_10-00")
+
+	if err := os.MkdirAll(recentDir, 0755); err != nil {
+		t.Fatalf("Failed to create recent dir: %v", err)
+	}
+	if err := os.MkdirAll(olderDir, 0755); err != nil {
+		t.Fatalf("Failed to create older dir: %v", err)
+	}
+
+	// Create test CSV files
+	recentCSV := filepath.Join(recentDir, "watched.csv")
+
+	if err := ioutil.WriteFile(recentCSV, []byte("Title,Year\nMovie1,2025\n"), 0644); err != nil {
+		t.Fatalf("Failed to write recent CSV: %v", err)
+	}
+
+	// Test date parsing
+	parsedTime := handler.parseDirTime("export_2025-07-29_10-00")
+	if parsedTime.IsZero() {
+		t.Error("Failed to parse directory time")
+	}
+
+	// Test optimized directory processing
+	exportItem := handler.processExportDirectoryOptimized(recentDir, "export_2025-07-29_10-00")
+	if exportItem == nil {
+		t.Error("Expected export item from optimized processing")
+	} else {
+		if exportItem.Type != "watched" {
+			t.Errorf("Expected type 'watched', got '%s'", exportItem.Type)
+		}
+		if exportItem.Status != "completed" {
+			t.Errorf("Expected status 'completed', got '%s'", exportItem.Status)
+		}
+	}
+
+	// Test optimized CSV file processing
+	csvItem := handler.processCSVFileOptimized(recentCSV, "watched.csv")
+	if csvItem == nil {
+		t.Error("Expected CSV item from optimized processing")
+	} else {
+		if csvItem.Type != "watched" {
+			t.Errorf("Expected type 'watched', got '%s'", csvItem.Type)
+		}
+	}
+}
+
+func TestExportUtilityFunctions(t *testing.T) {
+	// Create test configuration
+	cfg := &config.Config{}
+	log := logger.NewLogger()
+	keyringMgr, _ := keyring.NewManager(keyring.MemoryBackend)
+	tokenManager := auth.NewTokenManager(cfg, log, keyringMgr)
+	templates := template.New("")
+	handler := NewExportsHandler(cfg, log, tokenManager, templates)
+
+	// Test parse export type
+	tests := []struct {
+		filename string
+		expected string
+	}{
+		{"watched.csv", "watched"},
+		{"collection.csv", "collection"},
+		{"shows.csv", "shows"},
+		{"ratings.csv", "ratings"},
+		{"watchlist.csv", "watchlist"},
+		{"unknown.csv", ""},
+	}
+
+	for _, test := range tests {
+		result := handler.parseExportType(test.filename)
+		if result != test.expected {
+			t.Errorf("parseExportType(%s): expected %s, got %s", test.filename, test.expected, result)
+		}
+	}
+
+	// Test file size formatting
+	testSizes := []struct {
+		size     int64
+		expected string
+	}{
+		{0, "0 B"},
+		{500, "500 B"},
+		{1024, "1.0 KB"},
+		{1536, "1.5 KB"},
+		{1048576, "1.0 MB"},
+	}
+
+	for _, test := range testSizes {
+		result := handler.formatFileSize(test.size)
+		if result != test.expected {
+			t.Errorf("formatFileSize(%d): expected %s, got %s", test.size, test.expected, result)
+		}
+	}
+
+	// Test getIntParam
+	req := httptest.NewRequest("GET", "/?page=5&limit=20&invalid=abc", nil)
+
+	page := handler.getIntParam(req, "page", 1)
+	if page != 5 {
+		t.Errorf("getIntParam(page): expected 5, got %d", page)
+	}
+
+	limit := handler.getIntParam(req, "limit", 10)
+	if limit != 20 {
+		t.Errorf("getIntParam(limit): expected 20, got %d", limit)
+	}
+
+	defaultVal := handler.getIntParam(req, "missing", 42)
+	if defaultVal != 42 {
+		t.Errorf("getIntParam(missing): expected 42, got %d", defaultVal)
+	}
+
+	invalidVal := handler.getIntParam(req, "invalid", 99)
+	if invalidVal != 99 {
+		t.Errorf("getIntParam(invalid): expected 99, got %d", invalidVal)
+	}
+
+	// Test apply filters
+	exports := []ExportItem{
+		{Type: "watched", Status: "completed"},
+		{Type: "ratings", Status: "completed"},
+		{Type: "watched", Status: "failed"},
+	}
+
+	// Filter by type
+	watchedOnly := handler.applyFilters(exports, "watched", "")
+	if len(watchedOnly) != 2 {
+		t.Errorf("applyFilters type watched: expected 2, got %d", len(watchedOnly))
+	}
+
+	// Filter by status
+	completedOnly := handler.applyFilters(exports, "", "completed")
+	if len(completedOnly) != 2 {
+		t.Errorf("applyFilters status completed: expected 2, got %d", len(completedOnly))
+	}
+
+	// Filter by both
+	watchedCompleted := handler.applyFilters(exports, "watched", "completed")
+	if len(watchedCompleted) != 1 {
+		t.Errorf("applyFilters watched+completed: expected 1, got %d", len(watchedCompleted))
+	}
+
+	// No filters
+	allExports := handler.applyFilters(exports, "", "")
+	if len(allExports) != 3 {
+		t.Errorf("applyFilters no filter: expected 3, got %d", len(allExports))
 	}
 }
