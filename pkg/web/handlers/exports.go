@@ -8,8 +8,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/auth"
@@ -58,12 +60,20 @@ type ExportAPIResponse struct {
 	Error   string      `json:"error,omitempty"`
 }
 
+type ExportCache struct {
+	mu        sync.RWMutex
+	exports   []ExportItem
+	lastScan  time.Time
+	cacheTTL  time.Duration
+}
+
 type ExportsHandler struct {
 	config       *config.Config
 	logger       logger.Logger
 	tokenManager *auth.TokenManager
 	templates    *template.Template
 	exportsDir   string
+	cache        *ExportCache
 }
 
 func NewExportsHandler(cfg *config.Config, log logger.Logger, tokenManager *auth.TokenManager, templates *template.Template) *ExportsHandler {
@@ -78,6 +88,9 @@ func NewExportsHandler(cfg *config.Config, log logger.Logger, tokenManager *auth
 		tokenManager: tokenManager,
 		templates:    templates,
 		exportsDir:   exportsDir,
+		cache: &ExportCache{
+			cacheTTL: 5 * time.Minute, // Cache pendant 5 minutes
+		},
 	}
 }
 
@@ -238,8 +251,8 @@ func (h *ExportsHandler) prepareExportsData(r *http.Request) *ExportsData {
 		limit = 100
 	}
 	
-	// Scan for existing export files with filtering
-	allExports := h.scanExportFiles()
+	// Get exports with caching and lazy loading
+	allExports := h.getExportsWithCache(page, limit)
 	
 	// Apply filters
 	filteredExports := h.applyFilters(allExports, typeFilter, statusFilter)
@@ -349,6 +362,174 @@ func (h *ExportsHandler) buildPaginationData(currentPage, totalPages, totalItems
 	return pagination
 }
 
+// getExportsWithCache retourne les exports avec mise en cache intelligente
+func (h *ExportsHandler) getExportsWithCache(page, limit int) []ExportItem {
+	h.cache.mu.RLock()
+	cacheValid := time.Since(h.cache.lastScan) < h.cache.cacheTTL && len(h.cache.exports) > 0
+	h.cache.mu.RUnlock()
+	
+	if cacheValid {
+		h.logger.Info("web.exports_cache_hit", map[string]interface{}{
+			"cached_count": len(h.cache.exports),
+		})
+		return h.cache.exports
+	}
+	
+	// Cache miss - scanner les exports avec lazy loading
+	exports := h.scanExportFilesOptimized()
+	
+	// Mettre à jour le cache
+	h.cache.mu.Lock()
+	h.cache.exports = exports
+	h.cache.lastScan = time.Now()
+	h.cache.mu.Unlock()
+	
+	h.logger.Info("web.exports_cache_updated", map[string]interface{}{
+		"total_exports": len(exports),
+	})
+	
+	return exports
+}
+
+// scanExportFilesOptimized scanne les exports de manière optimisée
+func (h *ExportsHandler) scanExportFilesOptimized() []ExportItem {
+	var exports []ExportItem
+	
+	// Check if exports directory exists
+	if _, err := os.Stat(h.exportsDir); os.IsNotExist(err) {
+		h.logger.Info("web.exports_dir_not_found", map[string]interface{}{
+			"dir": h.exportsDir,
+		})
+		return exports
+	}
+	
+	// Scan récent en premier (30 derniers jours) pour des performances optimales
+	recentExports := h.scanRecentExports(30)
+	exports = append(exports, recentExports...)
+	
+	// Si on a moins de 50 exports récents, scanner plus ancien en arrière-plan
+	if len(exports) < 50 {
+		olderExports := h.scanOlderExports(30)
+		exports = append(exports, olderExports...)
+	}
+	
+	// Trier par date (plus récent en premier)
+	sort.Slice(exports, func(i, j int) bool {
+		return exports[i].Date.After(exports[j].Date)
+	})
+	
+	h.logger.Info("web.exports_scanned_optimized", map[string]interface{}{
+		"count": len(exports),
+	})
+	
+	return exports
+}
+
+// scanRecentExports scanne seulement les exports récents
+func (h *ExportsHandler) scanRecentExports(days int) []ExportItem {
+	var exports []ExportItem
+	cutoffTime := time.Now().AddDate(0, 0, -days)
+	
+	entries, err := os.ReadDir(h.exportsDir)
+	if err != nil {
+		h.logger.Error("web.scan_exports_dir_error", map[string]interface{}{
+			"error": err.Error(),
+		})
+		return exports
+	}
+	
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			// Handle individual CSV files
+			if strings.HasSuffix(strings.ToLower(entry.Name()), ".csv") {
+				info, _ := entry.Info()
+				if info.ModTime().After(cutoffTime) {
+					export := h.processCSVFileOptimized(filepath.Join(h.exportsDir, entry.Name()), entry.Name())
+					if export != nil {
+						exports = append(exports, *export)
+					}
+				}
+			}
+			continue
+		}
+		
+		// Check timestamped directories
+		dirName := entry.Name()
+		if strings.HasPrefix(dirName, "export_") && len(dirName) >= 16 {
+			// Parse date from directory name quickly
+			if dirTime := h.parseDirTime(dirName); dirTime.After(cutoffTime) {
+				export := h.processExportDirectoryOptimized(filepath.Join(h.exportsDir, dirName), dirName)
+				if export != nil {
+					exports = append(exports, *export)
+				}
+			}
+		}
+	}
+	
+	return exports
+}
+
+// scanOlderExports scanne les exports plus anciens si nécessaire
+func (h *ExportsHandler) scanOlderExports(skipDays int) []ExportItem {
+	var exports []ExportItem
+	cutoffTime := time.Now().AddDate(0, 0, -skipDays)
+	
+	entries, err := os.ReadDir(h.exportsDir)
+	if err != nil {
+		return exports
+	}
+	
+	// Limiter le scan aux 100 premiers dossiers les plus anciens pour éviter la latence
+	count := 0
+	for _, entry := range entries {
+		if count >= 100 {
+			break
+		}
+		
+		if !entry.IsDir() {
+			if strings.HasSuffix(strings.ToLower(entry.Name()), ".csv") {
+				info, _ := entry.Info()
+				if info.ModTime().Before(cutoffTime) {
+					export := h.processCSVFileOptimized(filepath.Join(h.exportsDir, entry.Name()), entry.Name())
+					if export != nil {
+						exports = append(exports, *export)
+						count++
+					}
+				}
+			}
+			continue
+		}
+		
+		dirName := entry.Name()
+		if strings.HasPrefix(dirName, "export_") && len(dirName) >= 16 {
+			if dirTime := h.parseDirTime(dirName); dirTime.Before(cutoffTime) {
+				export := h.processExportDirectoryOptimized(filepath.Join(h.exportsDir, dirName), dirName)
+				if export != nil {
+					exports = append(exports, *export)
+					count++
+				}
+			}
+		}
+	}
+	
+	return exports
+}
+
+// parseDirTime parse rapidement la date d'un nom de dossier
+func (h *ExportsHandler) parseDirTime(dirName string) time.Time {
+	parts := strings.Split(dirName, "_")
+	if len(parts) < 3 {
+		return time.Time{}
+	}
+	
+	dateStr := parts[1] + " " + strings.ReplaceAll(parts[2], "-", ":")
+	if exportDate, err := time.Parse("2006-01-02 15:04", dateStr); err == nil {
+		return exportDate
+	}
+	return time.Time{}
+}
+
+// Ancienne méthode de scan complète - conservée pour référence
 func (h *ExportsHandler) scanExportFiles() []ExportItem {
 	var exports []ExportItem
 	
@@ -391,14 +572,10 @@ func (h *ExportsHandler) scanExportFiles() []ExportItem {
 		}
 	}
 	
-	// Sort by date (newest first)
-	for i := 0; i < len(exports)-1; i++ {
-		for j := i + 1; j < len(exports); j++ {
-			if exports[i].Date.Before(exports[j].Date) {
-				exports[i], exports[j] = exports[j], exports[i]
-			}
-		}
-	}
+	// Sort by date (newest first) - utiliser sort.Slice qui est plus efficace
+	sort.Slice(exports, func(i, j int) bool {
+		return exports[i].Date.After(exports[j].Date)
+	})
 	
 	h.logger.Info("web.exports_scanned", map[string]interface{}{
 		"count": len(exports),
@@ -407,6 +584,104 @@ func (h *ExportsHandler) scanExportFiles() []ExportItem {
 	return exports
 }
 
+// processExportDirectoryOptimized traite un dossier d'export de manière optimisée
+func (h *ExportsHandler) processExportDirectoryOptimized(dirPath, dirName string) *ExportItem {
+	// Parse timestamp from directory name
+	exportDate := h.parseDirTime(dirName)
+	if exportDate.IsZero() {
+		// Fallback to directory modification time
+		if info, err := os.Stat(dirPath); err == nil {
+			exportDate = info.ModTime()
+		} else {
+			return nil
+		}
+	}
+	
+	// Scan files optimisé - ne pas lire tous les contenus immédiatement
+	files, err := os.ReadDir(dirPath)
+	if err != nil {
+		return nil
+	}
+	
+	var csvFiles []string
+	var totalSize int64
+	var estimatedRecords int
+	var exportTypes []string
+	
+	for _, file := range files {
+		if !file.IsDir() && strings.HasSuffix(strings.ToLower(file.Name()), ".csv") {
+			csvFiles = append(csvFiles, file.Name())
+			
+			// Get file info
+			if info, err := file.Info(); err == nil {
+				totalSize += info.Size()
+				// Estimation rapide: ~80 caractères par ligne en moyenne
+				estimatedRecords += int(info.Size() / 80)
+			}
+			
+			// Déterminer le type d'export
+			if exportType := h.parseExportType(file.Name()); exportType != "" {
+				exportTypes = append(exportTypes, exportType)
+			}
+		}
+	}
+	
+	if len(csvFiles) == 0 {
+		return nil
+	}
+	
+	// Déterminer le type principal
+	mainType := "all"
+	if len(exportTypes) == 1 {
+		mainType = exportTypes[0]
+	} else if len(exportTypes) > 1 {
+		mainType = "all"
+	}
+	
+	// Estimation de durée
+	duration := h.estimateExportDuration(estimatedRecords)
+	
+	return &ExportItem{
+		ID:          fmt.Sprintf("dir_%s", dirName),
+		Type:        mainType,
+		Date:        exportDate,
+		Status:      "completed",
+		Duration:    duration,
+		FileSize:    h.formatFileSize(totalSize),
+		RecordCount: estimatedRecords,
+		Files:       csvFiles,
+	}
+}
+
+// processCSVFileOptimized traite un fichier CSV de manière optimisée
+func (h *ExportsHandler) processCSVFileOptimized(filePath, fileName string) *ExportItem {
+	info, err := os.Stat(filePath)
+	if err != nil {
+		return nil
+	}
+	
+	exportType := h.parseExportType(fileName)
+	if exportType == "" {
+		exportType = "unknown"
+	}
+	
+	// Estimation rapide du nombre d'enregistrements
+	estimatedRecords := int(info.Size() / 80) // ~80 caractères par ligne
+	duration := h.estimateExportDuration(estimatedRecords)
+	
+	return &ExportItem{
+		ID:          fmt.Sprintf("file_%s_%d", exportType, info.ModTime().Unix()),
+		Type:        exportType,
+		Date:        info.ModTime(),
+		Status:      "completed",
+		Duration:    duration,
+		FileSize:    h.formatFileSize(info.Size()),
+		RecordCount: estimatedRecords,
+		Files:       []string{fileName},
+	}
+}
+
+// Version originale conservée pour compatibilité
 func (h *ExportsHandler) processExportDirectory(dirPath, dirName string) *ExportItem {
 	// Parse timestamp from directory name (export_2025-07-11_15-43)
 	parts := strings.Split(dirName, "_")
@@ -441,13 +716,12 @@ func (h *ExportsHandler) processExportDirectory(dirPath, dirName string) *Export
 			csvFiles = append(csvFiles, file.Name())
 			
 			// Get file info
-			filePath := filepath.Join(dirPath, file.Name())
 			if info, err := file.Info(); err == nil {
 				totalSize += info.Size()
 			}
 			
-			// Count records
-			if records := h.countCSVRecords(filePath); records > 0 {
+			// Count records optimisé
+			if records := h.countCSVRecordsOptimized(filepath.Join(dirPath, file.Name())); records > 0 {
 				totalRecords += records
 			}
 			
@@ -496,7 +770,7 @@ func (h *ExportsHandler) processCSVFile(filePath, fileName string) *ExportItem {
 		exportType = "unknown"
 	}
 	
-	recordCount := h.countCSVRecords(filePath)
+	recordCount := h.countCSVRecordsOptimized(filePath)
 	duration := h.estimateExportDuration(recordCount)
 	
 	return &ExportItem{
@@ -554,6 +828,50 @@ func (h *ExportsHandler) parseExportType(filename string) string {
 	return ""
 }
 
+// countCSVRecordsOptimized compte les enregistrements de manière optimisée
+// Utilise une estimation basée sur la taille du fichier pour éviter de lire tout le contenu
+func (h *ExportsHandler) countCSVRecordsOptimized(filename string) int {
+	info, err := os.Stat(filename)
+	if err != nil {
+		return 0
+	}
+	
+	// Pour les petits fichiers (< 1MB), compter précisément
+	if info.Size() < 1024*1024 {
+		return h.countCSVRecords(filename)
+	}
+	
+	// Pour les gros fichiers, utiliser une estimation rapide
+	// Lire seulement les 1000 premières lignes pour calculer la taille moyenne
+	file, err := os.Open(filename)
+	if err != nil {
+		return 0
+	}
+	defer file.Close()
+	
+	buf := make([]byte, 50000) // Lire les premiers 50KB
+	n, err := file.Read(buf)
+	if err != nil && n == 0 {
+		return 0
+	}
+	
+	lines := strings.Count(string(buf[:n]), "\n")
+	if lines <= 1 {
+		return 0
+	}
+	
+	// Estimation: (taille totale / taille échantillon) * lignes échantillon
+	avgBytesPerLine := float64(n) / float64(lines)
+	estimatedTotalLines := int(float64(info.Size()) / avgBytesPerLine)
+	
+	// Soustraire 1 pour l'en-tête
+	if estimatedTotalLines > 1 {
+		return estimatedTotalLines - 1
+	}
+	return 0
+}
+
+// Version originale conservée pour les petits fichiers
 func (h *ExportsHandler) countCSVRecords(filename string) int {
 	content, err := os.ReadFile(filename)
 	if err != nil {
