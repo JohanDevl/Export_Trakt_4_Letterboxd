@@ -21,16 +21,16 @@ Le système de gestion des images Docker a été optimisé pour maintenir unique
 
 ### 📋 Séquence lors d'un merge vers main :
 
-1. **PR mergée vers `main`** → Déclenche `docker-build.yml` 
-2. **docker-build.yml** récupère le dernier tag Git (ex: `v2.0.13`)
-3. **Image Docker créée** avec tags : `latest`, `main`, `v2.0.13`
-4. **auto-tag.yml** crée automatiquement le prochain tag (ex: `v2.0.14`)
-5. **Nouveau build Docker déclenché** avec le nouveau tag `v2.0.14`
+1. **PR mergée vers `main`** → Push sur la branche main (pas de build Docker)
+2. **auto-tag.yml** se déclenche et crée automatiquement le nouveau tag (ex: `v2.0.14`)
+3. **Push du tag Git** déclenche automatiquement `docker-build.yml`
+4. **Image Docker créée** avec tags : `latest`, `main`, `v2.0.14`
 
 ### 🔄 Résultat :
-- L'image Docker utilise **toujours la dernière version disponible** au moment du build
-- Les versions sémantiques sont **synchronisées** avec les tags Git
-- **Double build** garantit la disponibilité immédiate des nouvelles versions
+- **Un seul build Docker** par merge (plus de double build)
+- L'image Docker utilise **exactement la version sémantique** du tag Git
+- **Synchronisation parfaite** entre versions Git et Docker
+- **Process optimisé** sans builds redondants
 
 ## Registres Supportés
 

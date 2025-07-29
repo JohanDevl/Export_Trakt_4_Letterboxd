@@ -93,20 +93,3 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Trigger Docker build for new version
-        uses: actions/github-script@v7
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const { data: result } = await github.rest.actions.createWorkflowDispatch({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              workflow_id: 'docker-build.yml',
-              ref: 'main',
-              inputs: {
-                reason: `New version tagged: ${{ steps.tag.outputs.new_tag }}`
-              }
-            });
-            
-            console.log(`🐳 Triggered Docker build for version ${{ steps.tag.outputs.new_tag }}`);
-            console.log(`Workflow dispatch result:`, result);
