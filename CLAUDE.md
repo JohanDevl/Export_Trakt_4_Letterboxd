@@ -233,27 +233,14 @@ The project uses GitHub Actions with:
 
 ### Docker Image Management
 
-The project implements an intelligent Docker image management system:
+The project implements an intelligent Docker image management system with semantic versioning and automatic cleanup. For comprehensive Docker documentation including image strategy, compose profiles, and usage examples, see the [Docker Wiki](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/wiki/Docker).
 
-**Tagging Strategy:**
-- `latest` + `main` + `v1.2.3` for main branch (semantic versioning)
-- `develop` for develop branch
-- `PR-123` for pull requests (testing before merge)
-
-**Automatic Cleanup:**
-- PR images are deleted when PR is closed
-- Daily cleanup (2 AM UTC) removes obsolete images
-- Protected tags: `latest`, `main`, `develop`, semantic versions (`v*`), and active PR tags
-- Cleanup applies to both Docker Hub and GitHub Container Registry
-
-**Usage Examples:**
+**Quick Usage:**
 ```bash
 docker pull johandevl/export-trakt-4-letterboxd:latest    # Production
 docker pull johandevl/export-trakt-4-letterboxd:develop   # Development  
 docker pull johandevl/export-trakt-4-letterboxd:PR-123    # Test PR
 ```
-
-See `DOCKER_STRATEGY.md` for detailed information.
 
 ## Common Patterns
 
