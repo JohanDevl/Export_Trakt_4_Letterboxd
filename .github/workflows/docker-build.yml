@@ -6,7 +6,7 @@ on:
   push:
     branches:
       - main
-      - feature/go-migration
+      - develop
     paths-ignore:
       - "**.md"
       - "docs/**"
@@ -14,6 +14,7 @@ on:
   pull_request:
     branches:
       - main
+      - develop
     paths-ignore:
       - "**.md"
       - "docs/**"
@@ -52,22 +53,22 @@ jobs:
             ${{ env.REGISTRY_IMAGE }}
             ${{ env.GITHUB_IMAGE }}
           tags: |
-            type=ref,event=branch
-            type=ref,event=pr
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=sha,format=short
-            type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+            # Main branch tags
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=raw,value=main,enable=${{ github.ref == 'refs/heads/main' }}
+            type=semver,pattern={{version}},enable=${{ github.ref == 'refs/heads/main' }}
+            # Develop branch tag
+            type=raw,value=develop,enable=${{ github.ref == 'refs/heads/develop' }}
+            # PR tags
+            type=ref,event=pr,prefix=PR-
 
       - name: Log in to Docker Hub
-        if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Log in to GitHub Container Registry
-        if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.GITHUB_REGISTRY }}
@@ -83,12 +84,12 @@ jobs:
         with:
           context: .
           file: ./Dockerfile
-          push: ${{ github.event_name != 'pull_request' }}
+          push: true
           platforms: linux/amd64,linux/arm64,linux/arm/v7
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ github.workflow }}-${{ github.ref_name }}
-          cache-to: ${{ github.event_name != 'pull_request' && format('type=gha,mode=max,scope={0}-{1}', github.workflow, github.ref_name) || '' }}
+          cache-to: type=gha,mode=max,scope=${{ github.workflow }}-${{ github.ref_name }}
           build-args: |
             VERSION=${{ steps.meta.outputs.version }}
             COMMIT_SHA=${{ github.sha }}

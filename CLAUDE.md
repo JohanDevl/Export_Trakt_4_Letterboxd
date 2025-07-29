@@ -48,6 +48,12 @@ docker compose --profile dev --profile run-all up --build      # Development bui
 docker compose --profile run-all up                           # Production image
 docker compose --profile schedule-6h up -d                    # Production scheduler
 docker compose --profile dev --profile schedule-test up -d --build  # Test scheduler
+
+# Use published images
+docker pull johandevl/export-trakt-4-letterboxd:latest         # Latest stable version
+docker pull johandevl/export-trakt-4-letterboxd:develop        # Development version
+docker pull johandevl/export-trakt-4-letterboxd:PR-123         # Test specific PR
+docker pull johandevl/export-trakt-4-letterboxd:v1.2.3         # Specific version
 ```
 
 ### Application Usage
@@ -219,9 +225,35 @@ Comprehensive error handling system:
 
 The project uses GitHub Actions with:
 - **Go Tests** (.github/workflows/go-tests.yml) - Testing with 57% minimum coverage
-- **Docker Build** (.github/workflows/docker-build.yml) - Multi-platform container builds
+- **Docker Build** (.github/workflows/docker-build.yml) - Multi-platform container builds with intelligent tagging
+- **Docker Cleanup** (.github/workflows/docker-cleanup.yml) - Automatic cleanup of obsolete images
+- **Auto Tag** (.github/workflows/auto-tag.yml) - Automatic semantic versioning on PR merge
 - **Security Scan** (.github/workflows/security-scan.yml) - gosec, trivy, and dependency scanning
 - **Release** (.github/workflows/release.yml) - Automated release creation
+
+### Docker Image Management
+
+The project implements an intelligent Docker image management system:
+
+**Tagging Strategy:**
+- `latest` + `main` + `v1.2.3` for main branch (semantic versioning)
+- `develop` for develop branch
+- `PR-123` for pull requests (testing before merge)
+
+**Automatic Cleanup:**
+- PR images are deleted when PR is closed
+- Daily cleanup (2 AM UTC) removes obsolete images
+- Protected tags: `latest`, `main`, `develop`, semantic versions (`v*`), and active PR tags
+- Cleanup applies to both Docker Hub and GitHub Container Registry
+
+**Usage Examples:**
+```bash
+docker pull johandevl/export-trakt-4-letterboxd:latest    # Production
+docker pull johandevl/export-trakt-4-letterboxd:develop   # Development  
+docker pull johandevl/export-trakt-4-letterboxd:PR-123    # Test PR
+```
+
+See `DOCKER_STRATEGY.md` for detailed information.
 
 ## Common Patterns
 
