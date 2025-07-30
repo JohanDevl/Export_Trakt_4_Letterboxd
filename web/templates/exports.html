@@ -213,7 +213,7 @@
           {{if eq .Status "completed"}}
             {{range .Files}}
             <a
-              href="/download/{{.}}"
+              href="{{if contains $.ID "dir_"}}/download/{{substr $.ID 4}}/{{.}}{{else}}/download/{{.}}{{end}}"
               class="btn btn-sm btn-secondary download-btn"
               title="Download {{.}}"
             >
