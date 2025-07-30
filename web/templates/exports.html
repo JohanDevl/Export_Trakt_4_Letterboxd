@@ -213,7 +213,7 @@
           {{if eq .Status "completed"}}
             {{range .Files}}
             <a
-              href="{{if contains $.ID "dir_"}}/download/{{substr $.ID 4}}/{{.}}{{else}}/download/{{.}}{{end}}"
+              href="/download/{{.}}"
               class="btn btn-sm btn-secondary download-btn"
               title="Download {{.}}"
             >
@@ -307,6 +307,35 @@
 </div>
 
 <!-- Export Progress WebSocket -->
+<script>
+  // Define showAlert locally if not available from app.js yet
+  function showAlert(type, message, duration = 5000) {
+    // If global showAlert is available, use it
+    if (window.ExportTraktApp && window.ExportTraktApp.showAlert) {
+      return window.ExportTraktApp.showAlert(type, message, duration);
+    }
+    
+    // Fallback: create a simple alert
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type}`;
+    alertDiv.style.cssText = `
+      position: fixed; top: 20px; right: 20px; z-index: 9999;
+      padding: 15px; border-radius: 5px; max-width: 400px;
+      background: ${type === 'error' ? '#f8d7da' : type === 'success' ? '#d4edda' : '#fff3cd'};
+      border: 1px solid ${type === 'error' ? '#f5c6cb' : type === 'success' ? '#c3e6cb' : '#faeeba'};
+      color: ${type === 'error' ? '#721c24' : type === 'success' ? '#155724' : '#856404'};
+    `;
+    alertDiv.innerHTML = `
+      <span>${type === 'error' ? '❌' : type === 'success' ? '✅' : 'ℹ️'} ${message}</span>
+      <button onclick="this.parentElement.remove()" style="float: right; background: none; border: none; font-size: 18px; cursor: pointer;">&times;</button>
+    `;
+    document.body.appendChild(alertDiv);
+    
+    if (duration > 0) {
+      setTimeout(() => alertDiv.remove(), duration);
+    }
+  }
+</script>
 <script>
   let exportSocket = null;
 

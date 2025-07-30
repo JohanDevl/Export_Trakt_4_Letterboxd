@@ -89,7 +89,7 @@ func NewExportsHandler(cfg *config.Config, log logger.Logger, tokenManager *auth
 		templates:    templates,
 		exportsDir:   exportsDir,
 		cache: &ExportCache{
-			cacheTTL: 5 * time.Minute, // Cache pendant 5 minutes
+			cacheTTL: 10 * time.Second, // Cache très court pour debug
 		},
 	}
 }
@@ -116,13 +116,24 @@ func (h *ExportsHandler) handleGetExports(w http.ResponseWriter, r *http.Request
 	
 	data := h.prepareExportsData(r)
 	
+	// Debug log the data being passed to template
+	h.logger.Info("web.template_data_debug", map[string]interface{}{
+		"exports_count": len(data.Exports),
+		"pagination_nil": data.Pagination == nil,
+		"token_status_nil": data.TokenStatus == nil,
+	})
+	
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := h.templates.ExecuteTemplate(w, "exports.html", data); err != nil {
 		h.logger.Error("web.template_error", map[string]interface{}{
 			"error":    err.Error(),
 			"template": "exports.html",
+			"exports_count": len(data.Exports),
+			"data_exports_nil": data.Exports == nil,
+			"pagination_nil": data.Pagination == nil,
 		})
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		// Don't call http.Error since headers might already be written  
+		w.Write([]byte("Template Error: " + err.Error()))
 		return
 	}
 }
@@ -253,11 +264,23 @@ func (h *ExportsHandler) prepareExportsData(r *http.Request) *ExportsData {
 	
 	// Get exports with caching and lazy loading
 	allExports := h.getExportsWithCache(page, limit)
+	h.logger.Info("web.all_exports_loaded", map[string]interface{}{
+		"total_exports": len(allExports),
+		"page": page,
+		"limit": limit,
+	})
 	
 	// Apply filters
 	filteredExports := h.applyFilters(allExports, typeFilter, statusFilter)
 	totalItems := len(filteredExports)
 	totalPages := (totalItems + limit - 1) / limit
+	h.logger.Info("web.exports_after_filter", map[string]interface{}{
+		"filtered_count": len(filteredExports),
+		"total_items": totalItems,
+		"total_pages": totalPages,
+		"type_filter": typeFilter,
+		"status_filter": statusFilter,
+	})
 	
 	if totalPages == 0 {
 		totalPages = 1
@@ -279,6 +302,12 @@ func (h *ExportsHandler) prepareExportsData(r *http.Request) *ExportsData {
 	} else {
 		data.Exports = []ExportItem{}
 	}
+	h.logger.Info("web.final_exports_prepared", map[string]interface{}{
+		"final_exports_count": len(data.Exports),
+		"start": start,
+		"end": end,
+		"page": page,
+	})
 	
 	// Build pagination data
 	data.Pagination = h.buildPaginationData(page, totalPages, totalItems, limit)
@@ -406,10 +435,17 @@ func (h *ExportsHandler) scanExportFilesOptimized() []ExportItem {
 	// Scan récent en premier (30 derniers jours) pour des performances optimales
 	recentExports := h.scanRecentExports(30)
 	exports = append(exports, recentExports...)
+	h.logger.Info("web.recent_exports_scanned", map[string]interface{}{
+		"recent_count": len(recentExports),
+	})
 	
 	// Toujours scanner les exports plus anciens pour avoir la liste complète
 	olderExports := h.scanOlderExports(30)
 	exports = append(exports, olderExports...)
+	h.logger.Info("web.older_exports_scanned", map[string]interface{}{
+		"older_count": len(olderExports),
+		"total_before_sort": len(exports),
+	})
 	
 	// Trier par date (plus récent en premier)
 	sort.Slice(exports, func(i, j int) bool {
