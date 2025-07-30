@@ -1124,6 +1124,12 @@ func (h *DownloadHandler) getFileSize(filepath string) int64 {
 
 // findFileInExportDirs searches for a file in export subdirectories
 func (h *DownloadHandler) findFileInExportDirs(filename string) string {
+	// Sanitize filename to prevent path traversal attacks
+	if strings.Contains(filename, "/") || strings.Contains(filename, "\\") || 
+	   strings.Contains(filename, "..") || strings.HasPrefix(filename, ".") {
+		return ""
+	}
+	
 	// Read the exports directory
 	entries, err := os.ReadDir(h.exportsDir)
 	if err != nil {
