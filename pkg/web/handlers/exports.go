@@ -1065,33 +1065,54 @@ func (h *DownloadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	
-	// Check if file exists
+	// Check if file exists, if not try to find it in export subdirectories
+	finalPath := absFilePath
 	if _, err := os.Stat(absFilePath); os.IsNotExist(err) {
-		h.logger.Warn("web.download_file_not_found", map[string]interface{}{
-			"requested_path": urlPath,
-			"full_path":      absFilePath,
-			"client_ip":      r.RemoteAddr,
-		})
-		http.Error(w, "File not found", http.StatusNotFound)
-		return
+		// If direct path doesn't exist and it's a simple filename, search in export directories
+		if !strings.Contains(urlPath, "/") {
+			foundPath := h.findFileInExportDirs(urlPath)
+			if foundPath != "" {
+				finalPath = foundPath
+				h.logger.Info("web.download_file_found_in_subdir", map[string]interface{}{
+					"requested_file": urlPath,
+					"found_path":     foundPath,
+				})
+			} else {
+				h.logger.Warn("web.download_file_not_found", map[string]interface{}{
+					"requested_path": urlPath,
+					"full_path":      absFilePath,
+					"client_ip":      r.RemoteAddr,
+				})
+				http.Error(w, "File not found", http.StatusNotFound)
+				return
+			}
+		} else {
+			h.logger.Warn("web.download_file_not_found", map[string]interface{}{
+				"requested_path": urlPath,
+				"full_path":      absFilePath,
+				"client_ip":      r.RemoteAddr,
+			})
+			http.Error(w, "File not found", http.StatusNotFound)
+			return
+		}
 	}
 	
 	h.logger.Info("web.file_download", map[string]interface{}{
 		"requested_path": urlPath,
-		"full_path":      absFilePath,
+		"final_path":     finalPath,
 		"client_ip":      r.RemoteAddr,
 	})
 	
 	// Extract just the filename for the download
-	filename := filepath.Base(absFilePath)
+	filename := filepath.Base(finalPath)
 	
 	// Set headers for download
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
 	w.Header().Set("Content-Type", "text/csv")
-	w.Header().Set("Content-Length", fmt.Sprintf("%d", h.getFileSize(absFilePath)))
+	w.Header().Set("Content-Length", fmt.Sprintf("%d", h.getFileSize(finalPath)))
 	
 	// Serve the file
-	http.ServeFile(w, r, absFilePath)
+	http.ServeFile(w, r, finalPath)
 }
 
 func (h *DownloadHandler) getFileSize(filepath string) int64 {
@@ -1099,4 +1120,39 @@ func (h *DownloadHandler) getFileSize(filepath string) int64 {
 		return info.Size()
 	}
 	return 0
+}
+
+// findFileInExportDirs searches for a file in export subdirectories
+func (h *DownloadHandler) findFileInExportDirs(filename string) string {
+	// Read the exports directory
+	entries, err := os.ReadDir(h.exportsDir)
+	if err != nil {
+		return ""
+	}
+	
+	// Look in export directories (export_YYYY-MM-DD_HH-MM format)
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		
+		// Check if directory name starts with "export_"
+		dirName := entry.Name()
+		if strings.HasPrefix(dirName, "export_") {
+			// Check if the file exists in this directory
+			possiblePath := filepath.Join(h.exportsDir, dirName, filename)
+			if _, err := os.Stat(possiblePath); err == nil {
+				// Verify the path is still within exports directory for security
+				if absPath, err := filepath.Abs(possiblePath); err == nil {
+					if absExportsDir, err := filepath.Abs(h.exportsDir); err == nil {
+						if strings.HasPrefix(absPath, absExportsDir) {
+							return absPath
+						}
+					}
+				}
+			}
+		}
+	}
+	
+	return ""
 }
