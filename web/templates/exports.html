@@ -308,6 +308,43 @@
 
 <!-- Export Progress WebSocket -->
 <script>
+  // Define showAlert locally if not available from app.js yet
+  function showAlert(type, message, duration = 5000) {
+    // If global showAlert is available, use it
+    if (window.ExportTraktApp && window.ExportTraktApp.showAlert) {
+      return window.ExportTraktApp.showAlert(type, message, duration);
+    }
+    
+    // Fallback: create a simple alert
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type}`;
+    alertDiv.style.cssText = `
+      position: fixed; top: 20px; right: 20px; z-index: 9999;
+      padding: 15px; border-radius: 5px; max-width: 400px;
+      background: ${type === 'error' ? '#f8d7da' : type === 'success' ? '#d4edda' : '#fff3cd'};
+      border: 1px solid ${type === 'error' ? '#f5c6cb' : type === 'success' ? '#c3e6cb' : '#faeeba'};
+      color: ${type === 'error' ? '#721c24' : type === 'success' ? '#155724' : '#856404'};
+    `;
+    
+    // Create elements safely to prevent XSS
+    const alertMessageSpan = document.createElement('span');
+    alertMessageSpan.textContent = `${type === 'error' ? '❌' : type === 'success' ? '✅' : 'ℹ️'} ${message}`;
+    
+    const closeButton = document.createElement('button');
+    closeButton.textContent = '×';
+    closeButton.onclick = function() { this.parentElement.remove(); };
+    closeButton.style.cssText = 'float: right; background: none; border: none; font-size: 18px; cursor: pointer;';
+    
+    alertDiv.appendChild(alertMessageSpan);
+    alertDiv.appendChild(closeButton);
+    document.body.appendChild(alertDiv);
+    
+    if (duration > 0) {
+      setTimeout(() => alertDiv.remove(), duration);
+    }
+  }
+</script>
+<script>
   let exportSocket = null;
 
   function startExport(type, options = {}) {
@@ -330,6 +367,7 @@
         if (!data.success) {
           showAlert("error", data.error || "Export failed");
           hideProgress();
+          resetExportButtons();
           return;
         }
         
@@ -479,7 +517,8 @@
     })
     .catch(error => {
       console.error('Failed to load page:', error);
-      showAlert('error', 'Failed to load exports: ' + error.message);
+      const sanitizedMessage = error.message.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      showAlert('error', 'Failed to load exports: ' + sanitizedMessage);
     })
     .finally(() => {
       isLoading = false;
@@ -520,8 +559,8 @@
       'watchlist': '📝 Watchlist'
     };
     
-    const typeLabel = typeIcons[exportItem.Type] || `📄 ${exportItem.Type}`;
-    const date = new Date(exportItem.Date).toLocaleString('en-CA', {
+    const typeLabel = typeIcons[exportItem.type] || `📄 ${exportItem.type}`;
+    const date = new Date(exportItem.date).toLocaleString('en-CA', {
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
@@ -530,10 +569,10 @@
     });
     
     let downloadButtons = '';
-    if (exportItem.Status === 'completed' && exportItem.Files && Array.isArray(exportItem.Files)) {
-      downloadButtons = exportItem.Files.map(file => {
-        const downloadUrl = exportItem.ID && exportItem.ID.startsWith('dir_') 
-          ? `/download/${exportItem.ID.substring(4)}/${file}`
+    if (exportItem.status === 'completed' && exportItem.files && Array.isArray(exportItem.files)) {
+      downloadButtons = exportItem.files.map(file => {
+        const downloadUrl = exportItem.id && exportItem.id.indexOf('dir_') === 0
+          ? `/download/${exportItem.id.substring(4)}/${file}`
           : `/download/${file}`;
         const fileName = file.replace(/\.[^/.]+$/, ""); // Remove extension
         return `
@@ -543,37 +582,37 @@
         `;
       }).join('');
       
-      if (exportItem.Files.length > 1) {
+      if (exportItem.files.length > 1) {
         downloadButtons += '<div class="download-all"><small>💡 Tip: Right-click links to save files</small></div>';
       }
     }
     
-    const errorHTML = exportItem.Error ? `
+    const errorHTML = exportItem.error ? `
       <div class="export-error">
         <span class="error-icon">❌</span>
-        <span class="error-message">${exportItem.Error}</span>
+        <span class="error-message">${exportItem.error}</span>
       </div>
     ` : '';
     
     return `
-      <div class="export-item" data-type="${exportItem.Type}" data-status="${exportItem.Status}">
+      <div class="export-item" data-type="${exportItem.type}" data-status="${exportItem.status}">
         <div class="export-info">
           <div class="export-header">
             <h4>${typeLabel}</h4>
-            <span class="export-status status-indicator ${exportItem.Status}">${exportItem.Status}</span>
+            <span class="export-status status-indicator ${exportItem.status}">${exportItem.status}</span>
           </div>
           <div class="export-details">
             <span class="export-date">📅 ${date}</span>
-            ${exportItem.Duration ? `<span class="export-duration">⏱️ ${exportItem.Duration}</span>` : ''}
-            ${exportItem.FileSize ? `<span class="export-size">💾 ${exportItem.FileSize}</span>` : ''}
-            ${exportItem.RecordCount ? `<span class="export-records">📊 ${exportItem.RecordCount} records</span>` : ''}
-            <span class="export-files">📁 ${exportItem.Files ? exportItem.Files.length : 0} file${exportItem.Files && exportItem.Files.length > 1 ? 's' : ''}</span>
+            ${exportItem.duration ? `<span class="export-duration">⏱️ ${exportItem.duration}</span>` : ''}
+            ${exportItem.fileSize ? `<span class="export-size">💾 ${exportItem.fileSize}</span>` : ''}
+            ${exportItem.recordCount ? `<span class="export-records">📊 ${exportItem.recordCount} records</span>` : ''}
+            <span class="export-files">📁 ${exportItem.files ? exportItem.files.length : 0} file${exportItem.files && exportItem.files.length > 1 ? 's' : ''}</span>
           </div>
           ${errorHTML}
         </div>
         <div class="export-actions-container">
           ${downloadButtons}
-          <button class="btn btn-sm btn-outline delete-btn" data-id="${exportItem.ID}" title="Delete this export">
+          <button class="btn btn-sm btn-outline delete-btn" data-id="${exportItem.id}" title="Delete this export">
             🗑️ Delete
           </button>
         </div>
@@ -773,6 +812,10 @@
     initializeFiltersFromURL();
     document.querySelectorAll(".export-btn").forEach((btn) => {
       btn.addEventListener("click", function () {
+        // Disable button immediately
+        this.disabled = true;
+        this.textContent = "🔄 Starting...";
+        
         const type = this.dataset.type;
         const options = {};
 

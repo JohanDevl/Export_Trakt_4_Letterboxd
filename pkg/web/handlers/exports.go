@@ -43,15 +43,15 @@ type PaginationData struct {
 }
 
 type ExportItem struct {
-	ID          string
-	Type        string
-	Date        time.Time
-	Status      string
-	Duration    string
-	FileSize    string
-	RecordCount int
-	Files       []string
-	Error       string
+	ID          string    `json:"id"`
+	Type        string    `json:"type"`
+	Date        time.Time `json:"date"`
+	Status      string    `json:"status"`
+	Duration    string    `json:"duration"`
+	FileSize    string    `json:"fileSize"`
+	RecordCount int       `json:"recordCount"`
+	Files       []string  `json:"files"`
+	Error       string    `json:"error"`
 }
 
 type ExportAPIResponse struct {
@@ -116,13 +116,24 @@ func (h *ExportsHandler) handleGetExports(w http.ResponseWriter, r *http.Request
 	
 	data := h.prepareExportsData(r)
 	
+	// Debug log the data being passed to template
+	h.logger.Info("web.template_data_debug", map[string]interface{}{
+		"exports_count": len(data.Exports),
+		"pagination_nil": data.Pagination == nil,
+		"token_status_nil": data.TokenStatus == nil,
+	})
+	
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := h.templates.ExecuteTemplate(w, "exports.html", data); err != nil {
 		h.logger.Error("web.template_error", map[string]interface{}{
 			"error":    err.Error(),
 			"template": "exports.html",
+			"exports_count": len(data.Exports),
+			"data_exports_nil": data.Exports == nil,
+			"pagination_nil": data.Pagination == nil,
 		})
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		// Don't call http.Error since headers might already be written  
+		w.Write([]byte("Template Error: " + err.Error()))
 		return
 	}
 }
@@ -253,11 +264,23 @@ func (h *ExportsHandler) prepareExportsData(r *http.Request) *ExportsData {
 	
 	// Get exports with caching and lazy loading
 	allExports := h.getExportsWithCache(page, limit)
+	h.logger.Info("web.all_exports_loaded", map[string]interface{}{
+		"total_exports": len(allExports),
+		"page": page,
+		"limit": limit,
+	})
 	
 	// Apply filters
 	filteredExports := h.applyFilters(allExports, typeFilter, statusFilter)
 	totalItems := len(filteredExports)
 	totalPages := (totalItems + limit - 1) / limit
+	h.logger.Info("web.exports_after_filter", map[string]interface{}{
+		"filtered_count": len(filteredExports),
+		"total_items": totalItems,
+		"total_pages": totalPages,
+		"type_filter": typeFilter,
+		"status_filter": statusFilter,
+	})
 	
 	if totalPages == 0 {
 		totalPages = 1
@@ -279,6 +302,12 @@ func (h *ExportsHandler) prepareExportsData(r *http.Request) *ExportsData {
 	} else {
 		data.Exports = []ExportItem{}
 	}
+	h.logger.Info("web.final_exports_prepared", map[string]interface{}{
+		"final_exports_count": len(data.Exports),
+		"start": start,
+		"end": end,
+		"page": page,
+	})
 	
 	// Build pagination data
 	data.Pagination = h.buildPaginationData(page, totalPages, totalItems, limit)
@@ -406,12 +435,17 @@ func (h *ExportsHandler) scanExportFilesOptimized() []ExportItem {
 	// Scan récent en premier (30 derniers jours) pour des performances optimales
 	recentExports := h.scanRecentExports(30)
 	exports = append(exports, recentExports...)
+	h.logger.Info("web.recent_exports_scanned", map[string]interface{}{
+		"recent_count": len(recentExports),
+	})
 	
-	// Si on a moins de 50 exports récents, scanner plus ancien en arrière-plan
-	if len(exports) < 50 {
-		olderExports := h.scanOlderExports(30)
-		exports = append(exports, olderExports...)
-	}
+	// Toujours scanner les exports plus anciens pour avoir la liste complète
+	olderExports := h.scanOlderExports(30)
+	exports = append(exports, olderExports...)
+	h.logger.Info("web.older_exports_scanned", map[string]interface{}{
+		"older_count": len(olderExports),
+		"total_before_sort": len(exports),
+	})
 	
 	// Trier par date (plus récent en premier)
 	sort.Slice(exports, func(i, j int) bool {
@@ -479,10 +513,10 @@ func (h *ExportsHandler) scanOlderExports(skipDays int) []ExportItem {
 		return exports
 	}
 	
-	// Limiter le scan aux 100 premiers dossiers les plus anciens pour éviter la latence
+	// Limiter le scan aux 500 premiers dossiers les plus anciens pour éviter la latence
 	count := 0
 	for _, entry := range entries {
-		if count >= 100 {
+		if count >= 500 {
 			break
 		}
 		
@@ -1031,33 +1065,54 @@ func (h *DownloadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	
-	// Check if file exists
+	// Check if file exists, if not try to find it in export subdirectories
+	finalPath := absFilePath
 	if _, err := os.Stat(absFilePath); os.IsNotExist(err) {
-		h.logger.Warn("web.download_file_not_found", map[string]interface{}{
-			"requested_path": urlPath,
-			"full_path":      absFilePath,
-			"client_ip":      r.RemoteAddr,
-		})
-		http.Error(w, "File not found", http.StatusNotFound)
-		return
+		// If direct path doesn't exist and it's a simple filename, search in export directories
+		if !strings.Contains(urlPath, "/") {
+			foundPath := h.findFileInExportDirs(urlPath)
+			if foundPath != "" {
+				finalPath = foundPath
+				h.logger.Info("web.download_file_found_in_subdir", map[string]interface{}{
+					"requested_file": urlPath,
+					"found_path":     foundPath,
+				})
+			} else {
+				h.logger.Warn("web.download_file_not_found", map[string]interface{}{
+					"requested_path": urlPath,
+					"full_path":      absFilePath,
+					"client_ip":      r.RemoteAddr,
+				})
+				http.Error(w, "File not found", http.StatusNotFound)
+				return
+			}
+		} else {
+			h.logger.Warn("web.download_file_not_found", map[string]interface{}{
+				"requested_path": urlPath,
+				"full_path":      absFilePath,
+				"client_ip":      r.RemoteAddr,
+			})
+			http.Error(w, "File not found", http.StatusNotFound)
+			return
+		}
 	}
 	
 	h.logger.Info("web.file_download", map[string]interface{}{
 		"requested_path": urlPath,
-		"full_path":      absFilePath,
+		"final_path":     finalPath,
 		"client_ip":      r.RemoteAddr,
 	})
 	
 	// Extract just the filename for the download
-	filename := filepath.Base(absFilePath)
+	filename := filepath.Base(finalPath)
 	
 	// Set headers for download
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
 	w.Header().Set("Content-Type", "text/csv")
-	w.Header().Set("Content-Length", fmt.Sprintf("%d", h.getFileSize(absFilePath)))
+	w.Header().Set("Content-Length", fmt.Sprintf("%d", h.getFileSize(finalPath)))
 	
 	// Serve the file
-	http.ServeFile(w, r, absFilePath)
+	http.ServeFile(w, r, finalPath)
 }
 
 func (h *DownloadHandler) getFileSize(filepath string) int64 {
@@ -1065,4 +1120,45 @@ func (h *DownloadHandler) getFileSize(filepath string) int64 {
 		return info.Size()
 	}
 	return 0
+}
+
+// findFileInExportDirs searches for a file in export subdirectories
+func (h *DownloadHandler) findFileInExportDirs(filename string) string {
+	// Sanitize filename to prevent path traversal attacks
+	if strings.Contains(filename, "/") || strings.Contains(filename, "\\") || 
+	   strings.Contains(filename, "..") || strings.HasPrefix(filename, ".") {
+		return ""
+	}
+	
+	// Read the exports directory
+	entries, err := os.ReadDir(h.exportsDir)
+	if err != nil {
+		return ""
+	}
+	
+	// Look in export directories (export_YYYY-MM-DD_HH-MM format)
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		
+		// Check if directory name starts with "export_"
+		dirName := entry.Name()
+		if strings.HasPrefix(dirName, "export_") {
+			// Check if the file exists in this directory
+			possiblePath := filepath.Join(h.exportsDir, dirName, filename)
+			if _, err := os.Stat(possiblePath); err == nil {
+				// Verify the path is still within exports directory for security
+				if absPath, err := filepath.Abs(possiblePath); err == nil {
+					if absExportsDir, err := filepath.Abs(h.exportsDir); err == nil {
+						if strings.HasPrefix(absPath, absExportsDir) {
+							return absPath
+						}
+					}
+				}
+			}
+		}
+	}
+	
+	return ""
 }
