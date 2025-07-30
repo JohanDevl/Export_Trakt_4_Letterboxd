@@ -520,8 +520,8 @@
       'watchlist': '📝 Watchlist'
     };
     
-    const typeLabel = typeIcons[exportItem.Type] || `📄 ${exportItem.Type}`;
-    const date = new Date(exportItem.Date).toLocaleString('en-CA', {
+    const typeLabel = typeIcons[exportItem.type] || `📄 ${exportItem.type}`;
+    const date = new Date(exportItem.date).toLocaleString('en-CA', {
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
@@ -530,10 +530,10 @@
     });
     
     let downloadButtons = '';
-    if (exportItem.Status === 'completed' && exportItem.Files && Array.isArray(exportItem.Files)) {
-      downloadButtons = exportItem.Files.map(file => {
-        const downloadUrl = exportItem.ID && exportItem.ID.startsWith('dir_') 
-          ? `/download/${exportItem.ID.substring(4)}/${file}`
+    if (exportItem.status === 'completed' && exportItem.files && Array.isArray(exportItem.files)) {
+      downloadButtons = exportItem.files.map(file => {
+        const downloadUrl = exportItem.id && exportItem.id.indexOf('dir_') === 0
+          ? `/download/${exportItem.id.substring(4)}/${file}`
           : `/download/${file}`;
         const fileName = file.replace(/\.[^/.]+$/, ""); // Remove extension
         return `
@@ -543,37 +543,37 @@
         `;
       }).join('');
       
-      if (exportItem.Files.length > 1) {
+      if (exportItem.files.length > 1) {
         downloadButtons += '<div class="download-all"><small>💡 Tip: Right-click links to save files</small></div>';
       }
     }
     
-    const errorHTML = exportItem.Error ? `
+    const errorHTML = exportItem.error ? `
       <div class="export-error">
         <span class="error-icon">❌</span>
-        <span class="error-message">${exportItem.Error}</span>
+        <span class="error-message">${exportItem.error}</span>
       </div>
     ` : '';
     
     return `
-      <div class="export-item" data-type="${exportItem.Type}" data-status="${exportItem.Status}">
+      <div class="export-item" data-type="${exportItem.type}" data-status="${exportItem.status}">
         <div class="export-info">
           <div class="export-header">
             <h4>${typeLabel}</h4>
-            <span class="export-status status-indicator ${exportItem.Status}">${exportItem.Status}</span>
+            <span class="export-status status-indicator ${exportItem.status}">${exportItem.status}</span>
           </div>
           <div class="export-details">
             <span class="export-date">📅 ${date}</span>
-            ${exportItem.Duration ? `<span class="export-duration">⏱️ ${exportItem.Duration}</span>` : ''}
-            ${exportItem.FileSize ? `<span class="export-size">💾 ${exportItem.FileSize}</span>` : ''}
-            ${exportItem.RecordCount ? `<span class="export-records">📊 ${exportItem.RecordCount} records</span>` : ''}
-            <span class="export-files">📁 ${exportItem.Files ? exportItem.Files.length : 0} file${exportItem.Files && exportItem.Files.length > 1 ? 's' : ''}</span>
+            ${exportItem.duration ? `<span class="export-duration">⏱️ ${exportItem.duration}</span>` : ''}
+            ${exportItem.fileSize ? `<span class="export-size">💾 ${exportItem.fileSize}</span>` : ''}
+            ${exportItem.recordCount ? `<span class="export-records">📊 ${exportItem.recordCount} records</span>` : ''}
+            <span class="export-files">📁 ${exportItem.files ? exportItem.files.length : 0} file${exportItem.files && exportItem.files.length > 1 ? 's' : ''}</span>
           </div>
           ${errorHTML}
         </div>
         <div class="export-actions-container">
           ${downloadButtons}
-          <button class="btn btn-sm btn-outline delete-btn" data-id="${exportItem.ID}" title="Delete this export">
+          <button class="btn btn-sm btn-outline delete-btn" data-id="${exportItem.id}" title="Delete this export">
             🗑️ Delete
           </button>
         </div>

@@ -43,15 +43,15 @@ type PaginationData struct {
 }
 
 type ExportItem struct {
-	ID          string
-	Type        string
-	Date        time.Time
-	Status      string
-	Duration    string
-	FileSize    string
-	RecordCount int
-	Files       []string
-	Error       string
+	ID          string    `json:"id"`
+	Type        string    `json:"type"`
+	Date        time.Time `json:"date"`
+	Status      string    `json:"status"`
+	Duration    string    `json:"duration"`
+	FileSize    string    `json:"fileSize"`
+	RecordCount int       `json:"recordCount"`
+	Files       []string  `json:"files"`
+	Error       string    `json:"error"`
 }
 
 type ExportAPIResponse struct {
