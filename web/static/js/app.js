@@ -254,10 +254,10 @@ function refreshStatusData() {
 
 // Interactive elements
 function initializeInteractiveElements() {
-    // Add loading states to buttons
+    // Add loading states to buttons (except export buttons which have their own logic)
     document.addEventListener('click', function(event) {
-        if (event.target.classList.contains('export-btn') || 
-            event.target.classList.contains('btn-primary')) {
+        if (event.target.classList.contains('btn-primary') && 
+            !event.target.classList.contains('export-btn')) {
             const btn = event.target;
             const originalText = btn.textContent;
             

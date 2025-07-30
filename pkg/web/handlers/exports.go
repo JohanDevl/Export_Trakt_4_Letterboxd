@@ -407,11 +407,9 @@ func (h *ExportsHandler) scanExportFilesOptimized() []ExportItem {
 	recentExports := h.scanRecentExports(30)
 	exports = append(exports, recentExports...)
 	
-	// Si on a moins de 50 exports récents, scanner plus ancien en arrière-plan
-	if len(exports) < 50 {
-		olderExports := h.scanOlderExports(30)
-		exports = append(exports, olderExports...)
-	}
+	// Toujours scanner les exports plus anciens pour avoir la liste complète
+	olderExports := h.scanOlderExports(30)
+	exports = append(exports, olderExports...)
 	
 	// Trier par date (plus récent en premier)
 	sort.Slice(exports, func(i, j int) bool {
@@ -479,10 +477,10 @@ func (h *ExportsHandler) scanOlderExports(skipDays int) []ExportItem {
 		return exports
 	}
 	
-	// Limiter le scan aux 100 premiers dossiers les plus anciens pour éviter la latence
+	// Limiter le scan aux 500 premiers dossiers les plus anciens pour éviter la latence
 	count := 0
 	for _, entry := range entries {
-		if count >= 100 {
+		if count >= 500 {
 			break
 		}
 		

@@ -330,6 +330,7 @@
         if (!data.success) {
           showAlert("error", data.error || "Export failed");
           hideProgress();
+          resetExportButtons();
           return;
         }
         
@@ -773,6 +774,10 @@
     initializeFiltersFromURL();
     document.querySelectorAll(".export-btn").forEach((btn) => {
       btn.addEventListener("click", function () {
+        // Disable button immediately
+        this.disabled = true;
+        this.textContent = "🔄 Starting...";
+        
         const type = this.dataset.type;
         const options = {};
 
