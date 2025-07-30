@@ -117,9 +117,9 @@ func TestExportsHandler(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
-	// Check response (it will be an error due to missing template, but that's expected)
-	if rec.Code != http.StatusInternalServerError {
-		t.Errorf("Expected status %d, got %d", http.StatusInternalServerError, rec.Code)
+	// Check response - should now work correctly after template fixes
+	if rec.Code != http.StatusOK {
+		t.Errorf("Expected status %d, got %d", http.StatusOK, rec.Code)
 	}
 }
 

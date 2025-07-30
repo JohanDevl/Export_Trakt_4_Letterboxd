@@ -89,7 +89,7 @@ func NewExportsHandler(cfg *config.Config, log logger.Logger, tokenManager *auth
 		templates:    templates,
 		exportsDir:   exportsDir,
 		cache: &ExportCache{
-			cacheTTL: 10 * time.Second, // Cache très court pour debug
+			cacheTTL: 5 * time.Minute, // Cache pendant 5 minutes
 		},
 	}
 }
