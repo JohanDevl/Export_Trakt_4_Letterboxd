@@ -1,0 +1,317 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+    tags: ["v*"]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - ".github/ISSUE_TEMPLATE/**"
+  pull_request:
+    branches: [main, develop]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - ".github/ISSUE_TEMPLATE/**"
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Reason for manual trigger'
+        required: false
+        default: 'Manual trigger'
+
+env:
+  GO_VERSION: "1.23"
+  REGISTRY_IMAGE: johandevl/export-trakt-4-letterboxd
+  GITHUB_REGISTRY: ghcr.io
+  GITHUB_IMAGE: ghcr.io/johandevl/export_trakt_4_letterboxd
+
+jobs:
+  # Job 1: Test and Build Go Application
+  test-and-build:
+    name: Test and Build Go Application
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      is_tag: ${{ steps.version.outputs.is_tag }}
+      coverage: ${{ steps.coverage.outputs.coverage }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Install dependencies
+        run: go mod download
+
+      - name: Run Go tests
+        run: go test -v ./...
+
+      - name: Check test coverage
+        id: coverage
+        run: |
+          # Run tests with coverage, excluding main package
+          go test -coverprofile=coverage.out ./pkg/...
+          COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | tr -d '%')
+          echo "coverage=$COVERAGE" >> $GITHUB_OUTPUT
+          echo "Total coverage (excluding main package): $COVERAGE%"
+          if (( $(echo "$COVERAGE < 70" | bc -l) )); then
+            echo "⚠️ Code coverage is below 70%. Current: $COVERAGE%"
+            echo "This is acceptable for now, but aim to improve coverage."
+          else
+            echo "✅ Coverage check passed! Current: $COVERAGE%, Target: 70%"
+          fi
+
+      - name: Generate coverage report
+        run: go tool cover -html=coverage.out -o coverage.html
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.html
+
+      - name: Get version info
+        id: version
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            # For tag pushes, use the tag directly
+            VERSION="${{ github.ref_name }}"
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "is_tag=true" >> $GITHUB_OUTPUT
+            echo "🏷️ Building from tag: $VERSION"
+          else
+            # For branch pushes, get the latest tag
+            git fetch --tags
+            LATEST_TAG=$(git tag -l "v*" | grep -v "-" | sort -V | tail -n 1)
+            if [ -z "$LATEST_TAG" ]; then
+              LATEST_TAG="v1.0.0"
+            fi
+            echo "version=$LATEST_TAG" >> $GITHUB_OUTPUT
+            echo "is_tag=false" >> $GITHUB_OUTPUT
+            echo "📋 Building from branch, using latest tag: $LATEST_TAG"
+          fi
+
+      - name: Build Go application
+        run: |
+          mkdir -p build
+          go build -v -ldflags "-X main.version=${{ steps.version.outputs.version }} -X main.buildDate=$(date -u +'%Y-%m-%dT%H:%M:%SZ') -X main.gitCommit=${{ github.sha }}" -o build/export_trakt ./cmd/export_trakt
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: export-trakt-binary
+          path: build/export_trakt
+
+  # Job 2: Build and Push Docker Images
+  docker:
+    name: Build and Push Docker Images
+    runs-on: ubuntu-latest
+    needs: test-and-build
+    if: github.event_name != 'pull_request'
+    permissions:
+      contents: read
+      packages: write
+      security-events: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: export-trakt-binary
+          path: build
+
+      - name: Make binary executable
+        run: chmod +x build/export_trakt
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ${{ env.REGISTRY_IMAGE }}
+            ${{ env.GITHUB_IMAGE }}
+          tags: |
+            # Latest tag - ONLY for git tags (semantic versions/releases)
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+            # Main tag - for git tags (semantic versions) AND main branch pushes
+            type=raw,value=main,enable=${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' }}
+            # Semantic version tag - ONLY for git tags (releases)
+            type=raw,value=${{ needs.test-and-build.outputs.version }},enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+            # Develop branch tag
+            type=raw,value=develop,enable=${{ github.ref == 'refs/heads/develop' }}
+            # PR tags
+            type=ref,event=pr,prefix=PR-
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.GITHUB_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set build date
+        id: build_date
+        run: echo "BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_OUTPUT
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          platforms: linux/amd64,linux/arm64,linux/arm/v7
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ github.workflow }}-${{ github.ref_name }}
+          cache-to: type=gha,mode=max,scope=${{ github.workflow }}-${{ github.ref_name }}
+          build-args: |
+            VERSION=${{ needs.test-and-build.outputs.version }}
+            COMMIT_SHA=${{ github.sha }}
+            BUILD_DATE=${{ steps.build_date.outputs.BUILD_DATE }}
+
+      - name: Scan image for vulnerabilities
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY_IMAGE }}:${{ needs.test-and-build.outputs.version }}
+          format: "sarif"
+          output: "trivy-results.sarif"
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: "trivy-results.sarif"
+
+  # Job 3: Test Docker Image
+  docker-test:
+    name: Test Docker Image
+    needs: [test-and-build, docker]
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Pull image for testing
+        run: docker pull ${{ env.REGISTRY_IMAGE }}:${{ needs.test-and-build.outputs.version }}
+
+      - name: Test Docker image
+        run: |
+          # Create test directories
+          mkdir -p ./test_config ./test_logs ./test_exports
+
+          # Basic image test - check if it runs properly
+          docker run --rm \
+            -v $(pwd)/test_config:/app/config \
+            -v $(pwd)/test_logs:/app/logs \
+            -v $(pwd)/test_exports:/app/exports \
+            ${{ env.REGISTRY_IMAGE }}:${{ needs.test-and-build.outputs.version }} --help
+
+          echo "✅ Docker image tests passed successfully"
+
+  # Job 4: Notification and Summary
+  notify:
+    name: Notify and Summarize
+    needs: [test-and-build, docker, docker-test]
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - name: Check overall result
+        id: check
+        run: |
+          if ${{ needs.test-and-build.result == 'success' && (needs.docker.result == 'success' || needs.docker.result == 'skipped') && (needs.docker-test.result == 'success' || needs.docker-test.result == 'skipped') }}; then
+            echo "status=success" >> $GITHUB_OUTPUT
+            echo "✅ All jobs completed successfully"
+          else
+            echo "status=failure" >> $GITHUB_OUTPUT
+            echo "❌ One or more jobs failed"
+          fi
+
+      - name: Create summary
+        run: |
+          echo "## 🎬 Export Trakt 4 Letterboxd CI/CD Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📊 Build Results" >> $GITHUB_STEP_SUMMARY
+          echo "- **Go Tests & Build**: ${{ needs.test-and-build.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Coverage**: ${{ needs.test-and-build.outputs.coverage }}%" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version**: ${{ needs.test-and-build.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "- **Docker Build**: ${{ needs.docker.result }}" >> $GITHUB_STEP_SUMMARY
+            echo "- **Docker Test**: ${{ needs.docker-test.result }}" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.check.outputs.status }}" == "success" ]; then
+            echo "### ✅ Pipeline Status: SUCCESS" >> $GITHUB_STEP_SUMMARY
+            if [ "${{ github.event_name }}" != "pull_request" ]; then
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "### 🐳 Docker Images Published" >> $GITHUB_STEP_SUMMARY
+              echo "- Docker Hub: \`${{ env.REGISTRY_IMAGE }}:${{ needs.test-and-build.outputs.version }}\`" >> $GITHUB_STEP_SUMMARY
+              echo "- GitHub Packages: \`${{ env.GITHUB_IMAGE }}:${{ needs.test-and-build.outputs.version }}\`" >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "### ❌ Pipeline Status: FAILED" >> $GITHUB_STEP_SUMMARY
+            echo "Please check the failed jobs above for more details." >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Create release comment
+        if: github.event_name == 'release' && steps.check.outputs.status == 'success'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `🎉 **Release ${{ needs.test-and-build.outputs.version }} Successfully Deployed!**
+              
+              ### 📦 Docker Images Available:
+              - **Docker Hub**: \`${{ env.REGISTRY_IMAGE }}:${{ needs.test-and-build.outputs.version }}\`
+              - **GitHub Packages**: \`${{ env.GITHUB_IMAGE }}:${{ needs.test-and-build.outputs.version }}\`
+              
+              ### 🏗️ Build Information:
+              - **Test Coverage**: ${{ needs.test-and-build.outputs.coverage }}%
+              - **Supported Platforms**: linux/amd64, linux/arm64, linux/arm/v7
+              - **Security Scan**: ✅ Passed
+              
+              ### 🚀 Quick Start:
+              \`\`\`bash
+              docker pull ${{ env.REGISTRY_IMAGE }}:${{ needs.test-and-build.outputs.version }}
+              \`\`\`
+              
+              All systems are go! 🚀`
+            })

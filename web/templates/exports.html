@@ -308,6 +308,52 @@
 
 <!-- Export Progress WebSocket -->
 <script>
+  // HTML sanitization utility
+  function escapeHtml(unsafe) {
+    if (typeof unsafe !== 'string') {
+      return String(unsafe);
+    }
+    return unsafe
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+  
+  // Escape HTML attributes (more restrictive)
+  function escapeHtmlAttr(unsafe) {
+    if (typeof unsafe !== 'string') {
+      return String(unsafe);
+    }
+    return unsafe
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;')
+      .replace(/\//g, '&#x2F;')
+      .replace(/=/g, '&#x3D;')
+      .replace(/`/g, '&#x60;');
+  }
+  
+  // Get CSRF token from cookie
+  function getCSRFToken() {
+    const name = 'csrf_token=';
+    const decodedCookie = decodeURIComponent(document.cookie);
+    const ca = decodedCookie.split(';');
+    for(let i = 0; i < ca.length; i++) {
+      let c = ca[i];
+      while (c.charAt(0) === ' ') {
+        c = c.substring(1);
+      }
+      if (c.indexOf(name) === 0) {
+        return c.substring(name.length, c.length);
+      }
+    }
+    return '';
+  }
+
   // Define showAlert locally if not available from app.js yet
   function showAlert(type, message, duration = 5000) {
     // If global showAlert is available, use it
@@ -361,7 +407,12 @@
 
     // Trigger export
     const params = new URLSearchParams({ type, ...options });
-    fetch(`/api/export?${params}`, { method: "POST" })
+    fetch(`/api/export?${params}`, { 
+      method: "POST",
+      headers: {
+        'X-CSRF-Token': getCSRFToken()
+      }
+    })
       .then((response) => response.json())
       .then((data) => {
         if (!data.success) {
@@ -448,7 +499,7 @@
     isLoading = true;
     const loadingIndicator = document.createElement('div');
     loadingIndicator.className = 'loading-indicator';
-    loadingIndicator.innerHTML = '🔄 Loading...';
+    loadingIndicator.textContent = '🔄 Loading...';
     
     const exportList = document.querySelector('.export-list');
     exportList.appendChild(loadingIndicator);
@@ -517,8 +568,8 @@
     })
     .catch(error => {
       console.error('Failed to load page:', error);
-      const sanitizedMessage = error.message.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-      showAlert('error', 'Failed to load exports: ' + sanitizedMessage);
+      // showAlert uses textContent internally, so no need for manual sanitization
+      showAlert('error', 'Failed to load exports: ' + (error.message || 'Unknown error'));
     })
     .finally(() => {
       isLoading = false;
@@ -572,12 +623,12 @@
     if (exportItem.status === 'completed' && exportItem.files && Array.isArray(exportItem.files)) {
       downloadButtons = exportItem.files.map(file => {
         const downloadUrl = exportItem.id && exportItem.id.indexOf('dir_') === 0
-          ? `/download/${exportItem.id.substring(4)}/${file}`
-          : `/download/${file}`;
+          ? `/download/${encodeURIComponent(exportItem.id.substring(4))}/${encodeURIComponent(file)}`
+          : `/download/${encodeURIComponent(file)}`;
         const fileName = file.replace(/\.[^/.]+$/, ""); // Remove extension
         return `
-          <a href="${downloadUrl}" class="btn btn-sm btn-secondary download-btn" title="Download ${file}">
-            📥 ${fileName}
+          <a href="${escapeHtmlAttr(downloadUrl)}" class="btn btn-sm btn-secondary download-btn" title="Download ${escapeHtmlAttr(file)}">
+            📥 ${escapeHtml(fileName)}
           </a>
         `;
       }).join('');
@@ -590,29 +641,29 @@
     const errorHTML = exportItem.error ? `
       <div class="export-error">
         <span class="error-icon">❌</span>
-        <span class="error-message">${exportItem.error}</span>
+        <span class="error-message">${escapeHtml(exportItem.error)}</span>
       </div>
     ` : '';
     
     return `
-      <div class="export-item" data-type="${exportItem.type}" data-status="${exportItem.status}">
+      <div class="export-item" data-type="${escapeHtmlAttr(exportItem.type)}" data-status="${escapeHtmlAttr(exportItem.status)}">
         <div class="export-info">
           <div class="export-header">
-            <h4>${typeLabel}</h4>
-            <span class="export-status status-indicator ${exportItem.status}">${exportItem.status}</span>
+            <h4>${escapeHtml(typeLabel)}</h4>
+            <span class="export-status status-indicator ${escapeHtmlAttr(exportItem.status)}">${escapeHtml(exportItem.status)}</span>
           </div>
           <div class="export-details">
-            <span class="export-date">📅 ${date}</span>
-            ${exportItem.duration ? `<span class="export-duration">⏱️ ${exportItem.duration}</span>` : ''}
-            ${exportItem.fileSize ? `<span class="export-size">💾 ${exportItem.fileSize}</span>` : ''}
-            ${exportItem.recordCount ? `<span class="export-records">📊 ${exportItem.recordCount} records</span>` : ''}
+            <span class="export-date">📅 ${escapeHtml(date)}</span>
+            ${exportItem.duration ? `<span class="export-duration">⏱️ ${escapeHtml(exportItem.duration)}</span>` : ''}
+            ${exportItem.fileSize ? `<span class="export-size">💾 ${escapeHtml(exportItem.fileSize)}</span>` : ''}
+            ${exportItem.recordCount ? `<span class="export-records">📊 ${escapeHtml(exportItem.recordCount)} records</span>` : ''}
             <span class="export-files">📁 ${exportItem.files ? exportItem.files.length : 0} file${exportItem.files && exportItem.files.length > 1 ? 's' : ''}</span>
           </div>
           ${errorHTML}
         </div>
         <div class="export-actions-container">
           ${downloadButtons}
-          <button class="btn btn-sm btn-outline delete-btn" data-id="${exportItem.id}" title="Delete this export">
+          <button class="btn btn-sm btn-outline delete-btn" data-id="${escapeHtmlAttr(exportItem.id)}" title="Delete this export">
             🗑️ Delete
           </button>
         </div>
@@ -856,7 +907,12 @@
   });
 
   function deleteExport(id) {
-    fetch(`/api/export/${id}`, { method: "DELETE" })
+    fetch(`/api/export/${id}`, { 
+      method: "DELETE",
+      headers: {
+        'X-CSRF-Token': getCSRFToken()
+      }
+    })
       .then((response) => response.json())
       .then((data) => {
         if (data.success) {

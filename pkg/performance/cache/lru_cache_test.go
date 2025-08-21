@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"fmt"
 	"testing"
 	"time"
 )
@@ -108,5 +109,63 @@ func TestCacheKeys(t *testing.T) {
 	keys = cache.Keys()
 	if len(keys) != 2 {
 		t.Errorf("Expected 2 keys, got %d", len(keys))
+	}
+}
+
+func TestCacheMemoryLimits(t *testing.T) {
+	// Create cache with small memory limit (1KB)
+	config := CacheConfig{
+		Capacity:  1000, // Large capacity but limited by memory
+		MaxMemory: 1024, // 1KB memory limit
+		TTL:       time.Hour,
+	}
+	cache := NewLRUCache(config)
+	
+	// Add items that should exceed memory limit
+	largeValue := make([]byte, 500) // 500 bytes
+	for i := 0; i < 10; i++ {
+		key := fmt.Sprintf("key%d", i)
+		cache.Set(key, largeValue)
+	}
+	
+	// Should have evicted some items due to memory pressure
+	stats := cache.Stats()
+	if stats.MemoryEvicts == 0 {
+		t.Error("Expected memory evictions to occur")
+	}
+	
+	if stats.CurrentMemory > stats.MaxMemory {
+		t.Errorf("Memory usage %d exceeds limit %d", stats.CurrentMemory, stats.MaxMemory)
+	}
+	
+	if stats.Size == 10 {
+		t.Error("Expected some items to be evicted due to memory pressure")
+	}
+}
+
+func TestCacheMemoryEstimation(t *testing.T) {
+	// Test memory estimation for different value types
+	tests := []struct {
+		key   string
+		value interface{}
+		name  string
+	}{
+		{"string_key", "test_value", "string"},
+		{"bytes_key", []byte("test_bytes"), "bytes"},
+		{"int_key", 12345, "int"},
+		{"bool_key", true, "bool"},
+	}
+	
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			size := estimateSize(test.key, test.value)
+			if size <= 0 {
+				t.Errorf("Expected positive size for %s, got %d", test.name, size)
+			}
+			// Size should at least include the key length
+			if size < int64(len(test.key)) {
+				t.Errorf("Size %d should be at least key length %d", size, len(test.key))
+			}
+		})
 	}
 }

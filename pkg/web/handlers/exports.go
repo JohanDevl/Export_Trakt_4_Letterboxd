@@ -17,6 +17,7 @@ import (
 	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/auth"
 	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/config"
 	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/logger"
+	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/web/middleware"
 )
 
 type ExportsData struct {
@@ -24,6 +25,7 @@ type ExportsData struct {
 	CurrentPage  string
 	ServerStatus string
 	LastUpdated  string
+	CSRFToken    string
 	TokenStatus  *TokenStatusData
 	Exports      []ExportItem
 	Alert        *AlertData
@@ -68,26 +70,28 @@ type ExportCache struct {
 }
 
 type ExportsHandler struct {
-	config       *config.Config
-	logger       logger.Logger
-	tokenManager *auth.TokenManager
-	templates    *template.Template
-	exportsDir   string
-	cache        *ExportCache
+	config         *config.Config
+	logger         logger.Logger
+	tokenManager   *auth.TokenManager
+	templates      *template.Template
+	exportsDir     string
+	cache          *ExportCache
+	csrfMiddleware *middleware.CSRFMiddleware
 }
 
-func NewExportsHandler(cfg *config.Config, log logger.Logger, tokenManager *auth.TokenManager, templates *template.Template) *ExportsHandler {
+func NewExportsHandler(cfg *config.Config, log logger.Logger, tokenManager *auth.TokenManager, templates *template.Template, csrfMiddleware *middleware.CSRFMiddleware) *ExportsHandler {
 	exportsDir := "./exports"
 	if cfg.Letterboxd.ExportDir != "" {
 		exportsDir = cfg.Letterboxd.ExportDir
 	}
 	
 	return &ExportsHandler{
-		config:       cfg,
-		logger:       log,
-		tokenManager: tokenManager,
-		templates:    templates,
-		exportsDir:   exportsDir,
+		config:         cfg,
+		logger:         log,
+		tokenManager:   tokenManager,
+		templates:      templates,
+		exportsDir:     exportsDir,
+		csrfMiddleware: csrfMiddleware,
 		cache: &ExportCache{
 			cacheTTL: 5 * time.Minute, // Cache pendant 5 minutes
 		},
@@ -227,6 +231,7 @@ func (h *ExportsHandler) prepareExportsData(r *http.Request) *ExportsData {
 		CurrentPage:  "exports",
 		ServerStatus: "healthy",
 		LastUpdated:  time.Now().Format("2006-01-02 15:04:05"),
+		CSRFToken:    h.csrfMiddleware.GetToken(r),
 	}
 	
 	// Get token status

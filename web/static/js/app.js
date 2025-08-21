@@ -1,16 +1,59 @@
 // Global JavaScript for Export Trakt 4 Letterboxd Web Interface
 
+// HTML sanitization utility
+function escapeHtml(unsafe) {
+  if (typeof unsafe !== 'string') {
+    return String(unsafe);
+  }
+  return unsafe
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+// Escape HTML attributes (more restrictive)
+function escapeHtmlAttr(unsafe) {
+  if (typeof unsafe !== 'string') {
+    return String(unsafe);
+  }
+  return unsafe
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
+    .replace(/\//g, '&#x2F;')
+    .replace(/=/g, '&#x3D;')
+    .replace(/`/g, '&#x60;');
+}
+
+// Get CSRF token from cookie
+function getCSRFToken() {
+  const name = 'csrf_token=';
+  const decodedCookie = decodeURIComponent(document.cookie);
+  const ca = decodedCookie.split(';');
+  for(let i = 0; i < ca.length; i++) {
+    let c = ca[i];
+    while (c.charAt(0) === ' ') {
+      c = c.substring(1);
+    }
+    if (c.indexOf(name) === 0) {
+      return c.substring(name.length, c.length);
+    }
+  }
+  return '';
+}
+
 // Initialize the application
 document.addEventListener('DOMContentLoaded', function() {
     initializeApp();
 });
 
 function initializeApp() {
-    // WebSocket disabled - not implemented on server side
-    // initializeWebSocket();
-    
-    // Initialize auto-refresh for dynamic content
-    initializeAutoRefresh();
+    // Initialize real-time updates (SSE/WebSocket)
+    initializeRealTimeUpdates();
     
     // Initialize tooltips and interactive elements
     initializeInteractiveElements();
@@ -166,10 +209,10 @@ function addLogEntry(logData) {
     logEntry.className = `log-entry log-${logData.level}`;
     
     logEntry.innerHTML = `
-        <span class="log-time">${new Date(logData.time).toLocaleTimeString()}</span>
-        <span class="log-level">${logData.level.toUpperCase()}</span>
-        <span class="log-message">${logData.message}</span>
-        ${logData.context ? `<div class="log-context">${logData.context}</div>` : ''}
+        <span class="log-time">${escapeHtml(new Date(logData.time).toLocaleTimeString())}</span>
+        <span class="log-level">${escapeHtml(logData.level.toUpperCase())}</span>
+        <span class="log-message">${escapeHtml(logData.message)}</span>
+        ${logData.context ? `<div class="log-context">${escapeHtml(logData.context)}</div>` : ''}
     `;
     
     logViewer.appendChild(logEntry);
@@ -196,8 +239,8 @@ function showAlert(type, message, duration = 5000) {
     
     const icon = getAlertIcon(type);
     alert.innerHTML = `
-        <span class="alert-icon">${icon}</span>
-        <span class="alert-message">${message}</span>
+        <span class="alert-icon">${escapeHtml(icon)}</span>
+        <span class="alert-message">${escapeHtml(message)}</span>
         <button class="alert-close" onclick="this.parentElement.remove()">&times;</button>
     `;
     
@@ -227,8 +270,146 @@ function getAlertIcon(type) {
     return icons[type] || 'ℹ️';
 }
 
-// Auto-refresh functionality
-function initializeAutoRefresh() {
+// Real-time updates using SSE
+let eventSource = null;
+let sseReconnectInterval = null;
+
+function initializeRealTimeUpdates() {
+    // Try WebSocket first, fallback to SSE
+    if (window.WebSocket && false) { // Disable WebSocket for now, use SSE
+        initializeWebSocket();
+    } else {
+        initializeSSE();
+    }
+}
+
+function initializeSSE() {
+    if (!window.EventSource) {
+        console.log('SSE not supported, falling back to auto-refresh');
+        initializeFallbackRefresh();
+        return;
+    }
+    
+    connectSSE();
+}
+
+function connectSSE() {
+    // Determine appropriate SSE endpoint based on current page
+    let sseUrl = '/sse/all';
+    if (window.location.pathname === '/status' || window.location.pathname === '/') {
+        sseUrl = '/sse/status';
+    } else if (window.location.pathname === '/exports') {
+        sseUrl = '/sse/export';
+    }
+    
+    try {
+        eventSource = new EventSource(sseUrl);
+        
+        eventSource.onopen = function() {
+            console.log('SSE connected');
+            clearInterval(sseReconnectInterval);
+            showConnectionStatus('connected');
+        };
+        
+        eventSource.onmessage = function(event) {
+            try {
+                const data = JSON.parse(event.data);
+                handleRealtimeMessage({
+                    type: 'message',
+                    payload: data
+                });
+            } catch (e) {
+                console.error('SSE message parsing error:', e);
+            }
+        };
+        
+        // Handle specific event types
+        eventSource.addEventListener('status_update', function(event) {
+            try {
+                const data = JSON.parse(event.data);
+                handleRealtimeMessage({
+                    type: 'status_update',
+                    payload: data
+                });
+            } catch (e) {
+                console.error('SSE status_update parsing error:', e);
+            }
+        });
+        
+        eventSource.addEventListener('export_progress', function(event) {
+            try {
+                const data = JSON.parse(event.data);
+                handleRealtimeMessage({
+                    type: 'export_progress',
+                    payload: data
+                });
+            } catch (e) {
+                console.error('SSE export_progress parsing error:', e);
+            }
+        });
+        
+        eventSource.addEventListener('alert', function(event) {
+            try {
+                const data = JSON.parse(event.data);
+                handleRealtimeMessage({
+                    type: 'alert',
+                    payload: data
+                });
+            } catch (e) {
+                console.error('SSE alert parsing error:', e);
+            }
+        });
+        
+        eventSource.addEventListener('ping', function(event) {
+            // Keep-alive ping, no action needed
+            console.debug('SSE ping received');
+        });
+        
+        eventSource.onerror = function(error) {
+            console.error('SSE error:', error);
+            showConnectionStatus('error');
+            
+            // Attempt to reconnect after 5 seconds
+            eventSource.close();
+            sseReconnectInterval = setInterval(() => {
+                console.log('Attempting SSE reconnection...');
+                connectSSE();
+            }, 5000);
+        };
+        
+    } catch (error) {
+        console.error('Failed to create SSE connection:', error);
+        initializeFallbackRefresh();
+    }
+}
+
+function handleRealtimeMessage(data) {
+    switch (data.type) {
+        case 'status_update':
+            updateStatusIndicators(data.payload);
+            break;
+        case 'export_progress':
+            updateExportProgress(data.payload);
+            break;
+        case 'alert':
+            showAlert(data.payload.type, data.payload.message);
+            break;
+        case 'server_health':
+            console.log('Server health update:', data.payload);
+            break;
+        case 'token_update':
+            console.log('Token status updated:', data.payload);
+            updateStatusIndicators({ tokenStatus: data.payload });
+            break;
+        default:
+            console.log('Unknown realtime message type:', data.type);
+    }
+}
+
+// Fallback to old auto-refresh if real-time updates fail
+function initializeFallbackRefresh() {
+    console.log('Using fallback auto-refresh');
+    
     // Auto-refresh status pages every 30 seconds
     if (window.location.pathname === '/status' || window.location.pathname === '/') {
         setInterval(() => {
@@ -432,7 +613,8 @@ console.log(`
 🎬 Export Trakt 4 Letterboxd Web Interface
 =========================================
 Version: 1.0.0
-WebSocket: ${window.WebSocket ? 'Supported' : 'Not Supported'}
+Real-time Updates: ${window.EventSource ? 'SSE Enabled' : 'Fallback Mode'}
+WebSocket: ${window.WebSocket ? 'Available' : 'Not Supported'}
 Local Storage: ${window.localStorage ? 'Available' : 'Not Available'}
 
 Keyboard Shortcuts:
@@ -441,6 +623,11 @@ Keyboard Shortcuts:
 - Ctrl/Cmd + 3: Status
 - Ctrl/Cmd + 4: Config
 - Escape: Close alerts/modals
+
+Real-time Features:
+- Live status updates
+- Export progress tracking
+- Instant notifications
 `);
 
 // Performance monitoring

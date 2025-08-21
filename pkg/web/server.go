@@ -14,15 +14,25 @@ import (
 	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/config"
 	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/logger"
 	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/web/handlers"
+	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/web/middleware"
+	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/web/realtime"
 )
 
 type Server struct {
-	config       *config.Config
-	logger       logger.Logger
-	tokenManager *auth.TokenManager
-	templates    *template.Template
-	server       *http.Server
-	startTime    time.Time
+	config             *config.Config
+	logger             logger.Logger
+	tokenManager       *auth.TokenManager
+	templates          *template.Template
+	server             *http.Server
+	startTime          time.Time
+	csrfMiddleware     *middleware.CSRFMiddleware
+	securityMiddleware *middleware.SecurityHeaders
+	
+	// Real-time components
+	realtimeHub        *realtime.Hub
+	statusBroadcaster  *realtime.StatusBroadcaster
+	websocketHandler   *realtime.SimpleWebSocketHandler
+	sseHandler         *realtime.SSEHandler
 }
 
 type TemplateData struct {
@@ -30,14 +40,30 @@ type TemplateData struct {
 	CurrentPage  string
 	ServerStatus string
 	LastUpdated  string
+	CSRFToken    string
 }
 
 func NewServer(cfg *config.Config, log logger.Logger, tokenManager *auth.TokenManager) (*Server, error) {
+	// Determine if we should use secure cookies (HTTPS)
+	secureCookies := cfg.Security.RequireHTTPS
+	
+	// Initialize real-time components
+	realtimeHub := realtime.NewHub(log)
+	statusBroadcaster := realtime.NewStatusBroadcaster(realtimeHub, cfg, log, tokenManager)
+	websocketHandler := realtime.NewSimpleWebSocketHandler(realtimeHub, log)
+	sseHandler := realtime.NewSSEHandler(realtimeHub, log)
+	
 	s := &Server{
-		config:       cfg,
-		logger:       log,
-		tokenManager: tokenManager,
-		startTime:    time.Now(),
+		config:             cfg,
+		logger:             log,
+		tokenManager:       tokenManager,
+		startTime:          time.Now(),
+		csrfMiddleware:     middleware.NewCSRFMiddleware(log, secureCookies),
+		securityMiddleware: middleware.NewSecurityHeaders(log, secureCookies, true),
+		realtimeHub:        realtimeHub,
+		statusBroadcaster:  statusBroadcaster,
+		websocketHandler:   websocketHandler,
+		sseHandler:         sseHandler,
 	}
 	
 	// Load templates
@@ -172,7 +198,7 @@ func (s *Server) setupRoutes() {
 	
 	// Create handlers
 	dashboardHandler := handlers.NewDashboardHandler(s.config, s.logger, s.tokenManager, s.templates)
-	exportsHandler := handlers.NewExportsHandler(s.config, s.logger, s.tokenManager, s.templates)
+	exportsHandler := handlers.NewExportsHandler(s.config, s.logger, s.tokenManager, s.templates, s.csrfMiddleware)
 	statusHandler := handlers.NewStatusHandler(s.config, s.logger, s.tokenManager, s.templates)
 	authHandler := handlers.NewAuthHandler(s.config, s.logger, s.tokenManager, s.templates)
 	
@@ -206,12 +232,15 @@ func (s *Server) setupRoutes() {
 	// Health check endpoint
 	mux.HandleFunc("/health", s.handleHealth)
 	
-	// WebSocket endpoint for real-time updates
-	mux.HandleFunc("/ws/status", s.handleWebSocket)
-	mux.HandleFunc("/ws/export", s.handleExportWebSocket)
+	// Real-time endpoints
+	mux.HandleFunc("/ws/status", s.websocketHandler.HandleWebSocket)
+	mux.HandleFunc("/ws/export", s.websocketHandler.HandleWebSocket)
+	mux.HandleFunc("/sse/status", s.sseHandler.HandleSSEStatus)
+	mux.HandleFunc("/sse/export", s.sseHandler.HandleSSEExports)
+	mux.HandleFunc("/sse/all", s.sseHandler.HandleSSE)
 	
-	// Add middleware
-	handler := s.withLogging(s.withCORS(mux))
+	// Add middleware (order matters: security headers first, then CSRF, then CORS, then logging)
+	handler := s.withLogging(s.withCORS(s.csrfMiddleware.Middleware(s.securityMiddleware.Middleware(mux))))
 	
 	port := s.config.Auth.CallbackPort
 	if port == 0 {
@@ -271,27 +300,14 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	}`, health["status"], health["service"], health["timestamp"], health["uptime"], health["version"])
 }
 
-func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
-	// Placeholder for WebSocket implementation
-	// In a full implementation, this would upgrade the connection and handle real-time updates
-	s.logger.Info("web.websocket_connection_attempt", map[string]interface{}{
-		"client_ip": r.RemoteAddr,
-		"path":      r.URL.Path,
-	})
-	
-	// For now, return a message indicating WebSocket support is planned
-	w.WriteHeader(http.StatusNotImplemented)
-	fmt.Fprint(w, "WebSocket support is planned for future releases")
+// GetStatusBroadcaster returns the status broadcaster for external use
+func (s *Server) GetStatusBroadcaster() *realtime.StatusBroadcaster {
+	return s.statusBroadcaster
 }
 
-func (s *Server) handleExportWebSocket(w http.ResponseWriter, r *http.Request) {
-	// Placeholder for export progress WebSocket
-	s.logger.Info("web.export_websocket_connection_attempt", map[string]interface{}{
-		"client_ip": r.RemoteAddr,
-	})
-	
-	w.WriteHeader(http.StatusNotImplemented)
-	fmt.Fprint(w, "Export progress WebSocket support is planned for future releases")
+// GetRealtimeHub returns the realtime hub for external use
+func (s *Server) GetRealtimeHub() *realtime.Hub {
+	return s.realtimeHub
 }
 
 func (s *Server) withLogging(next http.Handler) http.Handler {
@@ -339,11 +355,19 @@ func (s *Server) Start() error {
 		"start_time": s.startTime.Format(time.RFC3339),
 	})
 	
+	// Start real-time components
+	go s.realtimeHub.Start()
+	s.statusBroadcaster.Start()
+	
 	return s.server.ListenAndServe()
 }
 
 func (s *Server) Stop(ctx context.Context) error {
 	s.logger.Info("web.server_stopping", nil)
+	
+	// Stop real-time components
+	s.statusBroadcaster.Stop()
+	
 	return s.server.Shutdown(ctx)
 }
 
