@@ -2,8 +2,8 @@ name: Docker Tag Monitor
 
 on:
   schedule:
-    # Run every hour to check for missing Docker images
-    - cron: '0 * * * *'
+    # Run once daily at 6 AM UTC to check for missing Docker images
+    - cron: '0 6 * * *'
   workflow_dispatch:
     inputs:
       reason:
@@ -43,8 +43,8 @@ jobs:
               echo "✅ Docker image exists for tag: $tag"
             fi
             
-            # Small delay to avoid rate limiting
-            sleep 1
+            # Small delay to avoid rate limiting (can be shorter since it's daily)
+            sleep 0.5
           done
           
           # Check if latest tag is up to date
