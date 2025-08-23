@@ -432,3 +432,23 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 }
+
+// handleWebSocket handles WebSocket connections for status updates
+func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
+	if s.websocketHandler != nil {
+		s.websocketHandler.HandleWebSocket(w, r)
+	} else {
+		// Fallback for tests when WebSocket handler is not initialized
+		http.Error(w, "WebSocket not implemented", http.StatusNotImplemented)
+	}
+}
+
+// handleExportWebSocket handles WebSocket connections for export updates
+func (s *Server) handleExportWebSocket(w http.ResponseWriter, r *http.Request) {
+	if s.websocketHandler != nil {
+		s.websocketHandler.HandleWebSocket(w, r)
+	} else {
+		// Fallback for tests when WebSocket handler is not initialized
+		http.Error(w, "WebSocket not implemented", http.StatusNotImplemented)
+	}
+}

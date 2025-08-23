@@ -14,6 +14,7 @@ import (
 	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/config"
 	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/logger"
 	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/security/keyring"
+	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/web/middleware"
 )
 
 func TestDashboardHandler(t *testing.T) {
@@ -110,7 +111,9 @@ func TestExportsHandler(t *testing.T) {
 	templates := template.New("")
 
 	// Create exports handler
-	handler := NewExportsHandler(cfg, log, tokenManager, templates)
+	// Create mock CSRF middleware
+	csrfMiddleware := &middleware.CSRFMiddleware{}
+	handler := NewExportsHandler(cfg, log, tokenManager, templates, csrfMiddleware)
 
 	// Test GET request
 	req := httptest.NewRequest("GET", "/exports", nil)
@@ -223,7 +226,9 @@ func TestExportItemParsing(t *testing.T) {
 	templates := template.New("")
 
 	// Create exports handler
-	handler := NewExportsHandler(cfg, log, tokenManager, templates)
+	// Create mock CSRF middleware
+	csrfMiddleware := &middleware.CSRFMiddleware{}
+	handler := NewExportsHandler(cfg, log, tokenManager, templates, csrfMiddleware)
 
 	// Test export type parsing
 	testCases := []struct {
@@ -268,7 +273,9 @@ func TestFormatFileSize(t *testing.T) {
 	templates := template.New("")
 
 	// Create exports handler
-	handler := NewExportsHandler(cfg, log, tokenManager, templates)
+	// Create mock CSRF middleware
+	csrfMiddleware := &middleware.CSRFMiddleware{}
+	handler := NewExportsHandler(cfg, log, tokenManager, templates, csrfMiddleware)
 
 	// Test file size formatting
 	testCases := []struct {
@@ -363,7 +370,9 @@ func TestExportEstimation(t *testing.T) {
 	templates := template.New("")
 
 	// Create exports handler
-	handler := NewExportsHandler(cfg, log, tokenManager, templates)
+	// Create mock CSRF middleware
+	csrfMiddleware := &middleware.CSRFMiddleware{}
+	handler := NewExportsHandler(cfg, log, tokenManager, templates, csrfMiddleware)
 
 	// Test duration estimation
 	testCases := []struct {
@@ -408,7 +417,9 @@ func TestHandlerMethods(t *testing.T) {
 	templates := template.New("")
 
 	// Create exports handler
-	handler := NewExportsHandler(cfg, log, tokenManager, templates)
+	// Create mock CSRF middleware
+	csrfMiddleware := &middleware.CSRFMiddleware{}
+	handler := NewExportsHandler(cfg, log, tokenManager, templates, csrfMiddleware)
 
 	// Test unsupported method
 	req := httptest.NewRequest("PUT", "/exports", nil)
@@ -606,7 +617,9 @@ func TestCountCSVRecords(t *testing.T) {
 	templates := template.New("")
 
 	// Create exports handler
-	handler := NewExportsHandler(cfg, log, tokenManager, templates)
+	// Create mock CSRF middleware
+	csrfMiddleware := &middleware.CSRFMiddleware{}
+	handler := NewExportsHandler(cfg, log, tokenManager, templates, csrfMiddleware)
 
 	// Create temporary CSV file for testing
 	testDir := "./test_csv_dir"
@@ -659,7 +672,9 @@ func TestCacheSystem(t *testing.T) {
 	templates := template.New("")
 
 	// Create exports handler
-	handler := NewExportsHandler(cfg, log, tokenManager, templates)
+	// Create mock CSRF middleware
+	csrfMiddleware := &middleware.CSRFMiddleware{}
+	handler := NewExportsHandler(cfg, log, tokenManager, templates, csrfMiddleware)
 
 	// Test cache initialization
 	if handler.cache == nil {
@@ -694,7 +709,9 @@ func TestLazyLoading(t *testing.T) {
 
 	// Set exports directory
 	cfg.Letterboxd.ExportDir = tempDir
-	handler := NewExportsHandler(cfg, log, tokenManager, templates)
+	// Create mock CSRF middleware
+	csrfMiddleware := &middleware.CSRFMiddleware{}
+	handler := NewExportsHandler(cfg, log, tokenManager, templates, csrfMiddleware)
 
 	// Create test export directories with different dates
 	recentDir := filepath.Join(tempDir, "export_2025-07-29_10-00")
@@ -751,7 +768,9 @@ func TestExportUtilityFunctions(t *testing.T) {
 	keyringMgr, _ := keyring.NewManager(keyring.MemoryBackend)
 	tokenManager := auth.NewTokenManager(cfg, log, keyringMgr)
 	templates := template.New("")
-	handler := NewExportsHandler(cfg, log, tokenManager, templates)
+	// Create mock CSRF middleware
+	csrfMiddleware := &middleware.CSRFMiddleware{}
+	handler := NewExportsHandler(cfg, log, tokenManager, templates, csrfMiddleware)
 
 	// Test parse export type
 	tests := []struct {
