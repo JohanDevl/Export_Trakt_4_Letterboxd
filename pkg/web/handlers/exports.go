@@ -63,10 +63,13 @@ type ExportAPIResponse struct {
 }
 
 type ExportCache struct {
-	mu        sync.RWMutex
-	exports   []ExportItem
-	lastScan  time.Time
-	cacheTTL  time.Duration
+	mu              sync.RWMutex
+	exports         []ExportItem
+	lastScan        time.Time
+	cacheTTL        time.Duration
+	recentExports   []ExportItem // Cache for recent exports (7 days)
+	recentLastScan  time.Time
+	recentCacheTTL  time.Duration // Shorter TTL for recent exports
 }
 
 // invalidateCache clears the cache to force a refresh
@@ -75,6 +78,8 @@ func (h *ExportsHandler) invalidateCache() {
 	defer h.cache.mu.Unlock()
 	h.cache.exports = nil
 	h.cache.lastScan = time.Time{}
+	h.cache.recentExports = nil
+	h.cache.recentLastScan = time.Time{}
 }
 
 type ExportsHandler struct {
@@ -101,7 +106,8 @@ func NewExportsHandler(cfg *config.Config, log logger.Logger, tokenManager *auth
 		exportsDir:     exportsDir,
 		csrfMiddleware: csrfMiddleware,
 		cache: &ExportCache{
-			cacheTTL: 5 * time.Minute, // Cache pendant 5 minutes
+			cacheTTL:       30 * time.Minute, // Cache pendant 30 minutes pour de meilleures performances
+			recentCacheTTL: 1 * time.Minute,  // Cache des exports récents refresh plus souvent
 		},
 	}
 }
@@ -238,7 +244,7 @@ func (h *ExportsHandler) prepareExportsData(r *http.Request) *ExportsData {
 		Title:        "Export Management",
 		CurrentPage:  "exports",
 		ServerStatus: "healthy",
-		LastUpdated:  time.Now().Format("2006-01-02 15:04:05"),
+		LastUpdated:  h.formatTimeInConfigTimezone(time.Now(), "2006-01-02 15:04:05"),
 		CSRFToken:    h.csrfMiddleware.GetToken(r),
 	}
 	
@@ -311,7 +317,12 @@ func (h *ExportsHandler) prepareExportsData(r *http.Request) *ExportsData {
 	}
 	
 	if start < totalItems {
-		data.Exports = filteredExports[start:end]
+		// Convert dates to configured timezone before displaying
+		paginatedExports := filteredExports[start:end]
+		for i := range paginatedExports {
+			paginatedExports[i].Date = h.convertToConfigTimezone(paginatedExports[i].Date)
+		}
+		data.Exports = paginatedExports
 	} else {
 		data.Exports = []ExportItem{}
 	}
@@ -526,10 +537,10 @@ func (h *ExportsHandler) scanOlderExports(skipDays int) []ExportItem {
 		return exports
 	}
 	
-	// Limiter le scan aux 500 premiers dossiers les plus anciens pour éviter la latence
+	// Limiter le scan aux 100 premiers dossiers les plus anciens pour améliorer les performances
 	count := 0
 	for _, entry := range entries {
-		if count >= 500 {
+		if count >= 100 {
 			break
 		}
 		
@@ -876,38 +887,70 @@ func (h *ExportsHandler) parseExportType(filename string) string {
 }
 
 // countCSVRecordsOptimized compte les enregistrements de manière optimisée
-// Utilise une estimation basée sur la taille du fichier pour éviter de lire tout le contenu
+// Utilise une estimation améliorée pour les gros fichiers
 func (h *ExportsHandler) countCSVRecordsOptimized(filename string) int {
 	info, err := os.Stat(filename)
 	if err != nil {
 		return 0
 	}
 	
-	// Pour les petits fichiers (< 1MB), compter précisément
-	if info.Size() < 1024*1024 {
+	// Pour les fichiers moyens (< 10MB), compter précisément
+	if info.Size() < 10*1024*1024 {
 		return h.countCSVRecords(filename)
 	}
 	
-	// Pour les gros fichiers, utiliser une estimation rapide
-	// Lire seulement les 1000 premières lignes pour calculer la taille moyenne
+	// Pour les très gros fichiers, utiliser une estimation améliorée
 	file, err := os.Open(filename)
 	if err != nil {
 		return 0
 	}
 	defer file.Close()
 	
-	buf := make([]byte, 50000) // Lire les premiers 50KB
+	// Lire un échantillon plus large (500KB) pour plus de précision
+	sampleSize := 500000
+	if info.Size() < int64(sampleSize) {
+		sampleSize = int(info.Size())
+	}
+	
+	buf := make([]byte, sampleSize)
 	n, err := file.Read(buf)
 	if err != nil && n == 0 {
 		return 0
 	}
 	
+	// Compter les lignes dans l'échantillon
 	lines := strings.Count(string(buf[:n]), "\n")
 	if lines <= 1 {
-		return 0
+		return 0 // Pas assez de lignes pour une estimation
 	}
 	
-	// Estimation: (taille totale / taille échantillon) * lignes échantillon
+	// Lire aussi un échantillon du milieu du fichier pour améliorer la précision
+	middleOffset := info.Size() / 2
+	if middleOffset > int64(sampleSize) {
+		_, err := file.Seek(middleOffset, 0)
+		if err == nil {
+			middleBuf := make([]byte, min(sampleSize/2, int(info.Size()-middleOffset)))
+			middleN, err := file.Read(middleBuf)
+			if err == nil && middleN > 0 {
+				middleLines := strings.Count(string(middleBuf[:middleN]), "\n")
+				if middleLines > 0 {
+					// Moyenne pondérée des deux échantillons
+					totalSampleSize := n + middleN
+					totalSampleLines := lines + middleLines
+					avgBytesPerLine := float64(totalSampleSize) / float64(totalSampleLines)
+					estimatedTotalLines := int(float64(info.Size()) / avgBytesPerLine)
+					
+					// Soustraire 1 pour l'en-tête
+					if estimatedTotalLines > 1 {
+						return estimatedTotalLines - 1
+					}
+					return 0
+				}
+			}
+		}
+	}
+	
+	// Fallback vers l'estimation simple si l'échantillon du milieu échoue
 	avgBytesPerLine := float64(n) / float64(lines)
 	estimatedTotalLines := int(float64(info.Size()) / avgBytesPerLine)
 	
@@ -916,6 +959,38 @@ func (h *ExportsHandler) countCSVRecordsOptimized(filename string) int {
 		return estimatedTotalLines - 1
 	}
 	return 0
+}
+
+// min helper function for Go versions < 1.21
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+// convertToConfigTimezone converts a time to the configured timezone
+func (h *ExportsHandler) convertToConfigTimezone(t time.Time) time.Time {
+	if h.config.Export.Timezone == "" || h.config.Export.Timezone == "UTC" {
+		return t.UTC()
+	}
+	
+	loc, err := time.LoadLocation(h.config.Export.Timezone)
+	if err != nil {
+		h.logger.Warn("web.timezone_load_failed", map[string]interface{}{
+			"timezone": h.config.Export.Timezone,
+			"error":    err.Error(),
+		})
+		return t.UTC() // Fallback to UTC
+	}
+	
+	return t.In(loc)
+}
+
+// formatTimeInConfigTimezone formats a time in the configured timezone
+func (h *ExportsHandler) formatTimeInConfigTimezone(t time.Time, layout string) string {
+	convertedTime := h.convertToConfigTimezone(t)
+	return convertedTime.Format(layout)
 }
 
 // Version originale conservée pour les petits fichiers

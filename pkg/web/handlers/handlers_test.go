@@ -681,8 +681,12 @@ func TestCacheSystem(t *testing.T) {
 		t.Error("Cache should be initialized")
 	}
 
-	if handler.cache.cacheTTL != 5*time.Minute {
-		t.Errorf("Expected cache TTL of 5 minutes, got %v", handler.cache.cacheTTL)
+	if handler.cache.cacheTTL != 30*time.Minute {
+		t.Errorf("Expected cache TTL of 30 minutes, got %v", handler.cache.cacheTTL)
+	}
+
+	if handler.cache.recentCacheTTL != 1*time.Minute {
+		t.Errorf("Expected recent cache TTL of 1 minute, got %v", handler.cache.recentCacheTTL)
 	}
 
 	// Test cache with empty exports dir
