@@ -69,6 +69,14 @@ type ExportCache struct {
 	cacheTTL  time.Duration
 }
 
+// invalidateCache clears the cache to force a refresh
+func (h *ExportsHandler) invalidateCache() {
+	h.cache.mu.Lock()
+	defer h.cache.mu.Unlock()
+	h.cache.exports = nil
+	h.cache.lastScan = time.Time{}
+}
+
 type ExportsHandler struct {
 	config         *config.Config
 	logger         logger.Logger
@@ -1013,6 +1021,12 @@ func (h *ExportsHandler) runExportAsync(exportID, exportType, historyMode string
 			"output":    string(output),
 		})
 	}
+	
+	// Invalidate cache to ensure new export appears in the list
+	h.invalidateCache()
+	h.logger.Info("web.export_cache_invalidated", map[string]interface{}{
+		"export_id": exportID,
+	})
 }
 
 // DownloadHandler handles file downloads
