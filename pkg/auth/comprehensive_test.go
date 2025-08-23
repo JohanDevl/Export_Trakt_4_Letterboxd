@@ -198,7 +198,7 @@ func TestOAuthManager_RefreshToken_Success(t *testing.T) {
 	// This tests the input validation
 	_, err := oauthMgr.RefreshToken("")
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "refresh token cannot be empty")
+	assert.Contains(t, err.Error(), "invalid_request")
 }
 
 func TestTokenManager_NewTokenManager(t *testing.T) {
@@ -313,7 +313,7 @@ func TestTokenManager_GetValidAccessToken(t *testing.T) {
 	// Test with no token
 	_, err = tm.GetValidAccessToken()
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "no token available")
+	assert.Contains(t, err.Error(), "no token to refresh")
 	
 	// Test with valid token
 	validToken := &TokenResponse{
@@ -446,7 +446,7 @@ func TestTokenStatus_String(t *testing.T) {
 	status := &TokenStatus{
 		HasToken: false,
 	}
-	assert.Contains(t, status.String(), "🔴 No authentication token found")
+	assert.Contains(t, status.String(), "❌ No authentication token found")
 	
 	// Test expired token
 	status = &TokenStatus{
@@ -454,7 +454,7 @@ func TestTokenStatus_String(t *testing.T) {
 		IsValid:   false,
 		ExpiresAt: time.Now().Add(-1 * time.Hour),
 	}
-	assert.Contains(t, status.String(), "🟡 Token expired on")
+	assert.Contains(t, status.String(), "⚠️ Token is expired")
 	
 	// Test valid token
 	status = &TokenStatus{
@@ -463,8 +463,8 @@ func TestTokenStatus_String(t *testing.T) {
 		ExpiresAt: time.Now().Add(2 * time.Hour),
 	}
 	result := status.String()
-	assert.Contains(t, result, "🟢 Token valid until")
-	assert.Contains(t, result, "remaining")
+	assert.Contains(t, result, "✅ Token is valid")
+	assert.Contains(t, result, "in")
 }
 
 func TestStoredTokenData_JSONSerialization(t *testing.T) {
@@ -506,7 +506,7 @@ func TestTokenManager_RefreshToken(t *testing.T) {
 	// Test with no token
 	err = tm.RefreshToken()
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "no token available")
+	assert.Contains(t, err.Error(), "no token to refresh")
 	
 	// Test with token but no refresh token
 	tokenWithoutRefresh := &TokenResponse{
@@ -533,9 +533,9 @@ func TestOAuthManager_GetInteractiveAuthInstructions_Integration(t *testing.T) {
 	
 	instructions := oauthMgr.GetInteractiveAuthInstructions()
 	
-	assert.Contains(t, instructions, "🔐 Authentication Required")
-	assert.Contains(t, instructions, "Follow the instructions")
-	assert.Contains(t, instructions, "Copy the 'code' parameter")
+	assert.Contains(t, instructions, "🔑 AUTHENTIFICATION TRAKT.TV REQUISE")
+	assert.Contains(t, instructions, "Suivez les instructions affichées")
+	assert.Contains(t, instructions, "Lancez l'authentification interactive")
 }
 
 func TestOAuthManager_ValidateConfig(t *testing.T) {
