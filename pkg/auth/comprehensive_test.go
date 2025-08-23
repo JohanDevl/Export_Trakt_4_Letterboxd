@@ -313,7 +313,7 @@ func TestTokenManager_GetValidAccessToken(t *testing.T) {
 	// Test with no token
 	_, err = tm.GetValidAccessToken()
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "no token to refresh")
+	assert.Contains(t, err.Error(), "no token available, authentication required")
 	
 	// Test with valid token
 	validToken := &TokenResponse{
