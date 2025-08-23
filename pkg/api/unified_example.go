@@ -38,7 +38,7 @@ func UnifiedAPIExample() error {
 
 	// 6. Create an optimized client
 	optimizedConfig := OptimizedClientConfig{
-		BaseConfig:       cfg,
+		Config:           cfg,
 		Logger:           log,
 		WorkerPoolSize:   10,
 		RateLimitPerSec:  100,

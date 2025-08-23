@@ -411,21 +411,24 @@ func (em *ErrorManager) defaultHandle(ctx context.Context, err *types.AppError) 
 // initializeDefaultHandlers sets up default error handlers
 func (em *ErrorManager) initializeDefaultHandlers() {
 	// Network errors handler
+	networkConfig := em.config.RetryConfig.PerCategoryConfig[types.CategoryNetwork]
 	em.handlers[types.CategoryNetwork] = &handlers.NetworkErrorHandler{
 		Logger: em.logger,
-		Config: em.config.RetryConfig.PerCategoryConfig[types.CategoryNetwork],
+		Config: convertToHandlerConfig(networkConfig),
 	}
 	
 	// Authentication errors handler
+	authConfig := em.config.RetryConfig.PerCategoryConfig[types.CategoryAuthentication]
 	em.handlers[types.CategoryAuthentication] = &handlers.AuthErrorHandler{
 		Logger: em.logger,
-		Config: em.config.RetryConfig.PerCategoryConfig[types.CategoryAuthentication],
+		Config: convertToHandlerConfig(authConfig),
 	}
 	
 	// Operation errors handler
+	opConfig := em.config.RetryConfig.PerCategoryConfig[types.CategoryOperation]
 	em.handlers[types.CategoryOperation] = &handlers.OperationErrorHandler{
 		Logger: em.logger,
-		Config: em.config.RetryConfig.PerCategoryConfig[types.CategoryOperation],
+		Config: convertToHandlerConfig(opConfig),
 	}
 }
 
@@ -457,4 +460,20 @@ func contains(s string, substrings ...string) bool {
 		}
 	}
 	return false
+}
+
+// convertToHandlerConfig converts CategoryRetryConfig to handlers.CategoryRetryConfig
+func convertToHandlerConfig(config *CategoryRetryConfig) *handlers.CategoryRetryConfig {
+	if config == nil {
+		return nil
+	}
+	
+	return &handlers.CategoryRetryConfig{
+		MaxAttempts:    config.MaxAttempts,
+		InitialDelay:   config.InitialDelay,
+		MaxDelay:       config.MaxDelay,
+		BackoffFactor:  config.BackoffFactor,
+		EnableJitter:   config.EnableJitter,
+		CircuitBreaker: config.CircuitBreaker,
+	}
 }

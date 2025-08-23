@@ -128,6 +128,24 @@ func (eac *ErrorAwareClient) Close() error {
 	return nil
 }
 
+// TryRecoverFromError attempts to recover from an error using the error manager
+func (eac *ErrorAwareClient) TryRecoverFromError(ctx context.Context, err error) error {
+	if eac.errorManager == nil {
+		return err
+	}
+	
+	// Convert to AppError if needed
+	var appErr *types.AppError
+	if ae, ok := err.(*types.AppError); ok {
+		appErr = ae
+	} else {
+		appErr = types.NewAppError(types.ErrOperationFailed, err.Error(), err)
+	}
+	
+	// Try recovery
+	return eac.errorManager.TryRecover(ctx, appErr)
+}
+
 // ErrorAwareOptimizedClient wraps OptimizedTraktAPIClient with unified error handling
 type ErrorAwareOptimizedClient struct {
 	client       OptimizedTraktAPIClient

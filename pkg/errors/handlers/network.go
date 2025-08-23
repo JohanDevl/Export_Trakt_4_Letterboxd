@@ -16,15 +16,6 @@ type NetworkErrorHandler struct {
 	Config *CategoryRetryConfig
 }
 
-// CategoryRetryConfig defines retry configuration per error category
-type CategoryRetryConfig struct {
-	MaxAttempts     int
-	InitialDelay    time.Duration
-	MaxDelay        time.Duration
-	BackoffFactor   float64
-	EnableJitter    bool
-	CircuitBreaker  bool
-}
 
 // NewNetworkErrorHandler creates a new network error handler
 func NewNetworkErrorHandler(logger logger.Logger, config *CategoryRetryConfig) *NetworkErrorHandler {

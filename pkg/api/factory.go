@@ -60,29 +60,12 @@ func (f *DefaultClientFactory) CreateBasicClient(cfg *config.Config) (TraktAPICl
 // CreateOptimizedClient creates an optimized Trakt API client
 func (f *DefaultClientFactory) CreateOptimizedClient(cfg OptimizedClientConfig) (OptimizedTraktAPIClient, error) {
 	// Validate configuration
-	if cfg.BaseConfig == nil {
+	if cfg.Config == nil {
 		return nil, fmt.Errorf("base configuration cannot be nil")
 	}
 
-	// Set defaults for optimized client config
-	optimizedConfig := OptimizedClientConfig{
-		Config:           cfg.BaseConfig,
-		Logger:           cfg.Logger,
-		WorkerPoolSize:   cfg.WorkerPoolSize,
-		RateLimitPerSec:  cfg.RateLimitPerSec,
-		ConnectionPool:   cfg.ConnectionPool,
-		RequestTimeout:   cfg.RequestTimeout,
-	}
-
-	// Set cache config defaults
-	if cfg.CacheConfig != nil {
-		optimizedConfig.CacheConfig = *cfg.CacheConfig
-	} else {
-		optimizedConfig.CacheConfig = cache.CacheConfig{
-			Capacity: 1000,
-			TTL:      24 * time.Hour,
-		}
-	}
+	// Configuration is already complete - just create the client
+	optimizedConfig := cfg
 
 	// Create optimized client
 	client := NewOptimizedClient(optimizedConfig)
@@ -106,11 +89,21 @@ func (f *DefaultClientFactory) CreateClientWithCapabilities(cfg ClientCapabiliti
 
 	// If advanced capabilities are requested, create optimized client
 	if cfg.EnableCaching || cfg.EnableMetrics || cfg.EnableConcurrency || cfg.WorkerPoolSize > 0 {
+		var cacheConfig cache.CacheConfig
+		if cfg.CacheConfig != nil {
+			cacheConfig = *cfg.CacheConfig
+		} else {
+			cacheConfig = cache.CacheConfig{
+				Capacity: 1000,
+				TTL:      24 * time.Hour,
+			}
+		}
+
 		optimizedConfig := OptimizedClientConfig{
-			BaseConfig:       cfg.BaseConfig,
+			Config:           cfg.BaseConfig,
 			Logger:           nil, // Would need to be provided
 			WorkerPoolSize:   cfg.WorkerPoolSize,
-			CacheConfig:      cfg.CacheConfig,
+			CacheConfig:      cacheConfig,
 		}
 
 		if cfg.WorkerPoolSize <= 0 {
@@ -124,14 +117,3 @@ func (f *DefaultClientFactory) CreateClientWithCapabilities(cfg ClientCapabiliti
 	return f.CreateBasicClient(cfg.BaseConfig)
 }
 
-// OptimizedClientConfig represents the configuration for optimized clients
-// This extends the interface definition with implementation details
-type OptimizedClientConfig struct {
-	BaseConfig       *config.Config
-	Logger           logger.Logger
-	CacheConfig      cache.CacheConfig
-	WorkerPoolSize   int
-	RateLimitPerSec  int
-	ConnectionPool   int
-	RequestTimeout   time.Duration
-}

@@ -1,22 +1,20 @@
 package realtime
 
 import (
-	"bufio"
-	"crypto/sha1"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strings"
 	"time"
 
+	"github.com/gorilla/websocket"
 	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/logger"
 )
 
 // WebSocketHandler handles WebSocket connections
 type WebSocketHandler struct {
-	hub    *Hub
-	logger logger.Logger
+	hub      *Hub
+	logger   logger.Logger
+	upgrader websocket.Upgrader
 }
 
 // NewWebSocketHandler creates a new WebSocket handler
