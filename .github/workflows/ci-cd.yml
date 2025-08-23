@@ -226,7 +226,7 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Pull image for testing
-        run: docker pull ${{ env.REGISTRY_IMAGE }}:${{ needs.test-and-build.outputs.version }}
+        run: docker pull ${{ env.REGISTRY_IMAGE }}:develop
 
       - name: Test Docker image
         run: |
@@ -238,7 +238,7 @@ jobs:
             -v $(pwd)/test_config:/app/config \
             -v $(pwd)/test_logs:/app/logs \
             -v $(pwd)/test_exports:/app/exports \
-            ${{ env.REGISTRY_IMAGE }}:${{ needs.test-and-build.outputs.version }} --help
+            ${{ env.REGISTRY_IMAGE }}:develop --help
 
           echo "✅ Docker image tests passed successfully"
 
