@@ -196,7 +196,7 @@ jobs:
       - name: Scan image for vulnerabilities
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ${{ env.REGISTRY_IMAGE }}:${{ needs.test-and-build.outputs.version }}
+          image-ref: ${{ env.REGISTRY_IMAGE }}:develop
           format: "sarif"
           output: "trivy-results.sarif"
 
