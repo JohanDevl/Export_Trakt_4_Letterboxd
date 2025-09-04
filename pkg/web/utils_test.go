@@ -99,8 +99,9 @@ func TestServerWebSocketEndpoints(t *testing.T) {
 	rec := httptest.NewRecorder()
 	server.handleWebSocket(rec, req)
 
-	if rec.Code != http.StatusNotImplemented {
-		t.Errorf("Expected status %d for WebSocket status, got %d", http.StatusNotImplemented, rec.Code)
+	// WebSocket upgrade should fail with Bad Request when no upgrade headers present
+	if rec.Code != http.StatusBadRequest && rec.Code != http.StatusNotImplemented {
+		t.Errorf("Expected status %d or %d for WebSocket status, got %d", http.StatusBadRequest, http.StatusNotImplemented, rec.Code)
 	}
 
 	// Test WebSocket export endpoint
@@ -108,8 +109,9 @@ func TestServerWebSocketEndpoints(t *testing.T) {
 	rec2 := httptest.NewRecorder()
 	server.handleExportWebSocket(rec2, req2)
 
-	if rec2.Code != http.StatusNotImplemented {
-		t.Errorf("Expected status %d for WebSocket export, got %d", http.StatusNotImplemented, rec2.Code)
+	// WebSocket upgrade should fail with Bad Request when no upgrade headers present
+	if rec2.Code != http.StatusBadRequest && rec2.Code != http.StatusNotImplemented {
+		t.Errorf("Expected status %d or %d for WebSocket export, got %d", http.StatusBadRequest, http.StatusNotImplemented, rec2.Code)
 	}
 }
 

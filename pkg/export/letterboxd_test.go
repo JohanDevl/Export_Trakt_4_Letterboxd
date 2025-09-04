@@ -835,4 +835,123 @@ func TestGetTimeInConfigTimezone(t *testing.T) {
 			assert.True(t, timeDiff.Seconds() < 5, "Time difference should be small")
 		})
 	}
+}
+
+func TestExportMovieHistory(t *testing.T) {
+	// Create a temporary directory for test exports
+	tmpDir, err := os.MkdirTemp("", "letterboxd_history_test")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Create test configuration
+	cfg := &config.Config{
+		Letterboxd: config.LetterboxdConfig{
+			ExportDir: tmpDir,
+		},
+		Export: config.ExportConfig{
+			Format:     "csv",
+			DateFormat: "2006-01-02",
+		},
+	}
+	log := &MockLogger{}
+
+	// Create test history with multiple viewings of the same movie
+	testHistory := []api.HistoryItem{
+		{
+			Movie: api.MovieInfo{
+				Title: "Test Movie",
+				Year:  2020,
+				IDs: api.MovieIDs{
+					IMDB: "tt1234567",
+					TMDB: 12345,
+				},
+			},
+			WatchedAt: "2023-06-01T12:00:00Z", // First viewing (oldest)
+			Action:    "watch",
+		},
+		{
+			Movie: api.MovieInfo{
+				Title: "Test Movie",
+				Year:  2020,
+				IDs: api.MovieIDs{
+					IMDB: "tt1234567",
+					TMDB: 12345,
+				},
+			},
+			WatchedAt: "2023-08-15T15:30:00Z", // Second viewing (rewatch)
+			Action:    "watch",
+		},
+		{
+			Movie: api.MovieInfo{
+				Title: "Another Movie",
+				Year:  2021,
+				IDs: api.MovieIDs{
+					IMDB: "tt7654321",
+					TMDB: 54321,
+				},
+			},
+			WatchedAt: "2023-07-10T18:45:00Z", // Single viewing
+			Action:    "watch",
+		},
+	}
+
+	// Create exporter and export
+	exporter := NewLetterboxdExporter(cfg, log)
+	err = exporter.ExportMovieHistory(testHistory, nil)
+	if err != nil {
+		t.Fatalf("Failed to export movie history: %v", err)
+	}
+
+	// Verify file exists
+	filePath := filepath.Join(tmpDir, "watched-history-test.csv")
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		t.Fatalf("Export file was not created at %s", filePath)
+	}
+
+	// Read and verify CSV content
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		t.Fatalf("Failed to read export file: %v", err)
+	}
+
+	// Parse CSV to verify rewatch logic
+	reader := csv.NewReader(strings.NewReader(string(content)))
+	records, err := reader.ReadAll()
+	if err != nil {
+		t.Fatalf("Failed to parse CSV: %v", err)
+	}
+
+	// Should have header + 3 records
+	if len(records) != 4 {
+		t.Fatalf("Expected 4 records (header + 3 data), got %d", len(records))
+	}
+
+	// Records should be sorted by date (newest first)
+	// So order should be: Aug 15 (rewatch=true), Jul 10 (rewatch=false), Jun 01 (rewatch=false)
+
+	// August 15 - Test Movie second viewing (should be marked as rewatch)
+	if records[1][0] != "Test Movie" || records[1][2] != "2023-08-15" {
+		t.Fatalf("First record should be Test Movie 2023-08-15, got %s %s", records[1][0], records[1][2])
+	}
+	if records[1][6] != "true" {
+		t.Fatalf("Second viewing should be marked as rewatch=true, got %s", records[1][6])
+	}
+
+	// July 10 - Another Movie single viewing
+	if records[2][0] != "Another Movie" || records[2][2] != "2023-07-10" {
+		t.Fatalf("Second record should be Another Movie 2023-07-10, got %s %s", records[2][0], records[2][2])
+	}
+	if records[2][6] != "false" {
+		t.Fatalf("Single viewing should be marked as rewatch=false, got %s", records[2][6])
+	}
+
+	// June 1 - Test Movie first viewing (should be marked as not a rewatch)
+	if records[3][0] != "Test Movie" || records[3][2] != "2023-06-01" {
+		t.Fatalf("Third record should be Test Movie 2023-06-01, got %s %s", records[3][0], records[3][2])
+	}
+	if records[3][6] != "false" {
+		t.Fatalf("First viewing should be marked as rewatch=false, got %s", records[3][6])
+	}
 } 

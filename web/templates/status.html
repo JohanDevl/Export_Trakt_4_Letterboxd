@@ -278,6 +278,35 @@
 </div>
 
 <script>
+// HTML sanitization utility
+function escapeHtml(unsafe) {
+  if (typeof unsafe !== 'string') {
+    return String(unsafe);
+  }
+  return unsafe
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+// Escape HTML attributes (more restrictive)
+function escapeHtmlAttr(unsafe) {
+  if (typeof unsafe !== 'string') {
+    return String(unsafe);
+  }
+  return unsafe
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
+    .replace(/\//g, '&#x2F;')
+    .replace(/=/g, '&#x3D;')
+    .replace(/`/g, '&#x60;');
+}
+
 function testAPIConnection() {
     const btn = event.target;
     const originalText = btn.textContent;
@@ -325,17 +354,17 @@ function downloadLogs() {
 
 function updateLogViewer(logs) {
     const viewer = document.getElementById('log-viewer');
-    viewer.innerHTML = '';
+    viewer.textContent = ''; // Safer than innerHTML for clearing content
     
     logs.forEach(log => {
         const entry = document.createElement('div');
         entry.className = `log-entry log-${log.level}`;
         
         entry.innerHTML = `
-            <span class="log-time">${new Date(log.time).toLocaleTimeString()}</span>
-            <span class="log-level">${log.level.toUpperCase()}</span>
-            <span class="log-message">${log.message}</span>
-            ${log.context ? `<div class="log-context">${log.context}</div>` : ''}
+            <span class="log-time">${escapeHtml(new Date(log.time).toLocaleTimeString())}</span>
+            <span class="log-level">${escapeHtml(log.level.toUpperCase())}</span>
+            <span class="log-message">${escapeHtml(log.message)}</span>
+            ${log.context ? `<div class="log-context">${escapeHtml(log.context)}</div>` : ''}
         `;
         
         viewer.appendChild(entry);
