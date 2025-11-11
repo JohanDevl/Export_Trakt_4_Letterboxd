@@ -14,24 +14,24 @@ type PerformanceMetrics struct {
 	mu sync.RWMutex
 	
 	// API metrics
-	apiCallsTotal    int64
-	apiCallsSuccess  int64
-	apiCallsError    int64
-	apiResponseTimes []time.Duration
+	apiCallsTotal     int64
+	apiCallsSuccess   int64
+	apiCallsError     int64
+	apiResponseTimes  *RingBuffer
 	
 	// Processing metrics
-	itemsProcessed   int64
-	itemsError       int64
-	processingTimes  []time.Duration
+	itemsProcessed    int64
+	itemsError        int64
+	processingTimes   *RingBuffer
 	
 	// Cache metrics
-	cacheHits        int64
-	cacheMisses      int64
+	cacheHits         int64
+	cacheMisses       int64
 	
 	// Job metrics
-	jobsProcessed    int64
-	jobsErrored      int64
-	jobDurations     []time.Duration
+	jobsProcessed     int64
+	jobsErrored       int64
+	jobDurations      *RingBuffer
 	
 	// Memory metrics
 	maxMemoryUsage   uint64
@@ -47,9 +47,9 @@ func NewPerformanceMetrics(logger logger.Logger) *PerformanceMetrics {
 	return &PerformanceMetrics{
 		startTime:        time.Now(),
 		logger:           logger,
-		apiResponseTimes: make([]time.Duration, 0, 1000),
-		processingTimes:  make([]time.Duration, 0, 1000),
-		jobDurations:     make([]time.Duration, 0, 1000),
+		apiResponseTimes: NewRingBuffer(1000),
+		processingTimes:  NewRingBuffer(1000),
+		jobDurations:     NewRingBuffer(1000),
 	}
 }
 
@@ -75,11 +75,8 @@ func (pm *PerformanceMetrics) RecordAPIResponseTime(duration time.Duration) {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
 	
-	// Keep only the last 1000 response times to prevent memory growth
-	if len(pm.apiResponseTimes) >= 1000 {
-		pm.apiResponseTimes = pm.apiResponseTimes[1:]
-	}
-	pm.apiResponseTimes = append(pm.apiResponseTimes, duration)
+	// Ring buffer automatically handles size limits
+	pm.apiResponseTimes.Add(duration)
 }
 
 // Processing Metrics
@@ -99,10 +96,8 @@ func (pm *PerformanceMetrics) RecordProcessingTime(duration time.Duration) {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
 	
-	if len(pm.processingTimes) >= 1000 {
-		pm.processingTimes = pm.processingTimes[1:]
-	}
-	pm.processingTimes = append(pm.processingTimes, duration)
+	// Ring buffer automatically handles size limits
+	pm.processingTimes.Add(duration)
 }
 
 // Cache Metrics
@@ -134,10 +129,8 @@ func (pm *PerformanceMetrics) RecordJobDuration(duration time.Duration) {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
 	
-	if len(pm.jobDurations) >= 1000 {
-		pm.jobDurations = pm.jobDurations[1:]
-	}
-	pm.jobDurations = append(pm.jobDurations, duration)
+	// Ring buffer automatically handles size limits
+	pm.jobDurations.Add(duration)
 }
 
 // Memory Metrics
@@ -171,12 +164,8 @@ func (pm *PerformanceMetrics) GetAPIStats() APIStats {
 	errors := atomic.LoadInt64(&pm.apiCallsError)
 	
 	var avgResponseTime time.Duration
-	if len(pm.apiResponseTimes) > 0 {
-		var sum time.Duration
-		for _, duration := range pm.apiResponseTimes {
-			sum += duration
-		}
-		avgResponseTime = sum / time.Duration(len(pm.apiResponseTimes))
+	if pm.apiResponseTimes.Size() > 0 {
+		avgResponseTime = pm.apiResponseTimes.Average()
 	}
 	
 	var successRate float64
@@ -202,12 +191,8 @@ func (pm *PerformanceMetrics) GetProcessingStats() ProcessingStats {
 	errors := atomic.LoadInt64(&pm.itemsError)
 	
 	var avgProcessingTime time.Duration
-	if len(pm.processingTimes) > 0 {
-		var sum time.Duration
-		for _, duration := range pm.processingTimes {
-			sum += duration
-		}
-		avgProcessingTime = sum / time.Duration(len(pm.processingTimes))
+	if pm.processingTimes.Size() > 0 {
+		avgProcessingTime = pm.processingTimes.Average()
 	}
 	
 	var successRate float64
@@ -258,12 +243,8 @@ func (pm *PerformanceMetrics) GetJobStats() JobStats {
 	errors := atomic.LoadInt64(&pm.jobsErrored)
 	
 	var avgDuration time.Duration
-	if len(pm.jobDurations) > 0 {
-		var sum time.Duration
-		for _, duration := range pm.jobDurations {
-			sum += duration
-		}
-		avgDuration = sum / time.Duration(len(pm.jobDurations))
+	if pm.jobDurations.Size() > 0 {
+		avgDuration = pm.jobDurations.Average()
 	}
 	
 	var successRate float64
@@ -332,10 +313,10 @@ func (pm *PerformanceMetrics) Reset() {
 	atomic.StoreUint64(&pm.maxMemoryUsage, 0)
 	atomic.StoreUint64(&pm.currentMemory, 0)
 	
-	// Reset slices
-	pm.apiResponseTimes = pm.apiResponseTimes[:0]
-	pm.processingTimes = pm.processingTimes[:0]
-	pm.jobDurations = pm.jobDurations[:0]
+	// Reset ring buffers
+	pm.apiResponseTimes.Clear()
+	pm.processingTimes.Clear()
+	pm.jobDurations.Clear()
 	
 	// Reset start time
 	pm.startTime = time.Now()

@@ -1,0 +1,203 @@
+name: Docker Tag Monitor
+
+on:
+  schedule:
+    # Run once daily at 6 AM UTC to check for missing Docker images
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Reason for manual check'
+        required: false
+        default: 'Manual monitoring check'
+
+jobs:
+  monitor-docker-tags:
+    name: Monitor Docker Tags
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check Docker Tags vs Git Tags
+        id: check
+        run: |
+          echo "🔍 Checking Docker images for Git tags..."
+          
+          # Get all version tags (v*.*.*)
+          git_tags=$(git tag -l "v*.*.*" | grep -v "-" | sort -V | tail -10)
+          missing_tags=()
+          
+          for tag in $git_tags; do
+            echo "Checking tag: $tag"
+            
+            # Check if Docker image exists on Docker Hub
+            response=$(curl -s -o /dev/null -w "%{http_code}" "https://hub.docker.com/v2/repositories/johandevl/export-trakt-4-letterboxd/tags/${tag}/")
+            
+            if [ "$response" != "200" ]; then
+              echo "❌ Missing Docker image for tag: $tag"
+              missing_tags+=("$tag")
+            else
+              echo "✅ Docker image exists for tag: $tag"
+            fi
+            
+            # Small delay to avoid rate limiting (can be shorter since it's daily)
+            sleep 0.5
+          done
+          
+          # Check if latest tag is up to date
+          latest_git_tag=$(echo "$git_tags" | tail -1)
+          echo "Latest git tag: $latest_git_tag"
+          
+          # Get the tag that Docker's 'latest' currently points to
+          latest_docker_response=$(curl -s "https://hub.docker.com/v2/repositories/johandevl/export-trakt-4-letterboxd/tags/latest/")
+          
+          if [ ${#missing_tags[@]} -gt 0 ]; then
+            echo "found_missing=true" >> $GITHUB_OUTPUT
+            echo "missing_tags=${missing_tags[*]}" >> $GITHUB_OUTPUT
+            echo "📊 Summary: Found ${#missing_tags[@]} missing Docker images"
+          else
+            echo "found_missing=false" >> $GITHUB_OUTPUT
+            echo "📊 Summary: All recent tags have Docker images ✅"
+          fi
+
+      - name: Trigger CI/CD for Missing Tags
+        if: steps.check.outputs.found_missing == 'true'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
+          script: |
+            const missingTags = '${{ steps.check.outputs.missing_tags }}'.split(' ');
+            
+            for (const tag of missingTags) {
+              if (tag.trim()) {
+                console.log(`🚀 Triggering CI/CD for missing tag: ${tag}`);
+                
+                try {
+                  const response = await github.rest.actions.createWorkflowDispatch({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    workflow_id: 'ci-cd.yml',
+                    ref: tag,
+                    inputs: {
+                      reason: `Auto-triggered by monitor for missing Docker image: ${tag}`
+                    }
+                  });
+                  
+                  console.log(`✅ Successfully triggered workflow for ${tag}`);
+                } catch (error) {
+                  console.error(`❌ Failed to trigger workflow for ${tag}:`, error.message);
+                  
+                  // If workflow_dispatch fails, we might need to retag
+                  console.log(`🔄 Attempting to retag ${tag} to trigger build...`);
+                  
+                  // This would require push permissions and might create a new commit
+                  // For now, just log the issue
+                  core.setFailed(`Failed to trigger build for ${tag}. Manual intervention required.`);
+                }
+              }
+            }
+
+      - name: Create Issue for Missing Tags
+        if: steps.check.outputs.found_missing == 'true'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
+          script: |
+            const missingTags = '${{ steps.check.outputs.missing_tags }}'.split(' ').filter(tag => tag.trim());
+            
+            if (missingTags.length > 0) {
+              const issueTitle = `🐳 Missing Docker Images for Git Tags`;
+              const issueBody = `## Missing Docker Images
+              
+The following Git tags do not have corresponding Docker images on Docker Hub:
+
+${missingTags.map(tag => `- \`${tag}\``).join('\n')}
+
+### Possible Causes:
+1. **Workflow Trigger Issue**: The CI/CD workflow was not triggered when these tags were created
+2. **Build Failure**: The Docker build failed for these tags
+3. **Token Permissions**: The auto-tag workflow lacks permissions to trigger CI/CD
+
+### Recommended Actions:
+1. Check the CI/CD workflow runs for these tags
+2. Manually trigger the CI/CD workflow if needed:
+   \`\`\`bash
+   gh workflow run ci-cd.yml --ref TAG_NAME -f reason="Manual trigger for missing Docker image"
+   \`\`\`
+3. Verify that PAT_TOKEN secret has proper permissions
+
+### Auto-Resolution:
+This monitor has already attempted to trigger CI/CD workflows for the missing tags.
+
+---
+*This issue was automatically created by the Docker Tag Monitor workflow.*
+*Last check: ${new Date().toISOString()}*`;
+
+              // Check if similar issue already exists
+              const existingIssues = await github.rest.issues.listForRepo({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                labels: ['docker', 'automation'],
+                state: 'open'
+              });
+              
+              const existingIssue = existingIssues.data.find(issue => 
+                issue.title.includes('Missing Docker Images')
+              );
+              
+              if (existingIssue) {
+                // Update existing issue
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: existingIssue.number,
+                  body: `## Update: ${new Date().toISOString()}
+
+New missing Docker images detected:
+${missingTags.map(tag => `- \`${tag}\``).join('\n')}
+
+Auto-resolution attempted by triggering CI/CD workflows.`
+                });
+                
+                console.log(`Updated existing issue #${existingIssue.number}`);
+              } else {
+                // Create new issue
+                const newIssue = await github.rest.issues.create({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  title: issueTitle,
+                  body: issueBody,
+                  labels: ['docker', 'automation', 'bug']
+                });
+                
+                console.log(`Created new issue #${newIssue.data.number}`);
+              }
+            }
+
+      - name: Summary
+        run: |
+          echo "## 🐳 Docker Tag Monitor Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Status" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ steps.check.outputs.found_missing }}" == "true" ]; then
+            echo "❌ **Found missing Docker images**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Missing Tags" >> $GITHUB_STEP_SUMMARY
+            echo "${{ steps.check.outputs.missing_tags }}" | tr ' ' '\n' | sed 's/^/- /' >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Actions Taken" >> $GITHUB_STEP_SUMMARY
+            echo "- 🚀 Triggered CI/CD workflows for missing tags" >> $GITHUB_STEP_SUMMARY
+            echo "- 📝 Created/updated GitHub issue for tracking" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "✅ **All recent tags have Docker images**" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "- Monitor CI/CD workflow runs" >> $GITHUB_STEP_SUMMARY
+          echo "- Verify Docker images are created successfully" >> $GITHUB_STEP_SUMMARY
+          echo "- Check that \`latest\` tag points to the most recent release" >> $GITHUB_STEP_SUMMARY

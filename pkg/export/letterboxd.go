@@ -364,10 +364,23 @@ func (e *LetterboxdExporter) ExportMovieHistory(history []api.HistoryItem, apiCl
 	}
 
 	// Track which movies we've seen to determine rewatch
+	// Process from oldest to newest to correctly identify rewatches
 	seenMovies := make(map[string]bool)
+	rewatchMap := make(map[int]bool) // Map index to rewatch status
 
-	// Write history entries
-	for _, item := range sortedHistory {
+	// First pass: Process in reverse order (oldest first) to determine rewatch status
+	for i := len(sortedHistory) - 1; i >= 0; i-- {
+		item := sortedHistory[i]
+		if seenMovies[item.Movie.IDs.IMDB] {
+			rewatchMap[i] = true // This is a rewatch
+		} else {
+			rewatchMap[i] = false // First time watching this movie
+			seenMovies[item.Movie.IDs.IMDB] = true
+		}
+	}
+
+	// Write history entries (in newest to oldest order)
+	for i, item := range sortedHistory {
 		// Parse watched date
 		watchedDate := ""
 		if item.WatchedAt != "" {
@@ -382,12 +395,10 @@ func (e *LetterboxdExporter) ExportMovieHistory(history []api.HistoryItem, apiCl
 			rating = r
 		}
 		
-		// Determine if this is a rewatch
+		// Determine if this is a rewatch using pre-calculated map
 		rewatch := "false"
-		if seenMovies[item.Movie.IDs.IMDB] {
+		if rewatchMap[i] {
 			rewatch = "true"
-		} else {
-			seenMovies[item.Movie.IDs.IMDB] = true
 		}
 
 		// Convert TMDB ID to string

@@ -169,16 +169,31 @@ func (wp *WorkerPool) worker(id int) {
 
 	for job := range wp.jobs {
 		start := time.Now()
+		var err error
 		
-		wp.logger.Debug("worker.processing_job", map[string]interface{}{
-			"worker_id": id,
-			"job_id":    job.ID(),
-		})
+		// Recover from panics during job execution
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					err = fmt.Errorf("job panicked: %v", r)
+					wp.logger.Error("worker.job_panic", map[string]interface{}{
+						"worker_id": id,
+						"job_id":    job.ID(),
+						"panic":     r,
+					})
+				}
+			}()
+			
+			wp.logger.Debug("worker.processing_job", map[string]interface{}{
+				"worker_id": id,
+				"job_id":    job.ID(),
+			})
 
-		// Execute job with timeout context
-		ctx, cancel := context.WithTimeout(wp.ctx, 30*time.Second)
-		err := job.Execute(ctx)
-		cancel()
+			// Execute job with timeout context
+			ctx, cancel := context.WithTimeout(wp.ctx, 30*time.Second)
+			err = job.Execute(ctx)
+			cancel()
+		}()
 		
 		duration := time.Since(start)
 		
