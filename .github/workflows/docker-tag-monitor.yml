@@ -2,8 +2,8 @@ name: Docker Tag Monitor
 
 on:
   schedule:
-    # Run once daily at 6 AM UTC to check for missing Docker images
-    - cron: '0 6 * * *'
+    # Run once daily at 2 AM UTC to check for missing Docker images (before cleanup at 6 AM)
+    - cron: '0 2 * * *'
   workflow_dispatch:
     inputs:
       reason:

@@ -271,5 +271,5 @@ coverage.txt
 # Go workspace file
 go.work
 
+# Claude Code workspace files (not CLAUDE.md documentation files)
 .claude
-CLAUDE.md

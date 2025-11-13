@@ -49,24 +49,45 @@ jobs:
           # Create output directory
           mkdir -p security-reports
 
-          # Run gosec with error handling
-          gosec -fmt sarif -out gosec-results.sarif ./... || {
-            echo "❌ gosec scan failed with exit code $?"
-            echo "Attempting to run with different format for debugging..."
-            gosec -fmt text ./... || true
-            echo "Creating empty SARIF file to prevent upload failure..."
-            echo '{"version":"2.1.0","$schema":"https://json.schemastore.org/sarif-2.1.0.json","runs":[{"tool":{"driver":{"name":"gosec","version":"0.0.0"}},"results":[]}]}' > gosec-results.sarif
-          }
+          # Run gosec and capture exit code
+          EXIT_CODE=0
+          gosec -fmt sarif -out gosec-results.sarif ./... || EXIT_CODE=$?
+
+          # Check if scan completed successfully
+          if [ $EXIT_CODE -ne 0 ]; then
+            echo "❌ gosec scan failed with exit code $EXIT_CODE"
+
+            # If SARIF file was created despite exit code (warnings treated as errors)
+            if [ -f "gosec-results.sarif" ] && [ -s "gosec-results.sarif" ]; then
+              echo "⚠️  SARIF file exists - scan completed with warnings/issues"
+              echo "Scan will be marked as failed but results will be uploaded"
+              # Continue to upload results but mark as failed
+            else
+              echo "❌ CRITICAL: gosec scan failed without producing results"
+              echo "Attempting to run with text format for debugging..."
+              gosec -fmt text ./... || true
+              echo ""
+              echo "🚨 SECURITY SCAN FAILURE - Please fix issues and re-run"
+              exit 1
+            fi
+          fi
 
           # Verify the SARIF file was created
-          if [ -f "gosec-results.sarif" ]; then
+          if [ -f "gosec-results.sarif" ] && [ -s "gosec-results.sarif" ]; then
             echo "✅ SARIF file created successfully"
             echo "File size: $(wc -c < gosec-results.sarif) bytes"
             echo "First few lines:"
             head -10 gosec-results.sarif || true
           else
-            echo "❌ SARIF file not found, creating empty file..."
-            echo '{"version":"2.1.0","$schema":"https://json.schemastore.org/sarif-2.1.0.json","runs":[{"tool":{"driver":{"name":"gosec","version":"0.0.0"}},"results":[]}]}' > gosec-results.sarif
+            echo "❌ CRITICAL: SARIF file not found or empty"
+            echo "🚨 SECURITY SCAN FAILURE - Cannot proceed without scan results"
+            exit 1
+          fi
+
+          # If we had issues detected, fail the job
+          if [ $EXIT_CODE -ne 0 ]; then
+            echo "🚨 Security scan detected issues - failing job"
+            exit $EXIT_CODE
           fi
 
       - name: Upload gosec results to GitHub Security tab

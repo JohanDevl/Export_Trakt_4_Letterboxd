@@ -1,5 +1,25 @@
 name: Auto Tag on Merge
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# IMPORTANT: PAT_TOKEN Requirement
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# This workflow requires PAT_TOKEN secret to trigger downstream workflows.
+#
+# Why PAT_TOKEN is needed:
+# - GitHub Actions workflows cannot trigger other workflows using GITHUB_TOKEN
+# - This workflow creates tags that should trigger the CI/CD pipeline
+# - Without PAT_TOKEN, the Docker build workflow will NOT be triggered
+#
+# Setup instructions:
+# 1. Create a Personal Access Token with 'repo' and 'workflow' scopes
+# 2. Add it as a repository secret named 'PAT_TOKEN'
+# 3. See docs/CI_CD_SETUP.md for detailed instructions
+#
+# If PAT_TOKEN is not configured, the workflow falls back to GITHUB_TOKEN,
+# but this will NOT trigger CI/CD workflows automatically.
+# ═══════════════════════════════════════════════════════════════════════════════
+
 on:
   pull_request:
     types:
@@ -22,6 +42,8 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          # IMPORTANT: PAT_TOKEN is required to trigger CI/CD workflows
+          # Fallback to GITHUB_TOKEN will NOT trigger workflows
           token: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
 
       - name: Set up Git
@@ -68,7 +90,8 @@ jobs:
           # Add PR info to tag message
           TAG_MESSAGE="Release $NEW_TAG from PR #${{ steps.pr_info.outputs.pr_number }}: ${{ github.event.pull_request.title }}"
 
-          # Create and push tag using PAT for workflow triggering
+          # Create and push tag using PAT_TOKEN for workflow triggering
+          # PAT_TOKEN is required to trigger ci-cd.yml workflow
           git tag -a "$NEW_TAG" -m "$TAG_MESSAGE"
           git push https://x-access-token:${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git "$NEW_TAG"
 
@@ -97,6 +120,8 @@ jobs:
       - name: Trigger CI/CD for Docker Build
         uses: actions/github-script@v7
         with:
+          # CRITICAL: PAT_TOKEN is required to trigger ci-cd.yml
+          # GITHUB_TOKEN will NOT work for triggering workflows
           github-token: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
           script: |
             const response = await github.rest.actions.createWorkflowDispatch({
