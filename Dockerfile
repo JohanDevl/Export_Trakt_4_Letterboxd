@@ -62,6 +62,12 @@ USER appuser
 # Create volumes for persistent data
 VOLUME ["/app/config", "/app/logs", "/app/exports"]
 
+# Health check
+# For CLI mode: checks if binary is executable
+# For server mode: add --server flag and this will check the /health endpoint
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD /app/export-trakt --version || exit 1
+
 # Set entrypoint
 ENTRYPOINT ["/app/export-trakt"]
 
