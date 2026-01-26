@@ -10,6 +10,12 @@ import (
 	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/logger"
 )
 
+const (
+	DefaultReadDeadline   = 60 * time.Second
+	DefaultWriteDeadline  = 10 * time.Second
+	DefaultPingInterval   = 54 * time.Second
+)
+
 // WebSocketHandler handles WebSocket connections
 type WebSocketHandler struct {
 	hub      *Hub
@@ -58,10 +64,10 @@ func (wsh *WebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http.Requ
 	
 	// Configure connection
 	conn.SetReadLimit(512)
-	conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+	conn.SetReadDeadline(time.Now().Add(DefaultReadDeadline))
 	conn.SetPongHandler(func(string) error {
 		wsh.hub.UpdateClientPing(clientID)
-		conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+		conn.SetReadDeadline(time.Now().Add(DefaultReadDeadline))
 		return nil
 	})
 	
@@ -77,13 +83,13 @@ func (wsh *WebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http.Requ
 
 // startMessageSender sends messages from client channel to WebSocket
 func (wsh *WebSocketHandler) startMessageSender(conn *websocket.Conn, client *Client) {
-	ticker := time.NewTicker(54 * time.Second)
+	ticker := time.NewTicker(DefaultPingInterval)
 	defer ticker.Stop()
 	
 	for {
 		select {
 		case message, ok := <-client.Channel:
-			conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			conn.SetWriteDeadline(time.Now().Add(DefaultWriteDeadline))
 			if !ok {
 				// Channel closed
 				conn.WriteMessage(websocket.CloseMessage, []byte{})
@@ -101,7 +107,7 @@ func (wsh *WebSocketHandler) startMessageSender(conn *websocket.Conn, client *Cl
 			
 		case <-ticker.C:
 			// Send ping
-			conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			conn.SetWriteDeadline(time.Now().Add(DefaultWriteDeadline))
 			if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				wsh.logger.Error("realtime.websocket_ping_error", map[string]interface{}{
 					"client_id": client.ID,
@@ -170,11 +176,11 @@ func (wsh *WebSocketHandler) handleTextMessage(clientID string, message []byte) 
 
 // startPingRoutine sends periodic pings to keep connection alive
 func (wsh *WebSocketHandler) startPingRoutine(conn *websocket.Conn, clientID string) {
-	ticker := time.NewTicker(54 * time.Second)
+	ticker := time.NewTicker(DefaultPingInterval)
 	defer ticker.Stop()
 	
 	for range ticker.C {
-		conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+		conn.SetWriteDeadline(time.Now().Add(DefaultWriteDeadline))
 		if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 			wsh.logger.Error("realtime.ping_routine_error", map[string]interface{}{
 				"client_id": clientID,

@@ -221,13 +221,15 @@ func ExampleUsage() {
 
 	tm, err := NewTelemetryManager(config, "1.0.0")
 	if err != nil {
-		panic(err)
+		fmt.Fprintf(os.Stderr, "error: failed to initialize telemetry manager: %v\n", err)
+		return
 	}
 
 	// Start telemetry
 	ctx := context.Background()
 	if err := tm.Start(ctx); err != nil {
-		panic(err)
+		fmt.Fprintf(os.Stderr, "error: failed to start telemetry: %v\n", err)
+		return
 	}
 
 	// Example: Instrumented export operation

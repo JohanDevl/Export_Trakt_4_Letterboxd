@@ -50,12 +50,16 @@ type Config struct {
 	RecoveryTime     time.Duration
 }
 
+const (
+	DefaultRecoveryTime = 60 * time.Second
+)
+
 // DefaultConfig returns default circuit breaker configuration
 func DefaultConfig() *Config {
 	return &Config{
 		FailureThreshold: 5,
 		Timeout:          30 * time.Second,
-		RecoveryTime:     60 * time.Second,
+		RecoveryTime:     DefaultRecoveryTime,
 	}
 }
 

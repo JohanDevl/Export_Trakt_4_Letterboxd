@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"html/template"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -705,7 +704,7 @@ func TestLazyLoading(t *testing.T) {
 	templates := template.New("")
 
 	// Create temporary exports directory
-	tempDir, err := ioutil.TempDir("", "test_exports_*")
+	tempDir, err := os.MkdirTemp("", "test_exports_*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
@@ -731,7 +730,7 @@ func TestLazyLoading(t *testing.T) {
 	// Create test CSV files
 	recentCSV := filepath.Join(recentDir, "watched.csv")
 
-	if err := ioutil.WriteFile(recentCSV, []byte("Title,Year\nMovie1,2025\n"), 0644); err != nil {
+	if err := os.WriteFile(recentCSV, []byte("Title,Year\nMovie1,2025\n"), 0644); err != nil {
 		t.Fatalf("Failed to write recent CSV: %v", err)
 	}
 

@@ -210,7 +210,9 @@ func CreateTestCSV(t *testing.T, dir, filename string, headers []string, rows []
 			}
 			headerLine += header
 		}
-		file.WriteString(headerLine + "\n")
+		if _, err := file.WriteString(headerLine + "\n"); err != nil {
+			t.Fatalf("Failed to write CSV headers: %v", err)
+		}
 	}
 	
 	// Write rows
@@ -222,7 +224,9 @@ func CreateTestCSV(t *testing.T, dir, filename string, headers []string, rows []
 			}
 			rowLine += cell
 		}
-		file.WriteString(rowLine + "\n")
+		if _, err := file.WriteString(rowLine + "\n"); err != nil {
+			t.Fatalf("Failed to write CSV row: %v", err)
+		}
 	}
 	
 	return path
