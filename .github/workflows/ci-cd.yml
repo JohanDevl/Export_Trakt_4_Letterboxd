@@ -53,21 +53,21 @@ jobs:
         run: go mod download
 
       - name: Run Go tests
-        run: go test -v ./...
+        run: go test -timeout 120s -count=1 ./...
 
       - name: Check test coverage
         id: coverage
         run: |
           # Run tests with coverage, excluding main package
-          go test -coverprofile=coverage.out ./pkg/...
+          go test -coverprofile=coverage.out -timeout 120s -count=1 ./pkg/...
           COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | tr -d '%')
           echo "coverage=$COVERAGE" >> $GITHUB_OUTPUT
           echo "Total coverage (excluding main package): $COVERAGE%"
-          if (( $(echo "$COVERAGE < 70" | bc -l) )); then
-            echo "⚠️ Code coverage is below 70%. Current: $COVERAGE%"
-            echo "This is acceptable for now, but aim to improve coverage."
+          if (( $(echo "$COVERAGE < 57" | bc -l) )); then
+            echo "❌ Code coverage is below 57%. Current: $COVERAGE%"
+            exit 1
           else
-            echo "✅ Coverage check passed! Current: $COVERAGE%, Target: 70%"
+            echo "✅ Coverage check passed! Current: $COVERAGE%, Target: 57%"
           fi
 
       - name: Generate coverage report
@@ -199,7 +199,7 @@ jobs:
             BUILD_DATE=${{ steps.build_date.outputs.BUILD_DATE }}
 
       - name: Scan image for vulnerabilities
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.28.0
         with:
           image-ref: ${{ env.REGISTRY_IMAGE }}:develop
           format: "sarif"
@@ -363,10 +363,164 @@ jobs:
           echo "✅ Docker image tests completed successfully"
           echo "═══════════════════════════════════════════════════════"
 
-  # Job 4: Notification and Summary
+  # Job 4: Build and Release Binaries (only on tag pushes)
+  release:
+    name: Build and Release Binaries
+    runs-on: ubuntu-latest
+    needs: test-and-build
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Install dependencies
+        run: go mod download
+
+      - name: Set up asset names
+        id: assets
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "linux_amd64=export_trakt_${VERSION}_linux_amd64" >> $GITHUB_OUTPUT
+          echo "linux_arm64=export_trakt_${VERSION}_linux_arm64" >> $GITHUB_OUTPUT
+          echo "linux_arm=export_trakt_${VERSION}_linux_arm" >> $GITHUB_OUTPUT
+          echo "darwin_amd64=export_trakt_${VERSION}_darwin_amd64" >> $GITHUB_OUTPUT
+          echo "darwin_arm64=export_trakt_${VERSION}_darwin_arm64" >> $GITHUB_OUTPUT
+          echo "windows_amd64=export_trakt_${VERSION}_windows_amd64.exe" >> $GITHUB_OUTPUT
+
+      - name: Build for Linux (amd64)
+        run: GOOS=linux GOARCH=amd64 go build -o "${{ steps.assets.outputs.linux_amd64 }}" ./cmd/export_trakt
+
+      - name: Build for Linux (arm64)
+        run: GOOS=linux GOARCH=arm64 go build -o "${{ steps.assets.outputs.linux_arm64 }}" ./cmd/export_trakt
+
+      - name: Build for Linux (arm)
+        run: GOOS=linux GOARCH=arm go build -o "${{ steps.assets.outputs.linux_arm }}" ./cmd/export_trakt
+
+      - name: Build for macOS (amd64)
+        run: GOOS=darwin GOARCH=amd64 go build -o "${{ steps.assets.outputs.darwin_amd64 }}" ./cmd/export_trakt
+
+      - name: Build for macOS (arm64)
+        run: GOOS=darwin GOARCH=arm64 go build -o "${{ steps.assets.outputs.darwin_arm64 }}" ./cmd/export_trakt
+
+      - name: Build for Windows (amd64)
+        run: GOOS=windows GOARCH=amd64 go build -o "${{ steps.assets.outputs.windows_amd64 }}" ./cmd/export_trakt
+
+      - name: Generate checksums
+        run: |
+          sha256sum ${{ steps.assets.outputs.linux_amd64 }} > ${{ steps.assets.outputs.linux_amd64 }}.sha256
+          sha256sum ${{ steps.assets.outputs.linux_arm64 }} > ${{ steps.assets.outputs.linux_arm64 }}.sha256
+          sha256sum ${{ steps.assets.outputs.linux_arm }} > ${{ steps.assets.outputs.linux_arm }}.sha256
+          sha256sum ${{ steps.assets.outputs.darwin_amd64 }} > ${{ steps.assets.outputs.darwin_amd64 }}.sha256
+          sha256sum ${{ steps.assets.outputs.darwin_arm64 }} > ${{ steps.assets.outputs.darwin_arm64 }}.sha256
+          sha256sum ${{ steps.assets.outputs.windows_amd64 }} > ${{ steps.assets.outputs.windows_amd64 }}.sha256
+
+      - name: Prepare assets
+        run: |
+          mkdir -p releases
+          cp ${{ steps.assets.outputs.linux_amd64 }} releases/
+          cp ${{ steps.assets.outputs.linux_amd64 }}.sha256 releases/
+          cp ${{ steps.assets.outputs.linux_arm64 }} releases/
+          cp ${{ steps.assets.outputs.linux_arm64 }}.sha256 releases/
+          cp ${{ steps.assets.outputs.linux_arm }} releases/
+          cp ${{ steps.assets.outputs.linux_arm }}.sha256 releases/
+          cp ${{ steps.assets.outputs.darwin_amd64 }} releases/
+          cp ${{ steps.assets.outputs.darwin_amd64 }}.sha256 releases/
+          cp ${{ steps.assets.outputs.darwin_arm64 }} releases/
+          cp ${{ steps.assets.outputs.darwin_arm64 }}.sha256 releases/
+          cp ${{ steps.assets.outputs.windows_amd64 }} releases/
+          cp ${{ steps.assets.outputs.windows_amd64 }}.sha256 releases/
+          cp README.md releases/
+          cp LICENSE releases/
+          cp -R locales releases/
+          cp config/config.example.toml releases/config.toml
+
+          cd releases
+          zip -r export_trakt_${{ steps.assets.outputs.version }}_linux_amd64.zip ${{ steps.assets.outputs.linux_amd64 }} ${{ steps.assets.outputs.linux_amd64 }}.sha256 README.md LICENSE locales config.toml
+          zip -r export_trakt_${{ steps.assets.outputs.version }}_linux_arm64.zip ${{ steps.assets.outputs.linux_arm64 }} ${{ steps.assets.outputs.linux_arm64 }}.sha256 README.md LICENSE locales config.toml
+          zip -r export_trakt_${{ steps.assets.outputs.version }}_linux_arm.zip ${{ steps.assets.outputs.linux_arm }} ${{ steps.assets.outputs.linux_arm }}.sha256 README.md LICENSE locales config.toml
+          zip -r export_trakt_${{ steps.assets.outputs.version }}_darwin_amd64.zip ${{ steps.assets.outputs.darwin_amd64 }} ${{ steps.assets.outputs.darwin_amd64 }}.sha256 README.md LICENSE locales config.toml
+          zip -r export_trakt_${{ steps.assets.outputs.version }}_darwin_arm64.zip ${{ steps.assets.outputs.darwin_arm64 }} ${{ steps.assets.outputs.darwin_arm64 }}.sha256 README.md LICENSE locales config.toml
+          zip -r export_trakt_${{ steps.assets.outputs.version }}_windows_amd64.zip ${{ steps.assets.outputs.windows_amd64 }} ${{ steps.assets.outputs.windows_amd64 }}.sha256 README.md LICENSE locales config.toml
+
+      - name: Generate Release Notes
+        id: release_notes
+        run: |
+          echo "Generating release notes for ${{ steps.assets.outputs.version }}"
+          VERSION_TAG="${{ steps.assets.outputs.version }}"
+          PREV_TAG=$(git describe --tags --abbrev=0 ${VERSION_TAG}^ 2>/dev/null || echo "")
+
+          if [ -z "$PREV_TAG" ]; then
+            COMMITS=$(git log --pretty=format:"* %s (%h)" ${VERSION_TAG})
+          else
+            COMMITS=$(git log --pretty=format:"* %s (%h)" ${PREV_TAG}..${VERSION_TAG})
+          fi
+
+          cat > release_notes.md << EOF
+          # Export_Trakt_4_Letterboxd ${{ steps.assets.outputs.version }}
+
+          ## Changes
+
+          ${COMMITS}
+
+          ## Installation
+
+          ### Linux (amd64)
+          \`\`\`bash
+          curl -LO https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/releases/download/${{ steps.assets.outputs.version }}/export_trakt_${{ steps.assets.outputs.version }}_linux_amd64.zip
+          unzip export_trakt_${{ steps.assets.outputs.version }}_linux_amd64.zip
+          chmod +x export_trakt_${{ steps.assets.outputs.version }}_linux_amd64
+          ./export_trakt_${{ steps.assets.outputs.version }}_linux_amd64 --config config.toml
+          \`\`\`
+
+          ### Docker
+          \`\`\`bash
+          docker pull ${{ env.REGISTRY_IMAGE }}:${{ steps.assets.outputs.version }}
+          docker run -v \$(pwd)/config:/app/config -v \$(pwd)/logs:/app/logs -v \$(pwd)/exports:/app/exports ${{ env.REGISTRY_IMAGE }}:${{ steps.assets.outputs.version }}
+          \`\`\`
+
+          For more information, see the [documentation](https://github.com/JohanDevl/Export_Trakt_4_Letterboxd/blob/main/README.md).
+          EOF
+
+          cat release_notes.md
+
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.assets.outputs.version }}
+          name: Export_Trakt_4_Letterboxd ${{ steps.assets.outputs.version }}
+          body_path: release_notes.md
+          draft: false
+          prerelease: ${{ contains(steps.assets.outputs.version, 'beta') || contains(steps.assets.outputs.version, 'rc') }}
+          files: |
+            releases/export_trakt_${{ steps.assets.outputs.version }}_linux_amd64.zip
+            releases/export_trakt_${{ steps.assets.outputs.version }}_linux_arm64.zip
+            releases/export_trakt_${{ steps.assets.outputs.version }}_linux_arm.zip
+            releases/export_trakt_${{ steps.assets.outputs.version }}_darwin_amd64.zip
+            releases/export_trakt_${{ steps.assets.outputs.version }}_darwin_arm64.zip
+            releases/export_trakt_${{ steps.assets.outputs.version }}_windows_amd64.zip
+            releases/${{ steps.assets.outputs.linux_amd64 }}
+            releases/${{ steps.assets.outputs.linux_arm64 }}
+            releases/${{ steps.assets.outputs.linux_arm }}
+            releases/${{ steps.assets.outputs.darwin_amd64 }}
+            releases/${{ steps.assets.outputs.darwin_arm64 }}
+            releases/${{ steps.assets.outputs.windows_amd64 }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Job 5: Notification and Summary
   notify:
     name: Notify and Summarize
-    needs: [test-and-build, docker, docker-pr, docker-test]
+    needs: [test-and-build, docker, docker-pr, docker-test, release]
     runs-on: ubuntu-latest
     if: always()
 
@@ -374,7 +528,7 @@ jobs:
       - name: Check overall result
         id: check
         run: |
-          if ${{ needs.test-and-build.result == 'success' && (needs.docker.result == 'success' || needs.docker.result == 'skipped') && (needs.docker-pr.result == 'success' || needs.docker-pr.result == 'skipped') && (needs.docker-test.result == 'success' || needs.docker-test.result == 'skipped') }}; then
+          if ${{ needs.test-and-build.result == 'success' && (needs.docker.result == 'success' || needs.docker.result == 'skipped') && (needs.docker-pr.result == 'success' || needs.docker-pr.result == 'skipped') && (needs.docker-test.result == 'success' || needs.docker-test.result == 'skipped') && (needs.release.result == 'success' || needs.release.result == 'skipped') }}; then
             echo "status=success" >> $GITHUB_OUTPUT
             echo "✅ All jobs completed successfully"
           else

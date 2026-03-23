@@ -35,6 +35,7 @@ type Result struct {
 // WorkerPool represents a pool of workers for concurrent processing
 type WorkerPool struct {
 	workers    int
+	jobTimeout time.Duration
 	jobs       chan Job
 	results    chan Result
 	ctx        context.Context
@@ -44,7 +45,7 @@ type WorkerPool struct {
 	metrics    MetricsRecorder
 	started    int64
 	stopped    int64
-	
+
 	// Worker pool statistics
 	processedJobs int64
 	failedJobs    int64
@@ -55,6 +56,7 @@ type WorkerPool struct {
 type WorkerPoolConfig struct {
 	Workers      int
 	BufferSize   int
+	JobTimeout   time.Duration
 	Logger       logger.Logger
 	Metrics      MetricsRecorder
 }
@@ -69,17 +71,22 @@ func NewWorkerPool(config WorkerPoolConfig) *WorkerPool {
 		config.BufferSize = config.Workers * 2
 	}
 
+	if config.JobTimeout <= 0 {
+		config.JobTimeout = 30 * time.Second
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
-	
+
 	return &WorkerPool{
-		workers: config.Workers,
-		jobs:    make(chan Job, config.BufferSize),
-		results: make(chan Result, config.BufferSize),
-		ctx:     ctx,
-		cancel:  cancel,
-		wg:      &sync.WaitGroup{},
-		logger:  config.Logger,
-		metrics: config.Metrics,
+		workers:    config.Workers,
+		jobTimeout: config.JobTimeout,
+		jobs:       make(chan Job, config.BufferSize),
+		results:    make(chan Result, config.BufferSize),
+		ctx:        ctx,
+		cancel:     cancel,
+		wg:         &sync.WaitGroup{},
+		logger:     config.Logger,
+		metrics:    config.Metrics,
 	}
 }
 
@@ -133,6 +140,10 @@ func (wp *WorkerPool) Stop() {
 
 // Submit submits a job to the worker pool
 func (wp *WorkerPool) Submit(job Job) error {
+	if atomic.LoadInt64(&wp.stopped) == 1 {
+		return ErrPoolFull
+	}
+
 	select {
 	case wp.jobs <- job:
 		return nil
@@ -190,7 +201,7 @@ func (wp *WorkerPool) worker(id int) {
 			})
 
 			// Execute job with timeout context
-			ctx, cancel := context.WithTimeout(wp.ctx, 30*time.Second)
+			ctx, cancel := context.WithTimeout(wp.ctx, wp.jobTimeout)
 			err = job.Execute(ctx)
 			cancel()
 		}()

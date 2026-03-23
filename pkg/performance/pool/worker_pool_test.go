@@ -520,28 +520,28 @@ func (j *BlockingJob) Release() {
 func TestWorkerPoolBufferFull(t *testing.T) {
 	logger := NewMockLogger()
 	metrics := NewMockMetricsRecorder()
-	
+
 	config := WorkerPoolConfig{
 		Workers:    1,
 		BufferSize: 1, // Very small buffer to make test more reliable
 		Logger:     logger,
 		Metrics:    metrics,
 	}
-	
+
 	pool := NewWorkerPool(config)
 	pool.Start()
 	defer pool.Stop()
-	
+
 	// Submit multiple jobs quickly to saturate buffer
 	// First job goes to worker, second fills buffer, third should fail
 	var errors []error
-	
+
 	for i := 0; i < 10; i++ {
-		job := NewSimpleJob(fmt.Sprintf("job_%d", i), 50*time.Millisecond)
+		job := NewSimpleJob(fmt.Sprintf("job_%d", i), 1*time.Microsecond)
 		err := pool.Submit(job)
 		errors = append(errors, err)
 	}
-	
+
 	// At least one submission should have failed with ErrPoolFull
 	fullErrors := 0
 	for _, err := range errors {
@@ -549,11 +549,23 @@ func TestWorkerPoolBufferFull(t *testing.T) {
 			fullErrors++
 		}
 	}
-	
+
 	assert.Greater(t, fullErrors, 0, "Expected at least one ErrPoolFull error")
-	
-	// Give time for jobs to complete before stopping
-	time.Sleep(200 * time.Millisecond)
+
+	// Drain results to prevent blocking on Stop()
+	// Non-blocking drain with timeout
+	done := make(chan struct{})
+	go func() {
+		for range pool.Results() {
+		}
+		close(done)
+	}()
+
+	// Give results channel time to drain before Stop closes it
+	select {
+	case <-done:
+	case <-time.After(100 * time.Millisecond):
+	}
 }
 
 func TestWorkerPoolSubmitAfterStop(t *testing.T) {
@@ -596,30 +608,31 @@ func TestWorkerPoolSubmitAfterStop(t *testing.T) {
 func TestWorkerPoolJobTimeout(t *testing.T) {
 	logger := NewMockLogger()
 	metrics := NewMockMetricsRecorder()
-	
+
 	config := WorkerPoolConfig{
 		Workers:    1,
 		BufferSize: 5,
+		JobTimeout: 200 * time.Millisecond,
 		Logger:     logger,
 		Metrics:    metrics,
 	}
-	
+
 	pool := NewWorkerPool(config)
 	pool.Start()
 	defer pool.Stop()
-	
-	// Submit job that takes longer than 30s timeout
-	longJob := NewLongRunningJob("timeout_job", 35*time.Second)
+
+	// Submit job that takes longer than 200ms configured timeout
+	longJob := NewLongRunningJob("timeout_job", 500*time.Millisecond)
 	err := pool.Submit(longJob)
 	assert.NoError(t, err)
-	
+
 	// Wait for result - should timeout
 	select {
 	case result := <-pool.Results():
 		assert.Error(t, result.Error)
 		assert.Contains(t, result.Error.Error(), "context deadline exceeded")
 		assert.Equal(t, "timeout_job", result.JobID)
-	case <-time.After(35 * time.Second):
+	case <-time.After(2 * time.Second):
 		t.Fatal("Test timeout waiting for job timeout")
 	}
 }
