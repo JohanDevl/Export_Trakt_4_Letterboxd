@@ -74,6 +74,11 @@ ENTRYPOINT ["/app/export-trakt"]
 # Default command if none is provided
 CMD ["--help"]
 
+# Re-declare build args for labels in runtime stage
+ARG VERSION=dev
+ARG BUILD_DATE=unknown
+ARG COMMIT_SHA=unknown
+
 # Metadata
 LABEL org.opencontainers.image.title="Export Trakt for Letterboxd"
 LABEL org.opencontainers.image.description="Tool to export Trakt.tv data for Letterboxd import"
