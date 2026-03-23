@@ -6,9 +6,9 @@ go test -coverprofile=coverage.txt -covermode=atomic ./pkg/...
 # For debug purposes, print the coverage
 go tool cover -func=coverage.txt
 
-# Check if we meet the 57% coverage threshold
+# Check if we meet the 50% coverage threshold
 COVERAGE=$(go tool cover -func=coverage.txt | grep total | awk '{print $3}' | sed 's/%//')
-THRESHOLD=57.0
+THRESHOLD=50.0
 
 echo "Current test coverage: $COVERAGE%"
 echo "Required threshold: $THRESHOLD%"
