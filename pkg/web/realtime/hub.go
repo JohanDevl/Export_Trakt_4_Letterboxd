@@ -2,7 +2,9 @@ package realtime
 
 import (
 	"encoding/json"
+	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/logger"
@@ -19,6 +21,8 @@ const (
 	ServerHealth    MessageType = "server_health"
 	TokenUpdate     MessageType = "token_update"
 )
+
+var messageCounter uint64
 
 // Message represents a real-time message
 type Message struct {
@@ -53,7 +57,9 @@ type Hub struct {
 	broadcast  chan Message
 	logger     logger.Logger
 	mutex      sync.RWMutex
-	
+	done       chan struct{}
+	stopOnce   sync.Once
+
 	// Statistics
 	stats HubStats
 }
@@ -76,6 +82,7 @@ func NewHub(logger logger.Logger) *Hub {
 		unregister: make(chan *Client, 100),
 		broadcast:  make(chan Message, 1000),
 		logger:     logger,
+		done:       make(chan struct{}),
 		stats: HubStats{
 			StartTime: time.Now(),
 		},
@@ -85,21 +92,24 @@ func NewHub(logger logger.Logger) *Hub {
 // Start begins processing hub operations
 func (h *Hub) Start() {
 	h.logger.Info("realtime.hub_starting", nil)
-	
+
 	// Start cleanup goroutine
 	go h.startCleanupRoutine()
-	
+
 	// Main hub loop
 	for {
 		select {
 		case client := <-h.register:
 			h.registerClient(client)
-			
+
 		case client := <-h.unregister:
 			h.unregisterClient(client)
-			
+
 		case message := <-h.broadcast:
 			h.broadcastMessage(message)
+
+		case <-h.done:
+			return
 		}
 	}
 }
@@ -265,9 +275,14 @@ func (h *Hub) updateStats() {
 func (h *Hub) startCleanupRoutine() {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
-	
-	for range ticker.C {
-		h.cleanupStaleClients()
+
+	for {
+		select {
+		case <-ticker.C:
+			h.cleanupStaleClients()
+		case <-h.done:
+			return
+		}
 	}
 }
 
@@ -327,9 +342,16 @@ func (h *Hub) UpdateClientPing(clientID string) {
 	}
 }
 
+// Stop stops the hub and all goroutines
+func (h *Hub) Stop() {
+	h.stopOnce.Do(func() {
+		close(h.done)
+	})
+}
+
 // generateMessageID generates a unique message ID
 func generateMessageID() string {
-	return time.Now().Format("20060102-150405.000000")
+	return fmt.Sprintf("msg-%s-%d", time.Now().Format("20060102-150405"), atomic.AddUint64(&messageCounter, 1))
 }
 
 // NewClient creates a new client

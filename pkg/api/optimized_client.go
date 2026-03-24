@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"sync"
@@ -25,7 +26,9 @@ type OptimizedClient struct {
 	metrics    *metrics.PerformanceMetrics
 	workerPool *pool.WorkerPool
 	rateLimiter chan struct{}
-	
+	done       chan struct{}
+	closeOnce  sync.Once
+
 	// Connection pooling
 	transport *http.Transport
 }
@@ -105,6 +108,7 @@ func NewOptimizedClient(cfg OptimizedClientConfig) *OptimizedClient {
 		metrics:     performanceMetrics,
 		workerPool:  workerPool,
 		rateLimiter: rateLimiter,
+		done:        make(chan struct{}),
 		transport:   transport,
 	}
 
@@ -123,11 +127,16 @@ func (c *OptimizedClient) rateLimiterRefill(ratePerSec int) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
-	for range ticker.C {
+	for {
 		select {
-		case c.rateLimiter <- struct{}{}:
-		default:
-			// Channel is full, skip this tick
+		case <-ticker.C:
+			select {
+			case c.rateLimiter <- struct{}{}:
+			default:
+				// Channel is full, skip this tick
+			}
+		case <-c.done:
+			return
 		}
 	}
 }
@@ -193,8 +202,9 @@ func (c *OptimizedClient) makeOptimizedRequest(ctx context.Context, endpoint str
 		return fmt.Errorf("API request failed with status %d", resp.StatusCode)
 	}
 
-	// Parse response
-	decoder := json.NewDecoder(resp.Body)
+	// Parse response with size limit
+	limitedBody := io.LimitReader(resp.Body, 50*1024*1024)
+	decoder := json.NewDecoder(limitedBody)
 	if err := decoder.Decode(result); err != nil {
 		c.metrics.IncrementAPIError()
 		return fmt.Errorf("failed to decode response: %w", err)
@@ -388,15 +398,20 @@ func (c *OptimizedClient) ClearCache() {
 
 // Close closes the optimized client and cleans up resources
 func (c *OptimizedClient) Close() error {
+	// Stop rate limiter refill goroutine
+	c.closeOnce.Do(func() {
+		close(c.done)
+	})
+
 	// Stop worker pool
 	c.workerPool.Stop()
-	
+
 	// Close transport connections
 	c.transport.CloseIdleConnections()
-	
+
 	// Log final performance metrics
 	c.metrics.LogStats()
-	
+
 	c.logger.Info("api.client_closed", nil)
 	return nil
 }

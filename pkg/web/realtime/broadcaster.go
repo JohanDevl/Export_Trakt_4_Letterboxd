@@ -12,6 +12,10 @@ import (
 	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/logger"
 )
 
+const (
+	HealthCheckInterval = 60 * time.Second
+)
+
 // StatusBroadcaster manages automatic status updates
 type StatusBroadcaster struct {
 	hub          *Hub
@@ -63,7 +67,7 @@ func (sb *StatusBroadcaster) broadcastLoop() {
 	
 	// Set up tickers
 	statusTicker := time.NewTicker(30 * time.Second)      // Status updates every 30s
-	healthTicker := time.NewTicker(60 * time.Second)      // Health check every 60s
+	healthTicker := time.NewTicker(HealthCheckInterval)      // Health check every 60s
 	exportTicker := time.NewTicker(5 * time.Second)       // Export updates every 5s
 	
 	defer statusTicker.Stop()

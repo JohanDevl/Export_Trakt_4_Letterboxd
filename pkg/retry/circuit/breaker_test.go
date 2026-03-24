@@ -87,9 +87,9 @@ func TestCircuitBreakerRecovery(t *testing.T) {
 		Timeout:          50 * time.Millisecond,
 		RecoveryTime:     100 * time.Millisecond,
 	}
-	
+
 	cb := NewCircuitBreaker(config)
-	
+
 	// Trigger open state
 	testErr := errors.New("test error")
 	for i := 0; i < 3; i++ {
@@ -97,9 +97,9 @@ func TestCircuitBreakerRecovery(t *testing.T) {
 			return testErr
 		})
 	}
-	
-	// Wait for recovery time
-	time.Sleep(150 * time.Millisecond)
+
+	// Wait for recovery time (use minimum + small margin to avoid flakiness)
+	time.Sleep(110 * time.Millisecond)
 	
 	// Execute successful operation
 	err := cb.Execute(context.Background(), func(ctx context.Context) error {

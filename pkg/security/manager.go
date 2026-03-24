@@ -470,6 +470,10 @@ func (m *Manager) CleanupTempFiles(tempDir string, maxAge time.Duration) error {
 
 // Close properly shuts down the security manager
 func (m *Manager) Close() error {
+	if m.rateLimiter != nil {
+		m.rateLimiter.Close()
+	}
+
 	if m.auditLogger != nil {
 		m.auditLogger.LogSystemEvent(audit.SystemStop, "security_manager", "shutdown", "success")
 		if err := m.auditLogger.Close(); err != nil {

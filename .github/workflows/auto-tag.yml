@@ -1,113 +1,71 @@
-name: Auto Tag on Merge
+name: Auto Tag on Version Change
 
 on:
-  pull_request:
-    types:
-      - closed
+  push:
     branches:
       - main
-    paths-ignore:
-      - "**/*.md"
-      - "docs/**"
-      - "LICENSE"
+    paths:
+      - 'VERSION'
+
+permissions:
+  contents: write
 
 jobs:
-  create-tag:
-    if: github.event.pull_request.merged == true
+  check-version:
+    name: Check for version change and create tag
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          token: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
 
-      - name: Set up Git
+      - name: Get current version
+        id: current
         run: |
-          git config --global user.name 'GitHub Actions'
-          git config --global user.email 'actions@github.com'
+          VERSION=$(cat VERSION | tr -d '[:space:]')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Current version: $VERSION"
 
-      - name: Get current date
-        id: date
-        run: echo "date=$(date +'%Y%m%d')" >> $GITHUB_OUTPUT
-
-      - name: Get PR title and number
-        id: pr_info
+      - name: Get previous version
+        id: previous
         run: |
-          PR_TITLE="${{ github.event.pull_request.title }}"
-          PR_NUMBER="${{ github.event.pull_request.number }}"
-          # Convert PR title to a tag-friendly format
-          TAG_SUFFIX=$(echo "$PR_TITLE" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-//' | sed 's/-$//' | cut -c1-30)
-          echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
-          echo "tag_suffix=$TAG_SUFFIX" >> $GITHUB_OUTPUT
+          git checkout HEAD^1 -- VERSION 2>/dev/null || echo "0.0.0" > VERSION
+          PREV_VERSION=$(cat VERSION | tr -d '[:space:]')
+          git checkout HEAD -- VERSION
+          echo "version=$PREV_VERSION" >> $GITHUB_OUTPUT
+          echo "Previous version: $PREV_VERSION"
 
-      - name: Create tag
-        id: tag
+      - name: Check if version changed
+        id: changed
         run: |
-          # Get the latest version tag
-          LATEST_TAG=$(git tag -l "v*" | grep -v "-" | sort -V | tail -n 1)
-
-          # If no tag exists, start with v1.0.0
-          if [ -z "$LATEST_TAG" ]; then
-            LATEST_TAG="v1.0.0"
+          if [ "${{ steps.current.outputs.version }}" != "${{ steps.previous.outputs.version }}" ]; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "Version changed: ${{ steps.previous.outputs.version }} -> ${{ steps.current.outputs.version }}"
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "Version unchanged"
           fi
 
-          # Extract version components
-          MAJOR=$(echo $LATEST_TAG | sed 's/v\([0-9]*\)\..*/\1/')
-          MINOR=$(echo $LATEST_TAG | sed 's/v[0-9]*\.\([0-9]*\)\..*/\1/')
-          PATCH=$(echo $LATEST_TAG | sed 's/v[0-9]*\.[0-9]*\.\([0-9]*\).*/\1/')
+      - name: Check if tag exists
+        id: tag_exists
+        if: steps.changed.outputs.changed == 'true'
+        run: |
+          TAG="v${{ steps.current.outputs.version }}"
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Tag $TAG already exists"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
 
-          # Increment patch version
-          PATCH=$((PATCH + 1))
-
-          # Create new version tag
-          NEW_TAG="v$MAJOR.$MINOR.$PATCH"
-
-          # Add PR info to tag message
-          TAG_MESSAGE="Release $NEW_TAG from PR #${{ steps.pr_info.outputs.pr_number }}: ${{ github.event.pull_request.title }}"
-
-          # Create and push tag using PAT for workflow triggering
-          git tag -a "$NEW_TAG" -m "$TAG_MESSAGE"
-          git push https://x-access-token:${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git "$NEW_TAG"
-
-          echo "new_tag=$NEW_TAG" >> $GITHUB_OUTPUT
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: ${{ steps.tag.outputs.new_tag }}
-          name: Release ${{ steps.tag.outputs.new_tag }}
-          body: |
-            ## Release ${{ steps.tag.outputs.new_tag }}
-
-            This release was automatically generated from PR #${{ steps.pr_info.outputs.pr_number }}: ${{ github.event.pull_request.title }}
-
-            ### Changes included:
-            ${{ github.event.pull_request.body }}
-
-            ### Merged by:
-            @${{ github.event.pull_request.merged_by.login }}
-          draft: false
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
-
-      - name: Trigger CI/CD for Docker Build
-        uses: actions/github-script@v7
-        with:
-          github-token: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
-          script: |
-            const response = await github.rest.actions.createWorkflowDispatch({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              workflow_id: 'ci-cd.yml',
-              ref: '${{ steps.tag.outputs.new_tag }}',
-              inputs: {
-                reason: 'Auto-triggered from release ${{ steps.tag.outputs.new_tag }}'
-              }
-            });
-            console.log('Triggered CI/CD workflow for tag ${{ steps.tag.outputs.new_tag }}');
-            console.log('Response:', response.status);
-
+      - name: Create and push tag
+        if: steps.changed.outputs.changed == 'true' && steps.tag_exists.outputs.exists == 'false'
+        run: |
+          VERSION="${{ steps.current.outputs.version }}"
+          TAG="v$VERSION"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "Release $VERSION"
+          git push origin "$TAG"
+          echo "Created tag: $TAG"

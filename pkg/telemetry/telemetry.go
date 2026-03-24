@@ -16,6 +16,10 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+const (
+	DefaultIdleTimeout = 60 * time.Second
+)
+
 // TelemetryConfig represents the complete telemetry configuration
 type TelemetryConfig struct {
 	Monitoring monitoring.MonitoringConfig   `toml:"monitoring"`
@@ -151,7 +155,7 @@ func (tm *TelemetryManager) setupHTTPServer() error {
 		Handler:      mux,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
-		IdleTimeout:  60 * time.Second,
+		IdleTimeout:  DefaultIdleTimeout,
 	}
 
 	return nil

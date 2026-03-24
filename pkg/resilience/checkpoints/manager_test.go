@@ -219,33 +219,30 @@ func TestManagerList(t *testing.T) {
 
 func TestManagerCleanupExpired(t *testing.T) {
 	tempDir := t.TempDir()
-	
+
 	config := &Config{
 		CheckpointDir: tempDir,
-		MaxAge:        100 * time.Millisecond, // Very short max age
+		MaxAge:        -1 * time.Hour, // Expired immediately
 	}
-	
+
 	manager, err := NewManager(config)
 	if err != nil {
 		t.Fatalf("Failed to create manager: %v", err)
 	}
-	
+
 	// Create a checkpoint
 	checkpoint := NewCheckpoint("expired_test", "test_operation", 0.5, nil, "next")
 	err = manager.Save(context.Background(), checkpoint)
 	if err != nil {
 		t.Fatalf("Failed to save checkpoint: %v", err)
 	}
-	
-	// Wait for it to expire
-	time.Sleep(200 * time.Millisecond)
-	
-	// Run cleanup
+
+	// Run cleanup immediately (checkpoint already expired)
 	err = manager.Cleanup(context.Background())
 	if err != nil {
 		t.Fatalf("Failed to cleanup expired checkpoints: %v", err)
 	}
-	
+
 	// Verify checkpoint was cleaned up (it should still exist in this implementation)
 	// The cleanup behavior depends on the actual implementation
 }

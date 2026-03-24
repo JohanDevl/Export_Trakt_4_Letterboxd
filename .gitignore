@@ -250,9 +250,9 @@ secrets/
 docker-secrets/
 .docker-secrets/
 
-# Go specific ignores
-export_trakt
-export-trakt
+# Go specific ignores (binary output only)
+/export_trakt
+/export-trakt
 *.exe
 *.exe~
 *.dll
@@ -271,5 +271,5 @@ coverage.txt
 # Go workspace file
 go.work
 
+# Claude Code workspace files (not CLAUDE.md documentation files)
 .claude
-CLAUDE.md

@@ -1,5 +1,5 @@
 # Test Dockerfile for Enhanced Error Handling System
-FROM golang:1.22-alpine AS builder
+FROM golang:1.23-alpine AS builder
 
 # Install build dependencies
 RUN apk add --no-cache git gcc musl-dev
@@ -32,6 +32,10 @@ COPY --from=builder /app/test-errors /app/test-errors
 
 # Create temporary directory for checkpoints
 RUN mkdir -p /tmp/test_checkpoints
+
+# Health check for test environment
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD test -x /app/test-errors || exit 1
 
 # Run the test
 ENTRYPOINT ["/app/test-errors"] 

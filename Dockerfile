@@ -62,11 +62,22 @@ USER appuser
 # Create volumes for persistent data
 VOLUME ["/app/config", "/app/logs", "/app/exports"]
 
+# Health check
+# For CLI mode: checks if binary is executable
+# For server mode: add --server flag and this will check the /health endpoint
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD /app/export-trakt --version || exit 1
+
 # Set entrypoint
 ENTRYPOINT ["/app/export-trakt"]
 
 # Default command if none is provided
 CMD ["--help"]
+
+# Re-declare build args for labels in runtime stage
+ARG VERSION=dev
+ARG BUILD_DATE=unknown
+ARG COMMIT_SHA=unknown
 
 # Metadata
 LABEL org.opencontainers.image.title="Export Trakt for Letterboxd"

@@ -15,6 +15,8 @@ type RateLimiter struct {
 	mu         sync.RWMutex
 	auditLog   *audit.Logger
 	config     RateLimitConfig
+	done       chan struct{}
+	closeOnce  sync.Once
 }
 
 // RateLimitConfig holds configuration for rate limiting
@@ -77,6 +79,7 @@ func NewRateLimiter(config RateLimitConfig, auditLog *audit.Logger) *RateLimiter
 		limits:   make(map[string]*bucketLimiter),
 		auditLog: auditLog,
 		config:   config,
+		done:     make(chan struct{}),
 	}
 
 	// Start cleanup goroutine if enabled
@@ -268,8 +271,13 @@ func (rl *RateLimiter) cleanupRoutine(interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		rl.cleanup()
+	for {
+		select {
+		case <-ticker.C:
+			rl.cleanup()
+		case <-rl.done:
+			return
+		}
 	}
 }
 
@@ -292,10 +300,12 @@ func (rl *RateLimiter) cleanup() {
 	}
 }
 
-// min returns the minimum of two float64 values
-func min(a, b float64) float64 {
-	if a < b {
-		return a
-	}
-	return b
-} 
+// Close stops the rate limiter cleanup goroutine
+func (rl *RateLimiter) Close() error {
+	rl.closeOnce.Do(func() {
+		close(rl.done)
+	})
+	return nil
+}
+
+ 

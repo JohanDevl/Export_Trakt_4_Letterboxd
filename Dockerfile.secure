@@ -91,6 +91,13 @@ ENV EXPORT_TRAKT_EXPORT_OUTPUT_DIR=/app/exports \
 # Security: Create secure volumes for persistent data
 VOLUME ["/app/config", "/app/logs", "/app/exports"]
 
+# Health check
+# Note: Distroless images don't have shell, so healthcheck is limited
+# For server mode with health endpoint, use: HEALTHCHECK CMD ["/app/export-trakt", "health"]
+# For now, Docker will check if the container is running
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD ["/app/export-trakt", "--version"]
+
 # Security: Use exact path to avoid PATH injection
 ENTRYPOINT ["/app/export-trakt"]
 

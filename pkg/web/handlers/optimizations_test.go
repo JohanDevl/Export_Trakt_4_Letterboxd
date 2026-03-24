@@ -32,9 +32,9 @@ func TestImprovedCSVRecordCounting(t *testing.T) {
 	
 	// Create a CSV with known record count (1000 records)
 	var csvContent strings.Builder
-	csvContent.WriteString("Title,Year,WatchedDate,Rating10,imdbID,tmdbID,Rewatch\n")
+	_, _ = csvContent.WriteString("Title,Year,WatchedDate,Rating10,imdbID,tmdbID,Rewatch\n")
 	for i := 0; i < 1000; i++ {
-		csvContent.WriteString("Movie Title,2020,2023-01-01,8,tt1234567,12345,false\n")
+		_, _ = csvContent.WriteString("Movie Title,2020,2023-01-01,8,tt1234567,12345,false\n")
 	}
 	
 	err = os.WriteFile(testFile, []byte(csvContent.String()), 0644)

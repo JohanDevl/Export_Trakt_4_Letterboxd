@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sync"
 	"net/http/httptest"
 	"testing"
 	"time"
@@ -417,6 +418,7 @@ type MockNotificationChannel struct {
 	name       string
 	enabled    bool
 	sendError  error
+	mu         sync.Mutex
 	sentAlerts []monitoring.Alert
 }
 
@@ -429,13 +431,12 @@ func (m *MockNotificationChannel) IsEnabled() bool {
 }
 
 func (m *MockNotificationChannel) SendAlert(ctx context.Context, alert monitoring.Alert) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.sentAlerts = append(m.sentAlerts, alert)
 	if m.sendError != nil {
-		// Still add to sent alerts for testing purposes
-		m.sentAlerts = append(m.sentAlerts, alert)
 		return m.sendError
 	}
-	
-	m.sentAlerts = append(m.sentAlerts, alert)
 	return nil
 }
 

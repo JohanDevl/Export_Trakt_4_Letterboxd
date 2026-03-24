@@ -100,20 +100,21 @@ func TestScheduler_Start_ValidSchedule(t *testing.T) {
 		errChan <- sched.Start()
 	}()
 
-	// Attendre un peu pour s'assurer que le scheduler démarre
-	time.Sleep(100 * time.Millisecond)
-
-	// Arrêter le scheduler
-	sched.Stop()
-
-	// Vérifier qu'il n'y a pas d'erreur
+	// Attendre le scheduler avec timeout
 	select {
 	case err := <-errChan:
 		if err != nil {
 			t.Errorf("Start() a retourné une erreur: %v", err)
 		}
-	case <-time.After(1 * time.Second):
-		// La méthode Start() n'a pas encore retourné après 1 seconde
-		// C'est normal si elle bloque indéfiniment
+	case <-time.After(10 * time.Millisecond):
+		// Scheduler is running, stop it
+		sched.Stop()
+		// Wait for Start() to return after stop
+		select {
+		case <-errChan:
+			// Scheduler stopped successfully
+		case <-time.After(1 * time.Second):
+			t.Error("Scheduler did not stop within timeout")
+		}
 	}
 } 

@@ -4,10 +4,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/JohanDevl/Export_Trakt_4_Letterboxd/pkg/logger"
+)
+
+const (
+	DefaultReadDeadline   = 60 * time.Second
+	DefaultWriteDeadline  = 10 * time.Second
+	DefaultPingInterval   = 54 * time.Second
 )
 
 // WebSocketHandler handles WebSocket connections
@@ -26,8 +33,15 @@ func NewWebSocketHandler(hub *Hub, logger logger.Logger) *WebSocketHandler {
 			ReadBufferSize:  1024,
 			WriteBufferSize: 1024,
 			CheckOrigin: func(r *http.Request) bool {
-				// In production, you should validate the origin properly
-				return true
+				origin := r.Header.Get("Origin")
+				if origin == "" {
+					return true
+				}
+				u, err := url.Parse(origin)
+				if err != nil {
+					return false
+				}
+				return u.Host == r.Host
 			},
 		},
 	}
@@ -58,54 +72,52 @@ func (wsh *WebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http.Requ
 	
 	// Configure connection
 	conn.SetReadLimit(512)
-	conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+	conn.SetReadDeadline(time.Now().Add(DefaultReadDeadline))
 	conn.SetPongHandler(func(string) error {
 		wsh.hub.UpdateClientPing(clientID)
-		conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+		conn.SetReadDeadline(time.Now().Add(DefaultReadDeadline))
 		return nil
 	})
 	
-	// Start ping routine
-	go wsh.startPingRoutine(conn, clientID)
-	
-	// Start message sender
+	// Start message sender (includes ping via its ticker)
 	go wsh.startMessageSender(conn, client)
-	
+
 	// Start message reader (handles incoming messages and keep-alive)
 	wsh.startMessageReader(conn, clientID)
 }
 
 // startMessageSender sends messages from client channel to WebSocket
 func (wsh *WebSocketHandler) startMessageSender(conn *websocket.Conn, client *Client) {
-	ticker := time.NewTicker(54 * time.Second)
+	ticker := time.NewTicker(DefaultPingInterval)
 	defer ticker.Stop()
-	
+
 	for {
 		select {
 		case message, ok := <-client.Channel:
-			conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 			if !ok {
 				// Channel closed
+				conn.SetWriteDeadline(time.Now().Add(DefaultWriteDeadline))
 				conn.WriteMessage(websocket.CloseMessage, []byte{})
 				return
 			}
-			
+
+			conn.SetWriteDeadline(time.Now().Add(DefaultWriteDeadline))
 			// Send message as JSON
 			if err := conn.WriteJSON(message); err != nil {
 				wsh.logger.Error("realtime.websocket_write_error", map[string]interface{}{
 					"client_id": client.ID,
-					"error": err.Error(),
+					"error":     err.Error(),
 				})
 				return
 			}
-			
+
 		case <-ticker.C:
 			// Send ping
-			conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			conn.SetWriteDeadline(time.Now().Add(DefaultWriteDeadline))
 			if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				wsh.logger.Error("realtime.websocket_ping_error", map[string]interface{}{
 					"client_id": client.ID,
-					"error": err.Error(),
+					"error":     err.Error(),
 				})
 				return
 			}
@@ -168,19 +180,3 @@ func (wsh *WebSocketHandler) handleTextMessage(clientID string, message []byte) 
 	}
 }
 
-// startPingRoutine sends periodic pings to keep connection alive
-func (wsh *WebSocketHandler) startPingRoutine(conn *websocket.Conn, clientID string) {
-	ticker := time.NewTicker(54 * time.Second)
-	defer ticker.Stop()
-	
-	for range ticker.C {
-		conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
-		if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
-			wsh.logger.Error("realtime.ping_routine_error", map[string]interface{}{
-				"client_id": clientID,
-				"error": err.Error(),
-			})
-			return
-		}
-	}
-}
