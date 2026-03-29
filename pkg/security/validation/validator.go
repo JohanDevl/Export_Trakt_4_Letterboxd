@@ -125,7 +125,7 @@ type RegexRule struct {
 func (r RegexRule) Validate(value string) error {
 	if !r.Pattern.MatchString(value) {
 		if r.Message != "" {
-			return fmt.Errorf(r.Message)
+			return fmt.Errorf("%s", r.Message)
 		}
 		return fmt.Errorf("value does not match required pattern")
 	}

@@ -63,8 +63,7 @@ func NewOpenTelemetryTracer(logger *logrus.Logger, config TracingConfig) (*OpenT
 	// Create resource
 	res, err := resource.Merge(
 		resource.Default(),
-		resource.NewWithAttributes(
-			semconv.SchemaURL,
+		resource.NewSchemaless(
 			semconv.ServiceNameKey.String(config.ServiceName),
 			semconv.ServiceVersionKey.String(config.ServiceVersion),
 			semconv.DeploymentEnvironmentKey.String(config.Environment),

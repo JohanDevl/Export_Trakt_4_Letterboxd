@@ -80,7 +80,7 @@ func (j *TestJob) Execute(ctx context.Context) error {
 	}
 	
 	if j.shouldError {
-		return fmt.Errorf(j.errorMsg)
+		return fmt.Errorf("%s", j.errorMsg)
 	}
 	
 	return nil
@@ -142,7 +142,7 @@ func (j *WaitJob) Execute(ctx context.Context) error {
 	select {
 	case <-j.waitCh:
 		if j.shouldError {
-			return fmt.Errorf(j.errorMsg)
+			return fmt.Errorf("%s", j.errorMsg)
 		}
 		return nil
 	case <-ctx.Done():
@@ -264,7 +264,7 @@ func (j *SlowJob) Execute(ctx context.Context) error {
 	}
 	
 	if j.shouldError {
-		return fmt.Errorf(j.errorMsg)
+		return fmt.Errorf("%s", j.errorMsg)
 	}
 	
 	return nil
