@@ -2,7 +2,7 @@
 # This Dockerfile implements security best practices as specified in Issue #18
 
 # Build stage with security hardening
-FROM golang:1.23-alpine AS builder
+FROM golang:1.26-alpine AS builder
 
 # Security: Install only necessary build dependencies
 RUN apk add --no-cache \
